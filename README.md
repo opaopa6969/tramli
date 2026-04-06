@@ -1,3 +1,5 @@
+[日本語版はこちら / Japanese](README-ja.md)
+
 # tramli
 
 Constrained flow engine for Java 21+.
