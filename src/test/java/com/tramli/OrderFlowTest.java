@@ -1,0 +1,98 @@
+package com.tramli;
+
+import org.junit.jupiter.api.Test;
+
+import java.util.Map;
+
+import static com.tramli.OrderFlowExample.*;
+import static org.junit.jupiter.api.Assertions.*;
+
+class OrderFlowTest {
+
+    @Test
+    void happyPath() {
+        var def = definition(true);
+        var engine = Tramli.engine(new InMemoryFlowStore());
+
+        // Start flow
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        Map<Class<?>, Object> data = Map.of((Class) OrderRequest.class, new OrderRequest("item-1", 3));
+        var flow = engine.startFlow(def, null, data);
+
+        // Auto chain: CREATED → PAYMENT_PENDING
+        assertEquals(OrderState.PAYMENT_PENDING, flow.currentState());
+        assertFalse(flow.isCompleted());
+
+        // External event: payment webhook
+        flow = engine.resumeAndExecute(flow.id(), def);
+
+        // Auto chain: PAYMENT_CONFIRMED → SHIPPED (terminal)
+        assertTrue(flow.isCompleted());
+        assertEquals("SHIPPED", flow.exitState());
+
+        // Verify context has all data
+        assertNotNull(flow.context().get(ShipmentInfo.class));
+        assertEquals("TRACK-001", flow.context().get(ShipmentInfo.class).trackingId());
+    }
+
+    @Test
+    void paymentRejected_cancelledAfterMaxRetries() {
+        var def = definition(false);
+        var engine = Tramli.engine(new InMemoryFlowStore());
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        Map<Class<?>, Object> data = Map.of((Class) OrderRequest.class, new OrderRequest("item-1", 1));
+        var flow = engine.startFlow(def, null, data);
+        assertEquals(OrderState.PAYMENT_PENDING, flow.currentState());
+
+        // 3 rejections
+        flow = engine.resumeAndExecute(flow.id(), def);
+        assertEquals(1, flow.guardFailureCount());
+        flow = engine.resumeAndExecute(flow.id(), def);
+        assertEquals(2, flow.guardFailureCount());
+        flow = engine.resumeAndExecute(flow.id(), def);
+
+        assertTrue(flow.isCompleted());
+        assertEquals("CANCELLED", flow.exitState());
+    }
+
+    @Test
+    void mermaidDiagram() {
+        var def = definition(true);
+        String mermaid = MermaidGenerator.generate(def);
+
+        assertTrue(mermaid.contains("stateDiagram-v2"));
+        assertTrue(mermaid.contains("[*] --> CREATED"));
+        assertTrue(mermaid.contains("CREATED --> PAYMENT_PENDING : OrderInit"));
+        assertTrue(mermaid.contains("PAYMENT_PENDING --> PAYMENT_CONFIRMED : [PaymentGuard]"));
+        assertTrue(mermaid.contains("PAYMENT_CONFIRMED --> SHIPPED : ShipProcessor"));
+        assertTrue(mermaid.contains("SHIPPED --> [*]"));
+    }
+
+    @Test
+    void definitionValidation() {
+        var def = definition(true);
+        assertEquals("order", def.name());
+        assertEquals(OrderState.CREATED, def.initialState());
+        assertTrue(def.terminalStates().contains(OrderState.SHIPPED));
+        assertTrue(def.terminalStates().contains(OrderState.CANCELLED));
+    }
+
+    @Test
+    void transitionLog() {
+        var store = new InMemoryFlowStore();
+        var engine = Tramli.engine(store);
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        Map<Class<?>, Object> data = Map.of((Class) OrderRequest.class, new OrderRequest("item-1", 1));
+        var flow = engine.startFlow(definition(true), null, data);
+
+        // CREATED → PAYMENT_PENDING (1 transition)
+        assertEquals(1, store.transitionLog().size());
+        assertEquals("OrderInit", store.transitionLog().getFirst().trigger());
+
+        engine.resumeAndExecute(flow.id(), definition(true));
+        // + PaymentGuard + PAYMENT_CONFIRMED → SHIPPED
+        assertTrue(store.transitionLog().size() >= 3);
+    }
+}
