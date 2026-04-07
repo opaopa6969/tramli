@@ -1,4 +1,4 @@
-# DGE 査読劇: tramli 論文
+# DGE 査読劇: tramli 論文 (Round 1 + Round 2)
 
 - **日時**: 2026-04-07
 - **テーマ**: tramli: Definition-Time Validated Constrained Flow Engine with Data-Flow Contracts
@@ -37,3 +37,38 @@
 8. **§5.3 書き直し**: 競合比較を trade-off フレーミングに。3競合に絞り込み
 9. **§6.1 新設**: Definition-Time vs Compile-Time vs Runtime の3レベル比較
 10. **Fig.1, Fig.2 追加**: OIDC flow diagram, Data-flow graph
+
+---
+
+## Round 2 (v2 → v3)
+
+- **評価者**: ☕ ヤン, 🧩 マンガー, 🔬 ハレル教授（留任）
+- **判定**: Minor Revision（ヤン）/ Minor Revision（マンガー）/ Accept with Minor Revision（ハレル）
+
+### Round 2 Gap 一覧
+
+| # | Gap | Severity | Status |
+|---|-----|----------|--------|
+| G15 | 対象読者の明記 | 🟡 Medium | ✅ v3 反映 |
+| G16 | 8 項目の選定基準と動機 | 🟡 Medium | ✅ v3 反映（§3.5） |
+| G17 | コンパイラ理論との analogies テーブル | 🟡 Medium | ✅ v3 反映（§3 冒頭） |
+| G18 | Soundness 性質の可視化 | 🟡 Medium | ✅ v3 反映（§3.4 Property box） |
+| G19 | Future Work 優先度 | 🟢 Low | ✅ v3 反映（§7） |
+| G20 | 「コミットメントデバイス」の一文 | 🟢 Low | ✅ v3 反映（§6.4） |
+| G21 | 3言語 = 仕様/実装分離のフレーミング | 🟢 Low | ✅ v3 反映（§4.1） |
+
+### v3 での主な変更
+
+1. **対象読者を明記**: タイトル下に target audience 追記
+2. **§3 冒頭にコンパイラ analogies テーブル追加**: requires/produces = 型チェック、DataFlowGraph = reaching definitions 等
+3. **§3.4 に Soundness Property box 追加**: sound but not complete を明示
+4. **§3.5 に選定基準追記**: 「≥2 プロジェクトで観測されたバグパターン」
+5. **§4.1 に仕様/実装分離のフレーミング追加**: JDBC analogy
+6. **§6.4 新設**: Constraints as Commitment Device（Rust borrow checker, SQL FK, Git DAG との analogies）
+7. **§7 Future Work に優先度追記**: High/Medium/Low
+
+### 未着手 Gap
+
+| # | Gap | Status |
+|---|-----|--------|
+| G13 | XState v5 typegen との詳細比較 | 🔲 追加調査必要 |

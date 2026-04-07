@@ -18,7 +18,7 @@ export class InMemoryFlowStore {
     this.flows.set(flow.id, flow);
   }
 
-  loadForUpdate<S extends string>(flowId: string): FlowInstance<S> | undefined {
+  loadForUpdate<S extends string>(flowId: string, _definition?: any): FlowInstance<S> | undefined {
     const flow = this.flows.get(flowId);
     if (!flow || flow.isCompleted) return undefined;
     return flow as FlowInstance<S>;

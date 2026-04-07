@@ -3,6 +3,16 @@
 All notable changes to tramli are documented here. Versions are published to
 crates.io, npm (@unlaxer/tramli), and Maven Central (org.unlaxer:tramli).
 
+## [1.6.0] - 2026-04-07
+
+### Added
+- `FlowInstance.lastError()` — error message preserved when processor throws (Java/TS)
+- `loadForUpdate(flowId, definition)` — TS FlowStore now accepts definition parameter
+- FlowStore implementation guide: `restore()` parameter reference, auto-chain design intent, error info docs
+
+### Fixed
+- Engine `handleError` now captures exception message into `FlowInstance.lastError`
+
 ## [1.5.3] - 2026-04-07
 
 ### Added

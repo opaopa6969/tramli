@@ -101,7 +101,7 @@ public final class FlowEngine {
                         store.recordTransition(flow.id(), from, transition.to(), guard.name(), flow.context());
                     } catch (Exception e) {
                         flow.context().restoreFrom(backup);
-                        handleError(flow, currentState);
+                        handleError(flow, currentState, e);
                         store.save(flow);
                         return flow;
                     }
@@ -185,7 +185,7 @@ public final class FlowEngine {
                 }
             } catch (Exception e) {
                 flow.context().restoreFrom(backup);
-                handleError(flow, flow.currentState());
+                handleError(flow, flow.currentState(), e);
                 return;
             }
             depth++;
@@ -299,6 +299,13 @@ public final class FlowEngine {
     }
 
     private <S extends Enum<S> & FlowState> void handleError(FlowInstance<S> flow, S fromState) {
+        handleError(flow, fromState, null);
+    }
+
+    private <S extends Enum<S> & FlowState> void handleError(FlowInstance<S> flow, S fromState, Exception cause) {
+        if (cause != null) {
+            flow.setLastError(cause.getClass().getSimpleName() + ": " + cause.getMessage());
+        }
         S errorTarget = flow.definition().errorTransitions().get(fromState);
         if (errorTarget != null) {
             S from = flow.currentState();

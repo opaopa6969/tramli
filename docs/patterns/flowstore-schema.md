@@ -100,3 +100,60 @@ WHERE id = ? AND version = ?;
 ```
 
 Use `FlowInstance.withVersion(newVersion)` after save to keep local state in sync.
+
+## FlowInstance.restore() Parameters
+
+The `restore()` factory method takes 10 parameters. Reference:
+
+| # | Parameter | Type | Notes |
+|---|-----------|------|-------|
+| 1 | id | String | Flow instance ID |
+| 2 | sessionId | String | Session/correlation ID (nullable) |
+| 3 | definition | FlowDefinition | Must match the flow's definition |
+| 4 | context | FlowContext | Deserialized from DB |
+| 5 | currentState | S (enum) | Current state enum value |
+| 6 | createdAt | Instant/Date | Original creation time |
+| 7 | expiresAt | Instant/Date | TTL expiry time |
+| 8 | guardFailureCount | int | Current guard failure counter |
+| 9 | version | int | Optimistic locking version |
+| 10 | exitState | String? | null if active, state name if completed |
+
+## loadForUpdate with Definition
+
+TypeScript FlowStore implementations should accept `definition` as a second parameter:
+
+```typescript
+loadForUpdate<S extends string>(flowId: string, definition?: FlowDefinition<S>): FlowInstance<S> | undefined;
+```
+
+This allows the store to reconstruct `FlowInstance` using `FlowInstance.restore()`,
+which requires the definition reference. InMemoryFlowStore ignores this parameter
+since it holds FlowInstance objects directly.
+
+## Auto-Chain Design Intent
+
+**tramli's auto-chain executes synchronously to completion.** When `startFlow()` or
+`resumeAndExecute()` is called, the engine fires all Auto/Branch transitions until
+it hits an External transition or a terminal state. The call returns only after
+the entire chain completes.
+
+This is intentional:
+- **Atomicity**: the chain is a single logical unit. Partial execution would require
+  rollback coordination
+- **Simplicity**: one request = one complete transition sequence
+- **Predictability**: after `startFlow()` returns, the flow is either waiting at
+  External or completed
+
+**If you need UI progress updates during a long chain:**
+1. Use External transitions to break the chain into steps, resuming from the client
+2. Emit events from within processors (e.g., socket.io) for progress indication
+3. Run `startFlow()` in a background task and poll `FlowInstance.currentState()`
+
+## Error Information
+
+When a processor throws during execution, the engine:
+1. Restores context from backup (pre-processor state)
+2. Sets `FlowInstance.lastError()` with the error message
+3. Routes to the error transition (if configured via `onError`/`onAnyError`)
+
+The `lastError` property is available for rollback processors to inspect what went wrong.

@@ -13,6 +13,7 @@ export class FlowInstance<S extends string> {
   readonly expiresAt: Date;
   private _exitState: string | null;
   private _activeSubFlow: FlowInstance<any> | null = null;
+  private _lastError: string | null = null;
 
   constructor(
     id: string, sessionId: string, definition: FlowDefinition<S>,
@@ -61,6 +62,8 @@ export class FlowInstance<S extends string> {
   get isCompleted(): boolean { return this._exitState !== null; }
 
   get activeSubFlow(): FlowInstance<any> | null { return this._activeSubFlow; }
+  /** Last error message (set when a processor throws and error transition fires). */
+  get lastError(): string | null { return this._lastError; }
 
   /** State path from root to deepest active sub-flow. */
   statePath(): string[] {
@@ -111,4 +114,5 @@ export class FlowInstance<S extends string> {
   /** @internal */ complete(exitState: string): void { this._exitState = exitState; }
   /** @internal */ setVersion(version: number): void { this._version = version; }
   /** @internal */ setActiveSubFlow(sub: FlowInstance<any> | null): void { this._activeSubFlow = sub; }
+  /** @internal */ setLastError(error: string | null): void { this._lastError = error; }
 }

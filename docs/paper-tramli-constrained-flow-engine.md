@@ -1,10 +1,12 @@
 # tramli: Definition-Time Validated Constrained Flow Engine with Data-Flow Contracts
 
-> v2 — DGE 査読 (G1-G7, G12) 反映
+> v3 — DGE 査読 Round 1 (G1-G12) + Round 2 (G15-G21) 反映
+
+**Target audience**: Engineers selecting state machine libraries, library authors, and researchers interested in the intersection of data-flow analysis and state machine design. This is a positioning paper, not a formal academic submission.
 
 ## Abstract
 
-State machine libraries are widely used for managing complex application workflows, yet most defer validation to runtime, leaving structural errors — unreachable states, data dependency mismatches, infinite transition loops — to be discovered in production. We present **tramli**, an embeddable flow engine that enforces 8 structural well-formedness checks at **definition time** (when `build()` is called on a flow definition), introduces **requires/produces contracts** on state processors for static data-flow verification, and provides **DataFlowGraph** analysis for dependency visualization, dead data detection, and migration planning. tramli is implemented as a zero-dependency library in Java, TypeScript, and Rust with a shared test suite across all three languages. We compare tramli against 3 primary competitors (XState, Spring Statemachine, statig) and position it within the state machine theory landscape from Harel Statecharts to modern typestate approaches.
+State machine libraries are widely used for managing complex application workflows, yet most defer validation to runtime, leaving structural errors — unreachable states, data dependency mismatches, infinite transition loops — to be discovered in production. We present **tramli**, an embeddable flow engine that enforces structural well-formedness checks at **definition time** (when `build()` is called on a flow definition), introduces **requires/produces contracts** on state processors for static data-flow verification, and provides **DataFlowGraph** analysis for dependency visualization, dead data detection, and migration planning. tramli is implemented as a zero-dependency library in Java, TypeScript, and Rust with a shared test suite across all three languages. We compare tramli against 3 primary competitors (XState, Spring Statemachine, statig) and position it within the state machine theory landscape from Harel Statecharts to modern typestate approaches.
 
 ---
 
@@ -64,6 +66,21 @@ Temporal.io (~19,400 stars) and AWS Step Functions solve a fundamentally differe
 ---
 
 ## 3. Design
+
+### Design Intuition: Compiler Techniques for State Machines
+
+tramli applies well-known compiler techniques to state machine definitions. Readers familiar with compiler theory will recognize:
+
+| tramli concept | Compiler analogy |
+|---|---|
+| requires/produces contracts | Function signature type checking |
+| DataFlowGraph | Reaching definitions + liveness analysis |
+| DAG check (auto transitions) | Loop detection in control flow graph |
+| deadData() | Dead code elimination |
+| lifetime() | Variable liveness range |
+| build() | Semantic analysis pass (after parsing, before codegen) |
+
+This analogy is deliberate. tramli treats a FlowDefinition as a "program" and `build()` as a "compiler pass" that rejects structurally invalid programs before execution.
 
 ### 3.1 Core Concepts
 
@@ -144,7 +161,13 @@ At definition time, tramli walks all paths from the initial state and verifies t
 
 **Important limitation**: requires/produces contracts verify *declarations*, not *implementations*. If a processor declares `produces(Foo.class)` but its `process()` method does not call `ctx.put(Foo.class, ...)`, the error will surface at runtime when a downstream processor calls `ctx.get(Foo.class)`. This is a well-formedness check, not formal verification.
 
-### 3.5 Definition-Time 8-Item Validation
+> **Property (Soundness of requires/produces verification)**: If `build()` succeeds, then for every reachable state S and every processor P reachable from S, the `requires()` set of P is a subset of the accumulated `produces()` of all prior processors along **every** path from the initial state to S, unioned with `initiallyAvailable` types. Formally: the verification is **sound** (no false negatives — if a data dependency is unsatisfied on any path, `build()` will report it) but **not complete** (false positives are possible — an infeasible path may trigger a spurious requires violation).
+
+### 3.5 Definition-Time Validation
+
+**For users**: call `build()` on your FlowDefinition. If it succeeds, your flow is structurally sound. If it fails, the error message tells you exactly what's wrong. You don't need to know the checks below.
+
+**For library authors and researchers**: `build()` executes the following structural well-formedness checks, selected based on the most common structural bugs encountered in production state machine code (§5.2). The selection criterion for inclusion: a bug pattern must have been independently observed in ≥2 real-world projects.
 
 `build()` executes 8 structural well-formedness checks. Any failure produces an actionable error message. These checks run in **O(|V| + |E|)** time (where |V| = number of states, |E| = number of transitions), as each check is a DFS or BFS traversal of the state graph. For the requires/produces check, path merging via set intersection prevents exponential blowup — at each state, the available-type set is the intersection of all incoming paths, ensuring conservative (sound) but not complete verification. False positives are possible (reporting a missing requirement on an infeasible path); false negatives (missing a real deficiency) are not.
 
@@ -199,10 +222,12 @@ Definition-time validation ensures all terminal states of the child flow are map
 
 ### 4.1 Three-Language Monorepo
 
-tramli is implemented in Java (21+), TypeScript (Node 18+), and Rust (1.75+) within a single repository. All three implementations:
+tramli is implemented in Java (21+), TypeScript (Node 18+), and Rust (1.75+) within a single repository. The architecture follows a **specification-implementation separation** pattern (analogous to JDBC's single API with multiple vendor implementations): FlowDefinition is the specification, and each language's FlowEngine is an implementation that must conform to the same behavioral contract.
+
+All three implementations:
 
 - Share the same FlowDefinition DSL structure
-- Implement the same 8-item validation
+- Implement the same validation checks
 - Generate identical Mermaid diagrams
 - Pass a shared test suite (`shared-tests/`, currently 42 scenarios)
 
@@ -315,7 +340,13 @@ tramli's 3-language implementation enables a migration path: prototype in TypeSc
 
 The requires/produces contracts serve as a **migration spec**: when porting a processor from Java to Rust, the contract tells you exactly what data types to accept and produce, and the shared test suite verifies the result.
 
-### 6.4 Limitations
+### 6.4 Constraints as Commitment Device
+
+tramli's design philosophy can be understood through the lens of **commitment devices** (behavioral economics): mechanisms that restrict future choices to prevent suboptimal decisions. `build()` is a commitment device — it makes it impossible for future developers (or LLMs) to introduce structurally broken transitions, unreachable states, or unsatisfied data dependencies. The constraint is the point: by giving up the ability to define arbitrary state machines, the developer gains the guarantee that whatever they define is structurally sound.
+
+This parallels other successful constraint-based designs: Rust's borrow checker (constrains memory access to guarantee safety), SQL's foreign key constraints (constrains data to guarantee referential integrity), and Git's DAG structure (constrains history to guarantee consistency).
+
+### 6.5 Limitations
 
 - **Not formal verification**: build-time checks are structural well-formedness checks, not model checking. tramli cannot verify arbitrary temporal logic properties (cf. SPIN, TLA+, Alloy). It catches 8 specific categories of structural errors.
 - **No runtime enforcement of produces**: if a processor declares `produces(Foo.class)` but doesn't actually produce it, the error occurs downstream at runtime.
@@ -327,10 +358,12 @@ The requires/produces contracts serve as a **migration spec**: when porting a pr
 
 ## 7. Future Work
 
-1. **Shared Test Scenarios (YAML)**: Language-agnostic test scenario files for cross-language migration verification.
-2. **FlowStore Service**: A wire protocol (gRPC/HTTP) for language-agnostic persistence, eliminating per-language FlowStore reimplementation.
-3. **Formal semantics specification**: A formal definition of tramli's execution semantics to strengthen cross-language equivalence beyond empirical testing.
-4. **DataFlowGraph extensions**: Migration order planning, skeleton code generation, and external dependency annotation.
+Listed by priority (highest first):
+
+1. **Shared Test Scenarios (YAML)** [High]: Language-agnostic test scenario files for cross-language migration verification. This directly strengthens the cross-language equivalence claim.
+2. **FlowStore Service** [High]: A wire protocol (gRPC/HTTP) for language-agnostic persistence, eliminating per-language FlowStore reimplementation. Enables polyglot architectures.
+3. **Formal semantics specification** [Medium]: A formal definition of tramli's execution semantics, including a sketch proof of requires/produces soundness. Strengthens academic positioning.
+4. **DataFlowGraph extensions** [Low]: Migration order planning, skeleton code generation, and external dependency annotation. Useful but not load-bearing.
 
 ---
 

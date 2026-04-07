@@ -33,7 +33,7 @@ export class FlowEngine {
     flowId: string, definition: FlowDefinition<S>,
     externalData?: Map<string, unknown>,
   ): Promise<FlowInstance<S>> {
-    const flow = this.store.loadForUpdate<S>(flowId);
+    const flow = this.store.loadForUpdate<S>(flowId, definition);
     if (!flow) throw new FlowError('FLOW_NOT_FOUND', `Flow ${flowId} not found or already completed`);
 
     if (externalData) {
@@ -69,9 +69,9 @@ export class FlowEngine {
             const from = flow.currentState;
             flow.transitionTo(transition.to);
             this.store.recordTransition(flow.id, from, transition.to, guard.name, flow.context);
-          } catch {
+          } catch (e: any) {
             flow.context.restoreFrom(backup);
-            this.handleError(flow, currentState);
+            this.handleError(flow, currentState, e instanceof Error ? e : new Error(String(e)));
             this.store.save(flow);
             return flow;
           }
@@ -147,9 +147,9 @@ export class FlowEngine {
           flow.transitionTo(target);
           this.store.recordTransition(flow.id, from, target, `${branch.name}:${label}`, flow.context);
         }
-      } catch {
+      } catch (e: any) {
         flow.context.restoreFrom(backup);
-        this.handleError(flow, flow.currentState);
+        this.handleError(flow, flow.currentState, e instanceof Error ? e : new Error(String(e)));
         return;
       }
       depth++;
@@ -249,7 +249,8 @@ export class FlowEngine {
     return parentFlow;
   }
 
-  private handleError<S extends string>(flow: FlowInstance<S>, fromState: S): void {
+  private handleError<S extends string>(flow: FlowInstance<S>, fromState: S, cause?: Error): void {
+    if (cause) flow.setLastError(`${cause.constructor.name}: ${cause.message}`);
     const errorTarget = flow.definition.errorTransitions.get(fromState);
     if (errorTarget) {
       const from = flow.currentState;
