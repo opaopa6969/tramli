@@ -170,6 +170,64 @@ fn assert_data_flow_happy_path() {
     assert!(missing.is_empty(), "Missing types at {:?}", flow.current_state());
 }
 
+// ─── v1.4.0+ API tests ──────────────────────────────
+
+#[test]
+fn impact_of() {
+    let def = order_def(true);
+    let (prods, cons) = def.data_flow_graph().impact_of(&TypeId::of::<PaymentIntent>());
+    assert!(!prods.is_empty());
+    assert!(!cons.is_empty());
+}
+
+#[test]
+fn parallelism_hints() {
+    let def = order_def(true);
+    let hints = def.data_flow_graph().parallelism_hints();
+    // may be empty if all dependent, but should not panic
+    assert!(hints.len() >= 0);
+}
+
+#[test]
+fn to_json() {
+    let def = order_def(true);
+    let json = def.data_flow_graph().to_json();
+    assert!(json.contains("\"types\""));
+    assert!(json.contains("\"deadData\""));
+}
+
+#[test]
+fn migration_order_and_markdown() {
+    let def = order_def(true);
+    let order = def.data_flow_graph().migration_order();
+    assert!(!order.is_empty());
+
+    let md = def.data_flow_graph().to_markdown();
+    assert!(md.contains("Migration Checklist"));
+}
+
+#[test]
+fn test_scaffold() {
+    let def = order_def(true);
+    let scaffold = def.data_flow_graph().test_scaffold();
+    assert!(!scaffold.is_empty());
+}
+
+#[test]
+fn generate_invariant_assertions() {
+    let def = order_def(true);
+    let assertions = def.data_flow_graph().generate_invariant_assertions();
+    assert!(!assertions.is_empty());
+}
+
+#[test]
+fn context_alias() {
+    let mut ctx = tramli::FlowContext::new("test-alias".into());
+    ctx.register_alias::<OrderRequest>("OrderRequest");
+    assert_eq!(ctx.alias_of(&TypeId::of::<OrderRequest>()), Some("OrderRequest"));
+    assert_eq!(ctx.type_id_of_alias("OrderRequest"), Some(&TypeId::of::<OrderRequest>()));
+}
+
 #[test]
 fn mermaid_state_diagram() {
     let def = order_def(true);

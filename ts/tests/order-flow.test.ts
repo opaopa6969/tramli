@@ -189,6 +189,105 @@ describe('OrderFlow', () => {
     expect(missing).toEqual([]);
   });
 
+  // ─── v1.4.0+ API tests ──────────────────────────────
+
+  it('impactOf', () => {
+    const def = definition(true);
+    const impact = def.dataFlowGraph!.impactOf(PaymentIntent);
+    expect(impact.producers.length).toBeGreaterThan(0);
+    expect(impact.consumers.length).toBeGreaterThan(0);
+  });
+
+  it('parallelismHints', () => {
+    const def = definition(true);
+    const hints = def.dataFlowGraph!.parallelismHints();
+    expect(hints).toBeDefined();
+  });
+
+  it('toJson', () => {
+    const def = definition(true);
+    const json = def.dataFlowGraph!.toJson();
+    expect(json).toContain('"types"');
+    expect(json).toContain('OrderRequest');
+  });
+
+  it('migrationOrder and toMarkdown', () => {
+    const def = definition(true);
+    const order = def.dataFlowGraph!.migrationOrder();
+    expect(order.length).toBeGreaterThan(0);
+    expect(order[0]).toBe('OrderInit');
+
+    const md = def.dataFlowGraph!.toMarkdown();
+    expect(md).toContain('# Migration Checklist');
+    expect(md).toContain('OrderInit');
+  });
+
+  it('crossFlowMap', () => {
+    const def = definition(true);
+    const map = DataFlowGraph.crossFlowMap(def.dataFlowGraph!, def.dataFlowGraph!);
+    expect(map).toBeDefined();
+  });
+
+  it('diff', () => {
+    const def = definition(true);
+    const result = DataFlowGraph.diff(def.dataFlowGraph!, def.dataFlowGraph!);
+    expect(result.addedTypes.size).toBe(0);
+    expect(result.removedTypes.size).toBe(0);
+  });
+
+  it('versionCompatibility', () => {
+    const def = definition(true);
+    const issues = DataFlowGraph.versionCompatibility(def.dataFlowGraph!, def.dataFlowGraph!);
+    expect(issues).toEqual([]);
+  });
+
+  it('skeletonGenerator', async () => {
+    const { SkeletonGenerator } = await import('../src/skeleton-generator.js');
+    const def = definition(true);
+    const ts = SkeletonGenerator.generate(def, 'typescript');
+    expect(ts).toContain('OrderInit');
+    const java = SkeletonGenerator.generate(def, 'java');
+    expect(java).toContain('OrderInit');
+    const rust = SkeletonGenerator.generate(def, 'rust');
+    expect(rust).toContain('OrderInit');
+  });
+
+  it('generateExternalContract', () => {
+    const def = definition(true);
+    const mermaid = MermaidGenerator.generateExternalContract(def);
+    expect(mermaid).toContain('flowchart LR');
+    expect(mermaid).toContain('PaymentGuard');
+  });
+
+  it('availableData and missingFor', async () => {
+    const def = definition(true);
+    const store = new InMemoryFlowStore();
+    const engine = Tramli.engine(store);
+    const flow = await engine.startFlow(def, 's1',
+      new Map([[OrderRequest as string, { itemId: 'item-1', quantity: 1 }]]));
+
+    expect(flow.availableData().size).toBeGreaterThan(0);
+    expect(flow.missingFor().length).toBe(0);
+  });
+
+  it('withPlugin', () => {
+    const def = definition(true);
+    type SubSimple = 'SS_INIT' | 'SS_DONE';
+    const ssConfig: Record<SubSimple, import('../src/types.js').StateConfig> = {
+      SS_INIT: { terminal: false, initial: true },
+      SS_DONE: { terminal: true, initial: false },
+    };
+    const pluginDef = Tramli.define<SubSimple>('plugin', ssConfig)
+      .from('SS_INIT').auto('SS_DONE', {
+        name: 'PluginProc', requires: [], produces: [],
+        process() {},
+      })
+      .build();
+    const extended = def.withPlugin('CREATED', 'PAYMENT_PENDING', pluginDef);
+    expect(extended).toBeDefined();
+    expect(extended.name).toContain('plugin');
+  });
+
   it('transition log', async () => {
     const def = definition(true);
     const store = new InMemoryFlowStore();
