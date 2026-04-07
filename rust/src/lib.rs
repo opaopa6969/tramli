@@ -27,17 +27,3 @@ macro_rules! requires {
         vec![$(std::any::TypeId::of::<$t>()),*]
     }
 }
-
-#[macro_export]
-macro_rules! guard_data {
-    ($($val:expr),* $(,)?) => {{
-        let mut map = std::collections::HashMap::new();
-        $(
-            map.insert(
-                std::any::TypeId::of_val(&$val),
-                Box::new($val) as Box<dyn $crate::CloneAny>,
-            );
-        )*
-        map
-    }}
-}

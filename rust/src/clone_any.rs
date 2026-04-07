@@ -7,7 +7,6 @@ use std::any::Any;
 pub trait CloneAny: Any + Send {
     fn clone_box(&self) -> Box<dyn CloneAny>;
     fn as_any(&self) -> &dyn Any;
-    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 impl<T: Any + Clone + Send + 'static> CloneAny for T {
@@ -15,9 +14,6 @@ impl<T: Any + Clone + Send + 'static> CloneAny for T {
         Box::new(self.clone())
     }
     fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
 }

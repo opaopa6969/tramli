@@ -37,7 +37,6 @@ pub trait TransitionGuard<S: FlowState>: Send + Sync {
     fn name(&self) -> &str;
     fn requires(&self) -> Vec<TypeId>;
     fn produces(&self) -> Vec<TypeId>;
-    fn max_retries(&self) -> usize;
     fn validate(&self, ctx: &FlowContext) -> GuardOutput;
 }
 

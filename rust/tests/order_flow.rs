@@ -49,7 +49,6 @@ impl TransitionGuard<OrderState> for PaymentGuard {
     fn name(&self) -> &str { "PaymentGuard" }
     fn requires(&self) -> Vec<TypeId> { requires![PaymentIntent] }
     fn produces(&self) -> Vec<TypeId> { requires![PaymentResult] }
-    fn max_retries(&self) -> usize { 3 }
     fn validate(&self, _ctx: &FlowContext) -> GuardOutput {
         if self.accept {
             let mut data = HashMap::new();

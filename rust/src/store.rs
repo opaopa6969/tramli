@@ -3,7 +3,6 @@ use std::time::Instant;
 
 use crate::instance::FlowInstance;
 use crate::types::FlowState;
-use crate::context::FlowContext;
 
 #[derive(Debug, Clone)]
 pub struct TransitionRecord {
@@ -31,7 +30,7 @@ impl<S: FlowState> InMemoryFlowStore<S> {
         self.flows.get_mut(flow_id).filter(|f| !f.is_completed())
     }
 
-    pub fn record_transition(&mut self, flow_id: &str, from: &str, to: &str, trigger: &str, _ctx: &FlowContext) {
+    pub fn record_transition(&mut self, flow_id: &str, from: &str, to: &str, trigger: &str) {
         self.transition_log.push(TransitionRecord {
             flow_id: flow_id.to_string(), from: from.to_string(),
             to: to.to_string(), trigger: trigger.to_string(), timestamp: Instant::now(),

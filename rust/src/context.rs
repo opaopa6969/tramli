@@ -8,6 +8,11 @@ use crate::error::FlowError;
 ///
 /// Use dedicated types as keys (e.g., `struct OrderRequest { ... }`), not primitives.
 /// Putting the same type twice silently overwrites the previous value.
+///
+/// # Processor Contract
+/// Processors MUST NOT perform destructive changes on existing context entries.
+/// Processors should only add new entries via `put()`. On processor failure,
+/// the engine routes to the error transition without restoring context.
 pub struct FlowContext {
     pub flow_id: String,
     pub created_at: std::time::Instant,
@@ -16,11 +21,7 @@ pub struct FlowContext {
 
 impl FlowContext {
     pub fn new(flow_id: String) -> Self {
-        Self {
-            flow_id,
-            created_at: std::time::Instant::now(),
-            attrs: HashMap::new(),
-        }
+        Self { flow_id, created_at: std::time::Instant::now(), attrs: HashMap::new() }
     }
 
     pub fn put<T: CloneAny + 'static>(&mut self, value: T) {
@@ -28,15 +29,13 @@ impl FlowContext {
     }
 
     pub fn get<T: CloneAny + 'static>(&self) -> Result<&T, FlowError> {
-        self.attrs
-            .get(&TypeId::of::<T>())
+        self.attrs.get(&TypeId::of::<T>())
             .and_then(|v| v.as_any().downcast_ref::<T>())
             .ok_or_else(|| FlowError::missing_context(std::any::type_name::<T>()))
     }
 
     pub fn find<T: CloneAny + 'static>(&self) -> Option<&T> {
-        self.attrs
-            .get(&TypeId::of::<T>())
+        self.attrs.get(&TypeId::of::<T>())
             .and_then(|v| v.as_any().downcast_ref::<T>())
     }
 
@@ -48,26 +47,8 @@ impl FlowContext {
         self.attrs.contains_key(id)
     }
 
-    pub fn snapshot(&self) -> HashMap<TypeId, Box<dyn CloneAny>> {
-        self.attrs.clone()
-    }
-
-    pub fn restore_from(&mut self, snapshot: HashMap<TypeId, Box<dyn CloneAny>>) {
-        self.attrs = snapshot;
-    }
-
-    /// Insert a type-erased value (used by engine for guard data merge).
+    /// Insert a type-erased value (used by engine for guard data merge and initial data).
     pub(crate) fn put_raw(&mut self, type_id: TypeId, value: Box<dyn CloneAny>) {
         self.attrs.insert(type_id, value);
-    }
-}
-
-impl Clone for FlowContext {
-    fn clone(&self) -> Self {
-        Self {
-            flow_id: self.flow_id.clone(),
-            created_at: self.created_at,
-            attrs: self.attrs.clone(),
-        }
     }
 }

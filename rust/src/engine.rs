@@ -28,18 +28,14 @@ impl<S: FlowState> FlowEngine<S> {
         initial_data: Vec<(std::any::TypeId, Box<dyn crate::CloneAny>)>,
     ) -> Result<String, FlowError> {
         let flow_id = format!("{:016x}", rand_id());
-        eprintln!("[engine] creating context");
         let mut ctx = FlowContext::new(flow_id.clone());
         for (type_id, value) in initial_data { ctx.put_raw(type_id, value); }
         let initial = definition.initial_state()
             .ok_or_else(|| FlowError::new("INVALID_FLOW_DEFINITION", "No initial state"))?;
         let expires_at = Instant::now() + definition.ttl;
         let flow = FlowInstance::new(flow_id.clone(), session_id.to_string(), definition, ctx, initial, expires_at);
-        eprintln!("[engine] storing flow");
         self.store.create(flow);
-        eprintln!("[engine] executing auto chain");
         self.execute_auto_chain(&flow_id)?;
-        eprintln!("[engine] done");
         Ok(flow_id)
     }
 
@@ -47,90 +43,136 @@ impl<S: FlowState> FlowEngine<S> {
         &mut self, flow_id: &str,
         external_data: Vec<(std::any::TypeId, Box<dyn crate::CloneAny>)>,
     ) -> Result<(), FlowError> {
-        let flow = self.store.get_mut(flow_id)
-            .ok_or_else(|| FlowError::new("FLOW_NOT_FOUND", format!("Flow {flow_id} not found or completed")))?;
+        // Phase 1: operate on flow, collect transition info
+        let transition_info = {
+            let flow = self.store.get_mut(flow_id)
+                .ok_or_else(|| FlowError::new("FLOW_NOT_FOUND", format!("Flow {flow_id} not found or completed")))?;
 
-        for (tid, val) in external_data { flow.context.put_raw(tid, val); }
+            for (tid, val) in external_data { flow.context.put_raw(tid, val); }
 
-        if Instant::now() > flow.expires_at {
-            flow.complete("EXPIRED");
-            return Ok(());
-        }
+            if Instant::now() > flow.expires_at {
+                flow.complete("EXPIRED");
+                return Ok(());
+            }
 
-        let current = flow.current_state();
-        let def = flow.definition.clone();
-        let transition = def.external_from(current)
-            .ok_or_else(|| FlowError::invalid_transition(&format!("{:?}", current), &format!("{:?}", current)))?;
+            let current = flow.current_state();
+            let def = flow.definition.clone();
+            let transition = def.external_from(current)
+                .ok_or_else(|| FlowError::invalid_transition(&format!("{:?}", current), &format!("{:?}", current)))?;
 
-        if let Some(guard) = &transition.guard {
-            let output = guard.validate(&flow.context);
-            match output {
-                GuardOutput::Accepted { data } => {
-                    let backup = flow.context.snapshot();
-                    for (k, v) in data { flow.context.put_raw(k, v); }
-                    let to = transition.to;
-                    if let Some(proc) = &transition.processor {
-                        if proc.process(&mut flow.context).is_err() {
-                            flow.context.restore_from(backup);
-                            Self::handle_error(flow, current, &def);
-                            return Ok(());
+            if let Some(guard) = &transition.guard {
+                let output = guard.validate(&flow.context);
+                match output {
+                    GuardOutput::Accepted { data } => {
+                        for (k, v) in data { flow.context.put_raw(k, v); }
+                        let to = transition.to;
+                        if let Some(proc) = &transition.processor {
+                            if proc.process(&mut flow.context).is_err() {
+                                Self::handle_error(flow, current, &def);
+                                Some((format!("{:?}", current), format!("{:?}", flow.current_state()), "error".to_string()))
+                            } else {
+                                let from_dbg = format!("{:?}", current);
+                                flow.transition_to(to);
+                                Some((from_dbg, format!("{:?}", to), guard.name().to_string()))
+                            }
+                        } else {
+                            let from_dbg = format!("{:?}", current);
+                            flow.transition_to(to);
+                            Some((from_dbg, format!("{:?}", to), guard.name().to_string()))
                         }
                     }
-                    flow.transition_to(to);
-                }
-                GuardOutput::Rejected { .. } => {
-                    flow.increment_guard_failure();
-                    if flow.guard_failure_count() >= def.max_guard_retries {
-                        Self::handle_error(flow, current, &def);
+                    GuardOutput::Rejected { .. } => {
+                        flow.increment_guard_failure();
+                        if flow.guard_failure_count() >= def.max_guard_retries {
+                            Self::handle_error(flow, current, &def);
+                            Some((format!("{:?}", current), format!("{:?}", flow.current_state()), "error".to_string()))
+                        } else {
+                            None
+                        }
                     }
-                    return Ok(());
+                    GuardOutput::Expired => {
+                        flow.complete("EXPIRED");
+                        None
+                    }
                 }
-                GuardOutput::Expired => {
-                    flow.complete("EXPIRED");
-                    return Ok(());
-                }
+            } else {
+                let from_dbg = format!("{:?}", current);
+                let to = transition.to;
+                flow.transition_to(to);
+                Some((from_dbg, format!("{:?}", to), "external".to_string()))
             }
-        } else {
-            flow.transition_to(transition.to);
+        }; // flow borrow ends here
+
+        // Phase 2: record transition (no flow borrow)
+        if let Some((from, to, trigger)) = &transition_info {
+            self.store.record_transition(flow_id, from, to, trigger);
         }
 
-        self.execute_auto_chain(flow_id)?;
+        // Phase 3: auto chain (only if we transitioned successfully)
+        if transition_info.is_some() {
+            // Check if the transition was an error — don't auto-chain after error
+            if let Some((_, _, ref trigger)) = transition_info {
+                if trigger != "error" {
+                    self.execute_auto_chain(flow_id)?;
+                }
+            }
+        }
         Ok(())
     }
 
     fn execute_auto_chain(&mut self, flow_id: &str) -> Result<(), FlowError> {
-        eprintln!("[auto_chain] enter");
         let mut depth = 0;
         while depth < MAX_CHAIN_DEPTH {
-            eprintln!("[auto_chain] depth={}", depth);
-            let flow = match self.store.get_mut(flow_id) { Some(f) => f, None => break };
-            let current = flow.current_state();
-            if current.is_terminal() { flow.complete(format!("{:?}", current)); break; }
+            // Phase 1: operate on flow, collect result
+            let step_result = {
+                let flow = match self.store.get_mut(flow_id) { Some(f) => f, None => break };
+                let current = flow.current_state();
+                if current.is_terminal() { flow.complete(format!("{:?}", current)); break; }
 
-            let def = flow.definition.clone();
-            let auto_t = def.transitions.iter()
-                .find(|t| t.from == current && (t.transition_type == TransitionType::Auto || t.transition_type == TransitionType::Branch));
-            let Some(t) = auto_t else { break };
+                let def = flow.definition.clone();
+                let auto_t = def.transitions.iter()
+                    .find(|t| t.from == current && (t.transition_type == TransitionType::Auto || t.transition_type == TransitionType::Branch));
+                let Some(t) = auto_t else { break };
 
-            // let backup = flow.context.snapshot();  // temporarily disabled
-            if t.transition_type == TransitionType::Auto {
-                if let Some(proc) = &t.processor {
-                    if proc.process(&mut flow.context).is_err() {
-                        // flow.context.restore_from(backup);
-                        Self::handle_error(flow, current, &def);
-                        return Ok(());
+                if t.transition_type == TransitionType::Auto {
+                    if let Some(proc) = &t.processor {
+                        if proc.process(&mut flow.context).is_err() {
+                            Self::handle_error(flow, current, &def);
+                            Some((format!("{:?}", current), format!("{:?}", flow.current_state()), "error".to_string(), true))
+                        } else {
+                            let from_dbg = format!("{:?}", current);
+                            let to = t.to;
+                            let trigger = proc.name().to_string();
+                            flow.transition_to(to);
+                            Some((from_dbg, format!("{:?}", to), trigger, false))
+                        }
+                    } else {
+                        let from_dbg = format!("{:?}", current);
+                        let to = t.to;
+                        flow.transition_to(to);
+                        Some((from_dbg, format!("{:?}", to), "auto".to_string(), false))
                     }
-                }
-                flow.transition_to(t.to);
-            } else if let Some(branch) = &t.branch {
-                let label = branch.decide(&flow.context);
-                if let Some(&target) = t.branch_targets.get(&label) {
-                    flow.transition_to(target);
+                } else if let Some(branch) = &t.branch {
+                    let label = branch.decide(&flow.context);
+                    if let Some(&target) = t.branch_targets.get(&label) {
+                        let from_dbg = format!("{:?}", current);
+                        flow.transition_to(target);
+                        Some((from_dbg, format!("{:?}", target), format!("{}:{}", branch.name(), label), false))
+                    } else {
+                        Self::handle_error(flow, current, &def);
+                        Some((format!("{:?}", current), format!("{:?}", flow.current_state()), "error".to_string(), true))
+                    }
                 } else {
-                    // flow.context.restore_from(backup);
-                    Self::handle_error(flow, current, &def);
-                    return Ok(());
+                    break
                 }
+            }; // flow borrow ends
+
+            // Phase 2: record + check if we should stop
+            if let Some((from, to, trigger, is_error)) = step_result {
+                self.store.record_transition(flow_id, &from, &to, &trigger);
+                if is_error { return Ok(()); }
+            } else {
+                break;
             }
             depth += 1;
         }
@@ -151,9 +193,11 @@ impl<S: FlowState> FlowEngine<S> {
 fn rand_id() -> u64 {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::SystemTime;
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
     let mut h = DefaultHasher::new();
     SystemTime::now().hash(&mut h);
-    std::thread::current().id().hash(&mut h);
+    COUNTER.fetch_add(1, Ordering::Relaxed).hash(&mut h);
     h.finish()
 }
