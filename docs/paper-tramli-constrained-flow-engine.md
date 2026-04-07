@@ -229,11 +229,11 @@ All three implementations:
 - Share the same FlowDefinition DSL structure
 - Implement the same validation checks
 - Generate identical Mermaid diagrams
-- Pass a shared test suite (`shared-tests/`, currently 42 scenarios)
+- Pass a shared test suite (125 tests across 3 languages + 4 YAML scenarios in `shared-tests/`)
 
 Zero external dependencies in all three languages. Jackson (Java) is optional, for JSONB serialization only.
 
-The shared test suite provides **empirical** (not formal) evidence of cross-language semantic equivalence. A formal specification of tramli's semantics is future work.
+The shared test suite (125 tests + 4 YAML scenarios) provides **empirical** (not formal) evidence of cross-language semantic equivalence. A formal specification of tramli's semantics is future work.
 
 ### 4.2 Performance
 
@@ -338,7 +338,7 @@ This is the core of tramli's differentiation from XState: **XState provides type
 
 **External validity**: Production deployment evidence comes from a single project (volta-auth-proxy). The 4 flows are all authentication-related, which may not represent the full diversity of state machine use cases (e.g., game logic, protocol implementations).
 
-**Internal validity**: Cross-language equivalence is verified empirically via 42 shared test scenarios, not by formal proof. Edge cases in language-specific behavior (e.g., floating-point handling, Unicode in state names) could differ without being caught by current tests.
+**Internal validity**: Cross-language equivalence is verified empirically via 125 tests + 4 YAML scenarios, not by formal proof. Edge cases in language-specific behavior (e.g., floating-point handling, Unicode in state names) could differ without being caught by current tests.
 
 **Construct validity**: The competitive comparison selects 3 primary competitors based on GitHub stars and ecosystem representation. Other libraries (squirrel-foundation, Robot3, rust-fsm, etc.) exist but were excluded from the main comparison to avoid diluting the analysis. Full data is available in supplementary materials.
 
@@ -392,10 +392,10 @@ This parallels other successful constraint-based designs: Rust's borrow checker 
 
 Listed by priority (highest first):
 
-1. **Shared Test Scenarios (YAML)** [High]: Language-agnostic test scenario files for cross-language migration verification. This directly strengthens the cross-language equivalence claim.
-2. **FlowStore Service** [High]: A wire protocol (gRPC/HTTP) for language-agnostic persistence, eliminating per-language FlowStore reimplementation. Enables polyglot architectures.
-3. **Formal semantics specification** [Medium]: A formal definition of tramli's execution semantics, including a sketch proof of requires/produces soundness. Strengthens academic positioning.
-4. **DataFlowGraph extensions** [Low]: Migration order planning, skeleton code generation, and external dependency annotation. Useful but not load-bearing.
+1. **Formal semantics specification** [High]: A formal definition of tramli's execution semantics, including a sketch proof of requires/produces soundness. Strengthens academic positioning and cross-language equivalence beyond empirical testing.
+2. **Runtime produces enforcement** [Medium]: The `strictMode` option (v1.7.0) verifies produces declarations at runtime. Future work could make this opt-in per-processor or integrate with testing frameworks.
+3. **FlowStore wire protocol** [Medium]: A recommended serialization format (JSON schema) for FlowContext and FlowInstance, enabling cross-language FlowStore interoperability without a centralized service (DD-018 rejected the service approach; the wire protocol remains viable).
+4. **DataFlowGraph extensions** [Low]: Migration order planning (implemented in v1.5.0), skeleton code generation (v1.5.0), and external dependency annotation. Largely complete.
 
 ---
 

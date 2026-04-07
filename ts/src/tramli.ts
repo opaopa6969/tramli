@@ -8,7 +8,7 @@ export class Tramli {
     return new Builder(name, stateConfig);
   }
 
-  static engine(store: InMemoryFlowStore): FlowEngine {
-    return new FlowEngine(store);
+  static engine(store: InMemoryFlowStore, options?: { strictMode?: boolean }): FlowEngine {
+    return new FlowEngine(store, options);
   }
 }

@@ -17,10 +17,12 @@ const MAX_CHAIN_DEPTH: usize = 10;
 /// See `docs/async-integration.md` for the pattern.
 pub struct FlowEngine<S: FlowState> {
     pub store: InMemoryFlowStore<S>,
+    pub strict_mode: bool,
 }
 
 impl<S: FlowState> FlowEngine<S> {
-    pub fn new(store: InMemoryFlowStore<S>) -> Self { Self { store } }
+    pub fn new(store: InMemoryFlowStore<S>) -> Self { Self { store, strict_mode: false } }
+    pub fn with_strict_mode(store: InMemoryFlowStore<S>) -> Self { Self { store, strict_mode: true } }
 
     pub fn start_flow(
         &mut self, definition: Arc<FlowDefinition<S>>,

@@ -8,7 +8,10 @@ import type { Transition, GuardOutput } from './types.js';
 const MAX_CHAIN_DEPTH = 10;
 
 export class FlowEngine {
-  constructor(private readonly store: InMemoryFlowStore) {}
+  private readonly strictMode: boolean;
+  constructor(private readonly store: InMemoryFlowStore, options?: { strictMode?: boolean }) {
+    this.strictMode = options?.strictMode ?? false;
+  }
 
   async startFlow<S extends string>(
     definition: FlowDefinition<S>, sessionId: string,
@@ -128,7 +131,10 @@ export class FlowEngine {
       const backup = flow.context.snapshot();
       try {
         if (autoOrBranch.type === 'auto') {
-          if (autoOrBranch.processor) await autoOrBranch.processor.process(flow.context);
+          if (autoOrBranch.processor) {
+            await autoOrBranch.processor.process(flow.context);
+            this.verifyProduces(autoOrBranch.processor, flow.context);
+          }
           const from = flow.currentState;
           flow.transitionTo(autoOrBranch.to);
           this.store.recordTransition(flow.id, from, autoOrBranch.to,
@@ -247,6 +253,16 @@ export class FlowEngine {
 
     this.store.save(parentFlow);
     return parentFlow;
+  }
+
+  private verifyProduces(processor: { name: string; produces: any[] }, ctx: FlowContext): void {
+    if (!this.strictMode) return;
+    for (const prod of processor.produces) {
+      if (!ctx.has(prod)) {
+        throw new FlowError('PRODUCES_VIOLATION',
+          `Processor '${processor.name}' declares produces ${prod} but did not put it in context (strictMode)`);
+      }
+    }
   }
 
   private handleError<S extends string>(flow: FlowInstance<S>, fromState: S, cause?: Error): void {

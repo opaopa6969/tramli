@@ -22,9 +22,15 @@ public final class FlowEngine {
     private static final int MAX_CHAIN_DEPTH = 10;
 
     private final FlowStore store;
+    private final boolean strictMode;
 
     public FlowEngine(FlowStore store) {
+        this(store, false);
+    }
+
+    public FlowEngine(FlowStore store, boolean strictMode) {
         this.store = store;
+        this.strictMode = strictMode;
     }
 
     public <S extends Enum<S> & FlowState> FlowInstance<S> startFlow(
@@ -161,7 +167,10 @@ public final class FlowEngine {
             Map<Class<?>, Object> backup = flow.context().snapshot();
             try {
                 if (autoOrBranch.isAuto()) {
-                    if (autoOrBranch.processor() != null) autoOrBranch.processor().process(flow.context());
+                    if (autoOrBranch.processor() != null) {
+                        autoOrBranch.processor().process(flow.context());
+                        verifyProduces(autoOrBranch.processor(), flow.context());
+                    }
                     S from = flow.currentState();
                     flow.transitionTo(autoOrBranch.to());
                     store.recordTransition(flow.id(), from, autoOrBranch.to(),
@@ -314,6 +323,17 @@ public final class FlowEngine {
             if (errorTarget.isTerminal()) flow.complete(errorTarget.name());
         } else {
             flow.complete("TERMINAL_ERROR");
+        }
+    }
+
+    private void verifyProduces(StateProcessor processor, FlowContext ctx) {
+        if (!strictMode || processor == null) return;
+        for (Class<?> prod : processor.produces()) {
+            if (!ctx.has(prod)) {
+                throw new FlowException("PRODUCES_VIOLATION",
+                        "Processor '" + processor.name() + "' declares produces " +
+                                prod.getSimpleName() + " but did not put it in context (strictMode)");
+            }
         }
     }
 

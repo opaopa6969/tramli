@@ -3,6 +3,16 @@
 All notable changes to tramli are documented here. Versions are published to
 crates.io, npm (@unlaxer/tramli), and Maven Central (org.unlaxer:tramli).
 
+## [1.7.0] - 2026-04-07
+
+### Added
+- **strictMode** — FlowEngine option to verify processor produces declarations at runtime (3 languages)
+- Shared scenario tests (Java SharedScenarioTest, TS shared-scenarios.test.ts)
+- strictMode produces violation test
+
+### Fixed
+- Paper: corrected test count (125 tests + 4 YAML scenarios), updated Future Work per DD-018
+
 ## [1.6.0] - 2026-04-07
 
 ### Added
