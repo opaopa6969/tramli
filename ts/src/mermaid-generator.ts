@@ -31,6 +31,11 @@ export class MermaidGenerator {
     return lines.join('\n') + '\n';
   }
 
+  /** Generate Mermaid data-flow diagram from requires/produces declarations. */
+  static generateDataFlow<S extends string>(def: FlowDefinition<S>): string {
+    return def.dataFlowGraph?.toMermaid() ?? '';
+  }
+
   private static transitionLabel<S extends string>(t: Transition<S>): string {
     if (t.type === 'auto') return t.processor?.name ?? '';
     if (t.type === 'external') return t.guard ? `[${t.guard.name}]` : '';

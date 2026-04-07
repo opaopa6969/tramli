@@ -2,6 +2,7 @@ use std::any::TypeId;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
+use crate::data_flow_graph::DataFlowGraph;
 use crate::error::FlowError;
 use crate::types::*;
 
@@ -13,11 +14,13 @@ pub struct FlowDefinition<S: FlowState> {
     pub error_transitions: HashMap<S, S>,
     initial_state: Option<S>,
     terminal_states: HashSet<S>,
+    data_flow_graph: DataFlowGraph<S>,
 }
 
 impl<S: FlowState> FlowDefinition<S> {
     pub fn initial_state(&self) -> Option<S> { self.initial_state }
     pub fn terminal_states(&self) -> &HashSet<S> { &self.terminal_states }
+    pub fn data_flow_graph(&self) -> &DataFlowGraph<S> { &self.data_flow_graph }
 
     pub fn transitions_from(&self, state: S) -> Vec<&Transition<S>> {
         self.transitions.iter().filter(|t| t.from == state).collect()
@@ -84,9 +87,11 @@ impl<S: FlowState> Builder<S> {
             name: name.clone(), ttl: self.ttl, max_guard_retries: self.max_guard_retries,
             transitions: self.transitions, error_transitions: self.error_transitions,
             initial_state: initial, terminal_states: terminals,
+            data_flow_graph: DataFlowGraph::empty(),
         };
         validate::<S>(&def, &name, perpetual, &initially_available)?;
-        Ok(def)
+        let graph = DataFlowGraph::build(&def, &initially_available);
+        Ok(FlowDefinition { data_flow_graph: graph, ..def })
     }
 }
 

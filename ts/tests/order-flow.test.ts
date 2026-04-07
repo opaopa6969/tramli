@@ -129,6 +129,37 @@ describe('OrderFlow', () => {
     expect(mermaid).toContain('SHIPPED --> [*]');
   });
 
+  it('data-flow graph', () => {
+    const def = definition(true);
+    const graph = def.dataFlowGraph!;
+
+    // Available data at each state
+    expect(graph.availableAt('CREATED').has('OrderRequest')).toBe(true);
+    expect(graph.availableAt('PAYMENT_PENDING').has('PaymentIntent')).toBe(true);
+    expect(graph.availableAt('SHIPPED').has('ShipmentInfo')).toBe(true);
+
+    // Producers
+    expect(graph.producersOf(PaymentIntent).length).toBeGreaterThan(0);
+    expect(graph.producersOf(PaymentIntent)[0].name).toBe('OrderInit');
+
+    // Consumers
+    expect(graph.consumersOf(OrderRequest).length).toBeGreaterThan(0);
+    expect(graph.consumersOf(OrderRequest)[0].name).toBe('OrderInit');
+
+    // Dead data — ShipmentInfo is produced but never required
+    expect(graph.deadData().has('ShipmentInfo')).toBe(true);
+  });
+
+  it('data-flow mermaid', () => {
+    const def = definition(true);
+    const mermaid = MermaidGenerator.generateDataFlow(def);
+    expect(mermaid).toContain('flowchart LR');
+    expect(mermaid).toContain('OrderInit');
+    expect(mermaid).toContain('PaymentIntent');
+    expect(mermaid).toContain('produces');
+    expect(mermaid).toContain('requires');
+  });
+
   it('transition log', async () => {
     const def = definition(true);
     const store = new InMemoryFlowStore();

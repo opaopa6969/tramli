@@ -1,6 +1,7 @@
 import type { FlowKey } from './flow-key.js';
 import type { StateConfig, Transition, TransitionType, StateProcessor, TransitionGuard, BranchProcessor } from './types.js';
 import { FlowError } from './flow-error.js';
+import { DataFlowGraph } from './data-flow-graph.js';
 
 export class FlowDefinition<S extends string> {
   readonly name: string;
@@ -11,6 +12,7 @@ export class FlowDefinition<S extends string> {
   readonly errorTransitions: Map<S, S>;
   readonly initialState: S | null;
   readonly terminalStates: Set<S>;
+  readonly dataFlowGraph!: DataFlowGraph<S> | null;
 
   private constructor(
     name: string, stateConfig: Record<S, StateConfig>, ttl: number,
@@ -114,8 +116,11 @@ export class Builder<S extends string> {
     }
     (result as any).initialState = initial;
     (result as any).terminalStates = terminals;
+    (result as any).dataFlowGraph = null;
 
     this.validate(result);
+
+    (result as any).dataFlowGraph = DataFlowGraph.build(result, this.initiallyAvailableKeys);
     return result;
   }
 

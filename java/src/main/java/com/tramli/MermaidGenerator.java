@@ -53,11 +53,18 @@ public final class MermaidGenerator {
         };
     }
 
+    /** Generate Mermaid data-flow diagram from requires/produces declarations. */
+    public static <S extends Enum<S> & FlowState> String generateDataFlow(FlowDefinition<S> definition) {
+        return definition.dataFlowGraph().toMermaid();
+    }
+
     public static <S extends Enum<S> & FlowState> String writeToFile(
             FlowDefinition<S> definition, Path outputDir) throws IOException {
         Files.createDirectories(outputDir);
         String content = generate(definition);
         Files.writeString(outputDir.resolve("flow-" + definition.name() + ".mmd"), content);
+        String dataFlow = generateDataFlow(definition);
+        Files.writeString(outputDir.resolve("dataflow-" + definition.name() + ".mmd"), dataFlow);
         return content;
     }
 }

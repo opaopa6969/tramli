@@ -5,19 +5,23 @@
 
 mod clone_any;
 mod context;
+mod data_flow_graph;
 mod definition;
 mod engine;
 mod error;
 mod instance;
+mod mermaid;
 mod store;
 mod types;
 
 pub use clone_any::CloneAny;
 pub use context::FlowContext;
+pub use data_flow_graph::{DataFlowGraph, NodeInfo};
 pub use definition::{FlowDefinition, Builder, FromBuilder, BranchBuilder};
 pub use engine::FlowEngine;
 pub use error::FlowError;
 pub use instance::FlowInstance;
+pub use mermaid::MermaidGenerator;
 pub use store::{InMemoryFlowStore, TransitionRecord};
 pub use types::*;
 

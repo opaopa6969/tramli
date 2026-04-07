@@ -107,6 +107,50 @@ fn payment_rejected_max_retries() {
 }
 
 #[test]
+#[test]
+fn data_flow_graph() {
+    let def = order_def(true);
+    let graph = def.data_flow_graph();
+
+    // Available data at CREATED
+    assert!(graph.available_at(OrderState::Created).contains(&TypeId::of::<OrderRequest>()));
+    // Available data at PaymentPending
+    assert!(graph.available_at(OrderState::PaymentPending).contains(&TypeId::of::<PaymentIntent>()));
+
+    // Producers of PaymentIntent
+    let producers = graph.producers_of(&TypeId::of::<PaymentIntent>());
+    assert!(!producers.is_empty());
+    assert_eq!(producers[0].name, "OrderInit");
+
+    // Consumers of OrderRequest
+    let consumers = graph.consumers_of(&TypeId::of::<OrderRequest>());
+    assert!(!consumers.is_empty());
+    assert_eq!(consumers[0].name, "OrderInit");
+
+    // Dead data — ShipmentInfo is produced but never required
+    assert!(graph.dead_data().contains(&TypeId::of::<ShipmentInfo>()));
+}
+
+#[test]
+fn mermaid_state_diagram() {
+    let def = order_def(true);
+    let mermaid = MermaidGenerator::generate(&def);
+    assert!(mermaid.contains("stateDiagram-v2"));
+    assert!(mermaid.contains("[*] --> Created"));
+    assert!(mermaid.contains("Shipped --> [*]"));
+}
+
+#[test]
+fn mermaid_data_flow() {
+    let def = order_def(true);
+    let mermaid = MermaidGenerator::generate_data_flow(&def);
+    assert!(mermaid.contains("flowchart LR"));
+    assert!(mermaid.contains("OrderInit"));
+    assert!(mermaid.contains("produces"));
+    assert!(mermaid.contains("requires"));
+}
+
+#[test]
 fn processor_throws_routes_to_error() {
     struct FailProc;
     impl StateProcessor<OrderState> for FailProc {

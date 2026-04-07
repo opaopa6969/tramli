@@ -70,6 +70,41 @@ class OrderFlowTest {
     }
 
     @Test
+    void dataFlowGraph() {
+        var def = definition(true);
+        var graph = def.dataFlowGraph();
+
+        // Available data at each state
+        assertTrue(graph.availableAt(OrderState.CREATED).contains(OrderRequest.class));
+        assertTrue(graph.availableAt(OrderState.PAYMENT_PENDING).contains(PaymentIntent.class));
+        assertTrue(graph.availableAt(OrderState.SHIPPED).contains(ShipmentInfo.class));
+
+        // Producers
+        assertFalse(graph.producersOf(PaymentIntent.class).isEmpty());
+        assertEquals("OrderInit", graph.producersOf(PaymentIntent.class).getFirst().name());
+
+        // Consumers
+        assertFalse(graph.consumersOf(OrderRequest.class).isEmpty());
+        assertEquals("OrderInit", graph.consumersOf(OrderRequest.class).getFirst().name());
+
+        // No dead data in this flow (all produced types are consumed downstream)
+        // ShipmentInfo is produced but never required — it's dead data
+        assertTrue(graph.deadData().contains(ShipmentInfo.class));
+    }
+
+    @Test
+    void dataFlowMermaid() {
+        var def = definition(true);
+        String mermaid = MermaidGenerator.generateDataFlow(def);
+
+        assertTrue(mermaid.contains("flowchart LR"));
+        assertTrue(mermaid.contains("OrderInit"));
+        assertTrue(mermaid.contains("PaymentIntent"));
+        assertTrue(mermaid.contains("produces"));
+        assertTrue(mermaid.contains("requires"));
+    }
+
+    @Test
     void definitionValidation() {
         var def = definition(true);
         assertEquals("order", def.name());

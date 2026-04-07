@@ -28,9 +28,11 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
     private final Map<S, S> errorTransitions;
     private final S initialState;
     private final Set<S> terminalStates;
+    private final DataFlowGraph<S> dataFlowGraph;
 
     private FlowDefinition(String name, Class<S> stateClass, Duration ttl, int maxGuardRetries,
-                           List<Transition<S>> transitions, Map<S, S> errorTransitions) {
+                           List<Transition<S>> transitions, Map<S, S> errorTransitions,
+                           DataFlowGraph<S> dataFlowGraph) {
         this.name = name;
         this.stateClass = stateClass;
         this.ttl = ttl;
@@ -46,6 +48,7 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
         }
         this.initialState = initial;
         this.terminalStates = Collections.unmodifiableSet(terminals);
+        this.dataFlowGraph = dataFlowGraph;
     }
 
     public String name() { return name; }
@@ -70,6 +73,9 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
     public Set<S> allStates() {
         return EnumSet.allOf(stateClass);
     }
+
+    /** Data-flow graph derived from requires/produces declarations. */
+    public DataFlowGraph<S> dataFlowGraph() { return dataFlowGraph; }
 
     // ─── Builder ─────────────────────────────────────────────
 
@@ -180,9 +186,10 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
         }
 
         public FlowDefinition<S> build() {
-            var def = new FlowDefinition<>(name, stateClass, ttl, maxGuardRetries, transitions, errorTransitions);
+            var def = new FlowDefinition<>(name, stateClass, ttl, maxGuardRetries, transitions, errorTransitions, null);
             validate(def);
-            return def;
+            var graph = DataFlowGraph.build(def, initiallyAvailable);
+            return new FlowDefinition<>(name, stateClass, ttl, maxGuardRetries, transitions, errorTransitions, graph);
         }
 
         private void validate(FlowDefinition<S> def) {
