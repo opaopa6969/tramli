@@ -11,6 +11,7 @@ mod engine;
 mod error;
 mod instance;
 mod mermaid;
+pub mod pipeline;
 mod store;
 pub mod sub_flow;
 mod types;

@@ -31,4 +31,12 @@ public final class Tramli {
     public static FlowEngine engine(FlowStore store) {
         return new FlowEngine(store);
     }
+
+    /**
+     * Start defining a new pipeline — sequential step chain with build-time
+     * requires/produces verification.
+     */
+    public static Pipeline.PipelineBuilder pipeline(String name) {
+        return Pipeline.builder(name);
+    }
 }

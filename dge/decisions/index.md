@@ -20,3 +20,4 @@
 | [DD-016](DD-016-v1-release.md) | tramli v1.0.0 リリース | [v1-readiness](../sessions/2026-04-07-tramli-v1-readiness.md) | 2026-04-07 |
 | [DD-017](DD-017-flow-composition-subflow.md) | Flow Composition（サブフロー） | [state-tree](../sessions/2026-04-07-tramli-state-tree.md) | 2026-04-07 |
 | [DD-018](DD-018-portability-no-flowstore-service.md) | FlowStore サービス化しない + エイリアス API | [flowstore-portability](../sessions/2026-04-07-tramli-flowstore-portability.md) | 2026-04-07 |
+| [DD-019](DD-019-pipeline.md) | Tramli.pipeline() — build 時検証付き直列パイプライン | [pipeline-vision](../sessions/2026-04-08-tramli-pipeline-vision.md) | 2026-04-08 |

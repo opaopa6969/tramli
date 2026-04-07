@@ -11,6 +11,8 @@ export { MermaidGenerator } from './mermaid-generator.js';
 export { SkeletonGenerator } from './skeleton-generator.js';
 export type { TargetLanguage } from './skeleton-generator.js';
 export { DataFlowGraph } from './data-flow-graph.js';
+export { Pipeline, PipelineBuilder, PipelineDataFlow, PipelineException } from './pipeline.js';
+export type { PipelineStep } from './pipeline.js';
 export type { NodeInfo } from './data-flow-graph.js';
 export { flowKey } from './flow-key.js';
 export type { FlowKey } from './flow-key.js';
