@@ -23,6 +23,9 @@ public final class FlowEngine {
 
     private final FlowStore store;
     private final boolean strictMode;
+    private java.util.function.Consumer<LogEntry.Transition> transitionLogger;
+    private java.util.function.Consumer<LogEntry.State> stateLogger;
+    private java.util.function.Consumer<LogEntry.Error> errorLogger;
 
     public FlowEngine(FlowStore store) {
         this(store, false);
@@ -31,6 +34,28 @@ public final class FlowEngine {
     public FlowEngine(FlowStore store, boolean strictMode) {
         this.store = store;
         this.strictMode = strictMode;
+    }
+
+    /** Set transition logger. Called on each state transition. */
+    public void setTransitionLogger(java.util.function.Consumer<LogEntry.Transition> logger) {
+        this.transitionLogger = logger;
+    }
+
+    /** Set state logger. Called on each context.put(). Opt-in for debugging. */
+    public void setStateLogger(java.util.function.Consumer<LogEntry.State> logger) {
+        this.stateLogger = logger;
+    }
+
+    /** Set error logger. Called when a processor throws or error transition fires. */
+    public void setErrorLogger(java.util.function.Consumer<LogEntry.Error> logger) {
+        this.errorLogger = logger;
+    }
+
+    /** Remove all loggers. */
+    public void removeAllLoggers() {
+        this.transitionLogger = null;
+        this.stateLogger = null;
+        this.errorLogger = null;
     }
 
     public <S extends Enum<S> & FlowState> FlowInstance<S> startFlow(
@@ -314,7 +339,6 @@ public final class FlowEngine {
     private <S extends Enum<S> & FlowState> void handleError(FlowInstance<S> flow, S fromState, Exception cause) {
         if (cause != null) {
             flow.setLastError(cause.getClass().getSimpleName() + ": " + cause.getMessage());
-            // Attach context snapshot to the exception if it's a FlowException
             if (cause instanceof FlowException fe) {
                 var available = flow.context().snapshot().keySet();
                 fe.withContextSnapshot(available, java.util.Set.of());
@@ -325,6 +349,8 @@ public final class FlowEngine {
             S from = flow.currentState();
             flow.transitionTo(errorTarget);
             store.recordTransition(flow.id(), from, errorTarget, "error", flow.context());
+            logTransition(flow.id(), from, errorTarget, "error");
+            logError(flow.id(), fromState, errorTarget, "error", cause);
             if (errorTarget.isTerminal()) flow.complete(errorTarget.name());
         } else {
             flow.complete("TERMINAL_ERROR");
@@ -339,6 +365,20 @@ public final class FlowEngine {
                         "Processor '" + processor.name() + "' declares produces " +
                                 prod.getSimpleName() + " but did not put it in context (strictMode)");
             }
+        }
+    }
+
+    private void logTransition(String flowId, FlowState from, FlowState to, String trigger) {
+        if (transitionLogger != null) {
+            transitionLogger.accept(new LogEntry.Transition(flowId,
+                    from != null ? from.name() : null, to.name(), trigger));
+        }
+    }
+
+    private void logError(String flowId, FlowState from, FlowState to, String trigger, Throwable cause) {
+        if (errorLogger != null) {
+            errorLogger.accept(new LogEntry.Error(flowId,
+                    from != null ? from.name() : null, to != null ? to.name() : null, trigger, cause));
         }
     }
 

@@ -15,14 +15,48 @@ const MAX_CHAIN_DEPTH: usize = 10;
 /// Intentionally synchronous — state transitions take microseconds.
 /// Async I/O happens outside the engine via External transitions.
 /// See `docs/async-integration.md` for the pattern.
+/// Log entry for transitions.
+pub struct TransitionLogEntry {
+    pub flow_id: String,
+    pub from: String,
+    pub to: String,
+    pub trigger: String,
+}
+
+/// Log entry for errors.
+pub struct ErrorLogEntry {
+    pub flow_id: String,
+    pub from: String,
+    pub to: String,
+    pub trigger: String,
+    pub cause: Option<String>,
+}
+
 pub struct FlowEngine<S: FlowState> {
     pub store: InMemoryFlowStore<S>,
     pub strict_mode: bool,
+    transition_logger: Option<Box<dyn Fn(&TransitionLogEntry) + Send + Sync>>,
+    error_logger: Option<Box<dyn Fn(&ErrorLogEntry) + Send + Sync>>,
 }
 
 impl<S: FlowState> FlowEngine<S> {
-    pub fn new(store: InMemoryFlowStore<S>) -> Self { Self { store, strict_mode: false } }
-    pub fn with_strict_mode(store: InMemoryFlowStore<S>) -> Self { Self { store, strict_mode: true } }
+    pub fn new(store: InMemoryFlowStore<S>) -> Self {
+        Self { store, strict_mode: false, transition_logger: None, error_logger: None }
+    }
+    pub fn with_strict_mode(store: InMemoryFlowStore<S>) -> Self {
+        Self { store, strict_mode: true, transition_logger: None, error_logger: None }
+    }
+
+    pub fn set_transition_logger(&mut self, logger: impl Fn(&TransitionLogEntry) + Send + Sync + 'static) {
+        self.transition_logger = Some(Box::new(logger));
+    }
+    pub fn set_error_logger(&mut self, logger: impl Fn(&ErrorLogEntry) + Send + Sync + 'static) {
+        self.error_logger = Some(Box::new(logger));
+    }
+    pub fn remove_all_loggers(&mut self) {
+        self.transition_logger = None;
+        self.error_logger = None;
+    }
 
     pub fn start_flow(
         &mut self, definition: Arc<FlowDefinition<S>>,

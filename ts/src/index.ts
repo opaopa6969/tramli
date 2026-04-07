@@ -1,5 +1,6 @@
 export { Tramli } from './tramli.js';
 export { FlowEngine } from './flow-engine.js';
+export type { TransitionLogEntry, StateLogEntry, ErrorLogEntry } from './flow-engine.js';
 export { FlowContext } from './flow-context.js';
 export { FlowInstance } from './flow-instance.js';
 export { FlowDefinition, Builder, FromBuilder, BranchBuilder, SubFlowBuilder } from './flow-definition.js';

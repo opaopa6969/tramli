@@ -7,10 +7,34 @@ import type { Transition, GuardOutput } from './types.js';
 
 const MAX_CHAIN_DEPTH = 10;
 
+/** Log entry types for tramli's pluggable logger API. */
+export interface TransitionLogEntry { flowId: string; from: string | null; to: string; trigger: string }
+export interface StateLogEntry { flowId: string; state: string; key: string; value: unknown }
+export interface ErrorLogEntry { flowId: string; from: string | null; to: string | null; trigger: string; cause: Error | null }
+
 export class FlowEngine {
   private readonly strictMode: boolean;
+  private transitionLogger?: (entry: TransitionLogEntry) => void;
+  private stateLogger?: (entry: StateLogEntry) => void;
+  private errorLogger?: (entry: ErrorLogEntry) => void;
+
   constructor(private readonly store: InMemoryFlowStore, options?: { strictMode?: boolean }) {
     this.strictMode = options?.strictMode ?? false;
+  }
+
+  setTransitionLogger(logger: ((entry: TransitionLogEntry) => void) | null): void {
+    this.transitionLogger = logger ?? undefined;
+  }
+  setStateLogger(logger: ((entry: StateLogEntry) => void) | null): void {
+    this.stateLogger = logger ?? undefined;
+  }
+  setErrorLogger(logger: ((entry: ErrorLogEntry) => void) | null): void {
+    this.errorLogger = logger ?? undefined;
+  }
+  removeAllLoggers(): void {
+    this.transitionLogger = undefined;
+    this.stateLogger = undefined;
+    this.errorLogger = undefined;
   }
 
   async startFlow<S extends string>(
@@ -274,6 +298,7 @@ export class FlowEngine {
         cause.withContextSnapshot(available, new Set());
       }
     }
+    this.errorLogger?.({ flowId: flow.id, from: fromState, to: null, trigger: 'error', cause: cause ?? null });
     const errorTarget = flow.definition.errorTransitions.get(fromState);
     if (errorTarget) {
       const from = flow.currentState;

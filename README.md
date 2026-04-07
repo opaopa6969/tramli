@@ -483,6 +483,43 @@ This is the same advantage that Airflow/Temporal users wish they had: **build-ti
 
 ---
 
+## Logging
+
+tramli has **zero logging dependencies**. You plug in your own logger via lambda/callback:
+
+```java
+var engine = Tramli.engine(store);
+
+// Transition log — called on every state transition
+engine.setTransitionLogger(entry ->
+    log.info("{} → {} ({})", entry.from(), entry.to(), entry.trigger()));
+
+// Error log — called when a processor throws or error transition fires
+engine.setErrorLogger(entry ->
+    log.error("error at {}: {}", entry.from(), entry.cause().getMessage()));
+
+// State log (opt-in) — called on every context.put(), useful for debugging
+engine.setStateLogger(entry ->
+    log.debug("put {} = {} (type: {})", entry.typeName(), entry.value(), entry.type()));
+
+// Remove all loggers
+engine.removeAllLoggers();
+```
+
+Log entries are **records** (Java) / **interfaces** (TS) / **structs** (Rust). Type-safe: `StateLogEntry.type()` gives you `Class<?>`, `typeName()` gives you the simple name string.
+
+```typescript
+// TypeScript
+engine.setTransitionLogger(entry => console.log(`${entry.from} → ${entry.to}`));
+```
+
+```rust
+// Rust
+engine.set_transition_logger(|entry| println!("{} → {}", entry.from, entry.to));
+```
+
+---
+
 ## Error Handling
 
 ### Guard Rejection
