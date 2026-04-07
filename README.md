@@ -2,7 +2,7 @@
 
 # tramli
 
-Constrained flow engine for Java 21+.
+Constrained flow engine — **Java, TypeScript, Rust.**
 
 State machines where **invalid transitions cannot exist** — enforced at build time by the compiler and [8-item validation](#8-item-build-validation).
 

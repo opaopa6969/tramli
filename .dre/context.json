@@ -1,0 +1,78 @@
+{
+  "current_phase": "backlog",
+  "stack": [
+    "backlog"
+  ],
+  "frames": {},
+  "history": [
+    {
+      "phase": "backlog",
+      "timestamp": "2026-04-06T22:58:57.789Z",
+      "action": "init"
+    }
+  ],
+  "plugins_sm": {
+    "gap_extraction": {
+      "plugin": "dge",
+      "states": [
+        {
+          "id": "flow_detection",
+          "next": "context_collection",
+          "description": "Flow + structure auto-detect (quick/design-review/brainstorm/tribunal/...)"
+        },
+        {
+          "id": "context_collection",
+          "next": "theme_clarification",
+          "description": "Phase 0 — auto-read README, docs/, tree, git log, DVE ContextBundle"
+        },
+        {
+          "id": "theme_clarification",
+          "next": "character_selection",
+          "description": "Clarify or refine theme"
+        },
+        {
+          "id": "character_selection",
+          "next": "dialogue_generation",
+          "description": "Fixed frame (Yang+Imaizumi) + variable frame (theme-specific)"
+        },
+        {
+          "id": "dialogue_generation",
+          "next": "gap_structuring",
+          "description": "Character dialogue → Gap markers"
+        },
+        {
+          "id": "gap_structuring",
+          "next": "session_save",
+          "description": "Category + Severity classification"
+        },
+        {
+          "id": "session_save",
+          "next": "summary",
+          "description": "Write to dge/sessions/"
+        },
+        {
+          "id": "summary",
+          "next": "user_choice",
+          "description": "Gap/idea list + auto-merge results"
+        },
+        {
+          "id": "user_choice",
+          "next": null,
+          "description": "Branch: re-run / auto-iterate / spec / record DD / end"
+        },
+        {
+          "id": "spec_generation",
+          "next": null,
+          "description": "UC/TECH/DD/DQ/ACT spec generation"
+        },
+        {
+          "id": "record_decision",
+          "next": "user_choice",
+          "description": "DD-NNN recording + index update"
+        }
+      ],
+      "current": null
+    }
+  },
+  "sub_state": null
+}

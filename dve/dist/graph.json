@@ -1,0 +1,161 @@
+{
+  "version": "1.0.0",
+  "generated_at": "2026-04-06T22:58:57.765Z",
+  "stats": {
+    "sessions": 0,
+    "gaps": 0,
+    "decisions": 0,
+    "annotations": 0,
+    "specs": 0
+  },
+  "nodes": [],
+  "edges": [],
+  "warnings": [],
+  "glossary": [
+    {
+      "term": "ContextBundle",
+      "definition": "DVE → DGE の橋渡しデータ。過去の文脈を復元して DGE に渡す",
+      "source": "system",
+      "aliases": []
+    },
+    {
+      "term": "enforcement",
+      "definition": "Hook ベースのルール強制。PostToolUse + Stop hook で検証",
+      "source": "system",
+      "aliases": []
+    },
+    {
+      "term": "Annotation",
+      "definition": "後から追加するコメント・異議・撤回。session を汚さず別レイヤーで保存",
+      "source": "system",
+      "aliases": []
+    },
+    {
+      "term": "orphan gap",
+      "definition": "DD に紐づかない孤立 Gap。まだ決定されていない設計の穴",
+      "source": "system",
+      "aliases": [
+        "孤立Gap"
+      ]
+    },
+    {
+      "term": "supersedes",
+      "definition": "DD の置き換え。新しい DD が古い DD を supersede する",
+      "source": "system",
+      "aliases": []
+    },
+    {
+      "term": "overturn",
+      "definition": "決定の撤回。DD のステータスが overturned に変わる",
+      "source": "system",
+      "aliases": [
+        "撤回"
+      ]
+    },
+    {
+      "term": "Red Team",
+      "definition": "セキュリティ/攻撃視点。「競合がこうしたら？」",
+      "source": "character"
+    },
+    {
+      "term": "Session",
+      "definition": "DGE の会話劇セッション。キャラクターが設計について議論し Gap を発見する",
+      "source": "system",
+      "aliases": []
+    },
+    {
+      "term": "drift",
+      "definition": "現実との乖離。DD の内容と実際のコードが食い違っている状態",
+      "source": "system",
+      "aliases": [
+        "ドリフト"
+      ]
+    },
+    {
+      "term": "ソクラテス",
+      "definition": "前提を問い続ける。「なぜそう思う？ もし逆だったら？」",
+      "source": "character"
+    },
+    {
+      "term": "Spec",
+      "definition": "Gap から生成された仕様書。UC/TECH/DD/DQ/ACT の5タイプ",
+      "source": "system",
+      "aliases": []
+    },
+    {
+      "term": "リヴァイ",
+      "definition": "The Implementation Enforcer — 動くものを要求する。「汚い。作り直せ。」",
+      "source": "character"
+    },
+    {
+      "term": "DGE",
+      "definition": "Design-Gap Extraction — 会話劇で設計の穴を発見するメソッド",
+      "source": "system",
+      "aliases": [
+        "Dialogue-driven Gap Extraction"
+      ]
+    },
+    {
+      "term": "DRE",
+      "definition": "Document Rule Engine — rules/skills/agents をパッケージ化して配布",
+      "source": "system",
+      "aliases": []
+    },
+    {
+      "term": "DVE",
+      "definition": "Decision Visualization Engine — 決定プロセスの可視化ツール",
+      "source": "system",
+      "aliases": []
+    },
+    {
+      "term": "DDE",
+      "definition": "Document-Deficit Extraction — ドキュメントの穴を LLM+CLI で補完",
+      "source": "system",
+      "aliases": []
+    },
+    {
+      "term": "Gap",
+      "definition": "設計の穴 — DGE の会話劇で発見される未定義・矛盾・考慮漏れ",
+      "source": "system",
+      "aliases": []
+    },
+    {
+      "term": "ビーン",
+      "definition": "The Data Evangelist — 「データは何て言ってる？」",
+      "source": "character"
+    },
+    {
+      "term": "ハウス",
+      "definition": "隠れた問題を見つける。「全員嘘をついている」",
+      "source": "character"
+    },
+    {
+      "term": "DD",
+      "definition": "Design Decision — 設計判断の記録。DGE session から生まれる",
+      "source": "system",
+      "aliases": [
+        "Design Decision"
+      ]
+    },
+    {
+      "term": "今泉",
+      "definition": "The Innocent Questioner — 前提を問う。5つの問いパターン（そもそも/要するに/他にないの/誰が困る/前もそうだった）",
+      "source": "character"
+    },
+    {
+      "term": "ヤン",
+      "definition": "The Lazy Strategist — 最もシンプルな解を見つける。「要らなくない？」",
+      "source": "character"
+    },
+    {
+      "term": "千石",
+      "definition": "品質を守る。「お客様への侮辱です」",
+      "source": "character"
+    },
+    {
+      "term": "深澤",
+      "definition": "The UX Feeler — ユーザーの感情と体験を言語化する",
+      "source": "character"
+    }
+  ]
+}

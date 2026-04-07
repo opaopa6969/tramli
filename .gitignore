@@ -1,6 +1,16 @@
-target/
+# Java
+java/target/
 *.class
 *.jar
 .idea/
 *.iml
+
+# TypeScript
+ts/node_modules/
+ts/dist/
+
+# Rust
+rust/target/
+
+# OS
 .DS_Store

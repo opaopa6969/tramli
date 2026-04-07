@@ -1,0 +1,20 @@
+version: 1
+phases:
+  - id: backlog
+    next: spec
+    description: "Requirements gathering, story writing"
+  - id: spec
+    next: gap_extraction
+    description: "Design, docs, architecture, DGE sessions"
+  - id: gap_extraction
+    next: impl
+    description: "Run DGE sessions to discover design gaps"
+  - id: impl
+    next: review
+    description: "Build features from spec"
+  - id: review
+    next: release
+    description: "Code review, test coverage, stabilization"
+  - id: release
+    next: null
+    description: "Release prep, deployment, maintenance"
