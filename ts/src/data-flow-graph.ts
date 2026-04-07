@@ -1,5 +1,7 @@
 import type { FlowDefinition } from './flow-definition.js';
 import type { FlowKey } from './flow-key.js';
+import type { StateProcessor } from './types.js';
+import type { FlowContext } from './flow-context.js';
 
 export interface NodeInfo<S extends string> {
   name: string;
@@ -55,11 +57,106 @@ export class DataFlowGraph<S extends string> {
     return dead;
   }
 
+  /** Data lifetime: which states a type is first produced and last consumed. */
+  lifetime(key: FlowKey<unknown>): { firstProduced: S; lastConsumed: S } | null {
+    const prods = this._producers.get(key);
+    const cons = this._consumers.get(key);
+    if (!prods || prods.length === 0) return null;
+    const firstProduced = prods[0].toState;
+    const lastConsumed = cons && cons.length > 0 ? cons[cons.length - 1].fromState : firstProduced;
+    return { firstProduced, lastConsumed };
+  }
+
+  /** Context pruning hints: for each state, types available but not required at that state. */
+  pruningHints(): Map<S, Set<string>> {
+    const consumedAt = new Map<S, Set<string>>();
+    for (const [typeName, nodes] of this._consumers) {
+      for (const node of nodes) {
+        if (!consumedAt.has(node.fromState)) consumedAt.set(node.fromState, new Set());
+        consumedAt.get(node.fromState)!.add(typeName);
+      }
+    }
+    const hints = new Map<S, Set<string>>();
+    for (const [state, available] of this._availableAtState) {
+      const needed = consumedAt.get(state) ?? new Set();
+      const prunable = new Set<string>();
+      for (const type of available) {
+        if (!needed.has(type)) prunable.add(type);
+      }
+      if (prunable.size > 0) hints.set(state, prunable);
+    }
+    return hints;
+  }
+
+  /**
+   * Check if processor B can replace processor A without breaking data-flow.
+   * B is compatible with A if: B requires no more than A, and B produces at least what A produces.
+   */
+  static isCompatible<S extends string>(
+    a: { requires: FlowKey<unknown>[]; produces: FlowKey<unknown>[] },
+    b: { requires: FlowKey<unknown>[]; produces: FlowKey<unknown>[] },
+  ): boolean {
+    const aReqs = new Set(a.requires as string[]);
+    const bReqs = new Set(b.requires as string[]);
+    const aProds = new Set(a.produces as string[]);
+    const bProds = new Set(b.produces as string[]);
+    for (const r of bReqs) { if (!aReqs.has(r)) return false; }
+    for (const p of aProds) { if (!bProds.has(p)) return false; }
+    return true;
+  }
+
+  /**
+   * Verify a processor's declared requires/produces against actual context usage.
+   * Returns list of violations (empty = OK).
+   */
+  static async verifyProcessor<S extends string>(
+    processor: StateProcessor<S>, ctx: FlowContext,
+  ): Promise<string[]> {
+    const violations: string[] = [];
+    for (const req of processor.requires) {
+      if (!ctx.has(req)) violations.push(`requires ${req} but not in context`);
+    }
+    const beforeKeys = new Set<string>();
+    for (const req of processor.requires) { if (ctx.has(req)) beforeKeys.add(req as string); }
+    // Capture all existing keys
+    const snapshot = ctx.snapshot();
+    const existingKeys = new Set(snapshot.keys());
+
+    try {
+      await processor.process(ctx);
+    } catch (e: any) {
+      violations.push(`threw ${e.constructor.name}: ${e.message}`);
+      return violations;
+    }
+    const afterSnapshot = ctx.snapshot();
+    for (const prod of processor.produces) {
+      if (!afterSnapshot.has(prod as string)) violations.push(`declares produces ${prod} but did not put it`);
+    }
+    for (const [key] of afterSnapshot) {
+      if (!existingKeys.has(key) && !(processor.produces as string[]).includes(key)) {
+        violations.push(`put ${key} but did not declare it in produces`);
+      }
+    }
+    return violations;
+  }
+
   /** All type nodes in the graph. */
   allTypes(): Set<string> {
     const types = new Set(this._allProduced);
     for (const c of this._allConsumed) types.add(c);
     return types;
+  }
+
+  /**
+   * Assert that a flow instance's context satisfies the data-flow invariant.
+   * Returns list of missing type keys (empty = OK).
+   */
+  assertDataFlow(ctx: FlowContext, currentState: S): string[] {
+    const missing: string[] = [];
+    for (const type of this.availableAt(currentState)) {
+      if (!ctx.has(type as FlowKey<unknown>)) missing.push(type);
+    }
+    return missing;
   }
 
   /** Generate Mermaid data-flow diagram. */

@@ -1,10 +1,22 @@
 export class FlowError extends Error {
+  /** Types that were available in context when the error occurred. */
+  availableTypes?: Set<string>;
+  /** Types that were expected but missing (if applicable). */
+  missingTypes?: Set<string>;
+
   constructor(
     public readonly code: string,
     message: string,
   ) {
     super(message);
     this.name = 'FlowError';
+  }
+
+  /** Attach context snapshot to this error. */
+  withContextSnapshot(available: Set<string>, missing: Set<string>): this {
+    this.availableTypes = available;
+    this.missingTypes = missing;
+    return this;
   }
 
   static invalidTransition(from: string, to: string): FlowError {

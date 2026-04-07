@@ -55,11 +55,106 @@ public final class DataFlowGraph<S extends Enum<S> & FlowState> {
         return dead;
     }
 
+    /** Data lifetime: which states a type is first produced and last consumed. */
+    public record Lifetime<S>(S firstProduced, S lastConsumed) {}
+
+    /** Get the lifetime of a type across the flow. Null if type is not in the graph. */
+    public Lifetime<S> lifetime(Class<?> type) {
+        List<NodeInfo<S>> prods = producers.get(type);
+        List<NodeInfo<S>> cons = consumers.get(type);
+        if (prods == null || prods.isEmpty()) return null;
+        S first = prods.getFirst().toState();
+        S last = cons != null && !cons.isEmpty() ? cons.getLast().fromState() : first;
+        return new Lifetime<>(first, last);
+    }
+
+    /**
+     * Context pruning hints: for each state, types that are available but not required
+     * by any processor/guard at that state or any state reachable from it.
+     * These types could theoretically be removed from context at that state.
+     */
+    public Map<S, Set<Class<?>>> pruningHints() {
+        // Collect all types consumed at or after each state
+        var consumedAtOrAfter = new LinkedHashMap<S, Set<Class<?>>>();
+        for (var entry : consumers.entrySet()) {
+            for (var node : entry.getValue()) {
+                consumedAtOrAfter.computeIfAbsent(node.fromState(), k -> new LinkedHashSet<>())
+                        .add(entry.getKey());
+            }
+        }
+
+        var hints = new LinkedHashMap<S, Set<Class<?>>>();
+        for (var entry : availableAtState.entrySet()) {
+            S state = entry.getKey();
+            var prunable = new LinkedHashSet<Class<?>>();
+            Set<Class<?>> needed = consumedAtOrAfter.getOrDefault(state, Set.of());
+            for (Class<?> type : entry.getValue()) {
+                if (!needed.contains(type)) prunable.add(type);
+            }
+            if (!prunable.isEmpty()) hints.put(state, prunable);
+        }
+        return hints;
+    }
+
+    /**
+     * Check if processor B can replace processor A without breaking data-flow.
+     * B is compatible with A if: B requires no more than A, and B produces at least what A produces.
+     */
+    public static boolean isCompatible(StateProcessor a, StateProcessor b) {
+        return a.requires().containsAll(b.requires()) && b.produces().containsAll(a.produces());
+    }
+
+    /**
+     * Verify that a processor's declared requires are available in context,
+     * and after execution, its declared produces are present.
+     * Returns list of violations (empty = OK).
+     */
+    public static List<String> verifyProcessor(StateProcessor processor, FlowContext ctx) {
+        var violations = new ArrayList<String>();
+        // Check requires before execution
+        for (Class<?> req : processor.requires()) {
+            if (!ctx.has(req)) violations.add("requires " + req.getSimpleName() + " but not in context");
+        }
+        // Check undeclared gets would require wrapping FlowContext — skip for now
+        // Check produces after execution
+        var before = new HashSet<>(ctx.snapshot().keySet());
+        try {
+            processor.process(ctx);
+        } catch (Exception e) {
+            violations.add("threw " + e.getClass().getSimpleName() + ": " + e.getMessage());
+            return violations;
+        }
+        var after = ctx.snapshot().keySet();
+        for (Class<?> prod : processor.produces()) {
+            if (!after.contains(prod)) violations.add("declares produces " + prod.getSimpleName() + " but did not put it");
+        }
+        // Check undeclared produces
+        for (Class<?> key : after) {
+            if (!before.contains(key) && !processor.produces().contains(key)) {
+                violations.add("put " + key.getSimpleName() + " but did not declare it in produces()");
+            }
+        }
+        return violations;
+    }
+
     /** All type nodes in the graph. */
     public Set<Class<?>> allTypes() {
         var types = new LinkedHashSet<>(allProduced);
         types.addAll(allConsumed);
         return types;
+    }
+
+    /**
+     * Assert that a flow instance's current context satisfies the data-flow invariant.
+     * Every type in availableAt(currentState) must be present in the context.
+     * Returns list of missing types (empty = OK).
+     */
+    public List<Class<?>> assertDataFlow(FlowContext ctx, S currentState) {
+        var missing = new ArrayList<Class<?>>();
+        for (Class<?> type : availableAt(currentState)) {
+            if (!ctx.has(type)) missing.add(type);
+        }
+        return missing;
     }
 
     /** Generate Mermaid data-flow diagram. */

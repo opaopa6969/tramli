@@ -1,3 +1,5 @@
+use std::any::TypeId;
+use std::collections::HashSet;
 use std::fmt;
 
 #[derive(Debug)]
@@ -5,15 +7,26 @@ pub struct FlowError {
     pub code: &'static str,
     pub message: String,
     pub source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    /// Types that were available in context when the error occurred.
+    pub available_types: Option<HashSet<TypeId>>,
+    /// Types that were expected but missing (if applicable).
+    pub missing_types: Option<HashSet<TypeId>>,
 }
 
 impl FlowError {
     pub fn new(code: &'static str, message: impl Into<String>) -> Self {
-        Self { code, message: message.into(), source: None }
+        Self { code, message: message.into(), source: None, available_types: None, missing_types: None }
     }
 
     pub fn with_source(code: &'static str, message: impl Into<String>, source: impl std::error::Error + Send + Sync + 'static) -> Self {
-        Self { code, message: message.into(), source: Some(Box::new(source)) }
+        Self { code, message: message.into(), source: Some(Box::new(source)), available_types: None, missing_types: None }
+    }
+
+    /// Attach context snapshot to this error.
+    pub fn with_context_snapshot(mut self, available: HashSet<TypeId>, missing: HashSet<TypeId>) -> Self {
+        self.available_types = Some(available);
+        self.missing_types = Some(missing);
+        self
     }
 
     pub fn invalid_transition(from: &str, to: &str) -> Self {

@@ -54,6 +54,79 @@ impl<S: FlowState> DataFlowGraph<S> {
         self.all_produced.difference(&self.all_consumed).copied().collect()
     }
 
+    /// Data lifetime: which states a type is first produced and last consumed.
+    pub fn lifetime(&self, type_id: &TypeId) -> Option<(S, S)> {
+        let prods = self.producers.get(type_id)?;
+        if prods.is_empty() { return None; }
+        let first = prods[0].to_state;
+        let last = self.consumers.get(type_id)
+            .and_then(|c| c.last())
+            .map(|c| c.from_state)
+            .unwrap_or(first);
+        Some((first, last))
+    }
+
+    /// Context pruning hints: for each state, types available but not required at that state.
+    pub fn pruning_hints(&self) -> HashMap<S, HashSet<TypeId>> {
+        let mut consumed_at: HashMap<S, HashSet<TypeId>> = HashMap::new();
+        for (type_id, nodes) in &self.consumers {
+            for node in nodes {
+                consumed_at.entry(node.from_state).or_default().insert(*type_id);
+            }
+        }
+        let mut hints = HashMap::new();
+        for (state, available) in &self.available_at_state {
+            let needed = consumed_at.get(state);
+            let prunable: HashSet<TypeId> = available.iter()
+                .filter(|t| needed.map_or(true, |n| !n.contains(t)))
+                .copied().collect();
+            if !prunable.is_empty() { hints.insert(*state, prunable); }
+        }
+        hints
+    }
+
+    /// Check if processor B can replace processor A without breaking data-flow.
+    /// B requires no more than A, and B produces at least what A produces.
+    pub fn is_compatible(
+        a_requires: &[TypeId], a_produces: &[TypeId],
+        b_requires: &[TypeId], b_produces: &[TypeId],
+    ) -> bool {
+        let a_reqs: HashSet<_> = a_requires.iter().collect();
+        let b_reqs: HashSet<_> = b_requires.iter().collect();
+        let a_prods: HashSet<_> = a_produces.iter().collect();
+        let b_prods: HashSet<_> = b_produces.iter().collect();
+        b_reqs.is_subset(&a_reqs) && a_prods.is_subset(&b_prods)
+    }
+
+    /// Verify a processor's requires are in context, and after execution produces are present.
+    /// Returns list of violation strings (empty = OK).
+    pub fn verify_processor(
+        processor: &dyn crate::types::StateProcessor<S>,
+        ctx: &mut crate::context::FlowContext,
+    ) -> Vec<String> {
+        let mut violations = Vec::new();
+        for req in processor.requires() {
+            if !ctx.has_type_id(&req) {
+                violations.push(format!("requires a type that is not in context"));
+            }
+        }
+        let before: HashSet<TypeId> = HashSet::new(); // can't enumerate ctx keys easily
+        match processor.process(ctx) {
+            Ok(()) => {}
+            Err(e) => {
+                violations.push(format!("threw: {}", e));
+                return violations;
+            }
+        }
+        // Check produces after execution
+        for prod in processor.produces() {
+            if !ctx.has_type_id(&prod) {
+                violations.push(format!("declares produces but did not put it"));
+            }
+        }
+        violations
+    }
+
     /// All type nodes in the graph.
     pub fn all_types(&self) -> HashSet<TypeId> {
         self.all_produced.union(&self.all_consumed).copied().collect()
@@ -62,6 +135,16 @@ impl<S: FlowState> DataFlowGraph<S> {
     /// Get the human-readable name for a TypeId (if registered).
     pub fn type_name(&self, type_id: &TypeId) -> &str {
         self.type_names.get(type_id).map(|s| s.as_str()).unwrap_or("unknown")
+    }
+
+    /// Assert that a flow's context satisfies the data-flow invariant at the given state.
+    /// Returns list of missing TypeIds (empty = OK).
+    pub fn assert_data_flow(&self, ctx: &crate::context::FlowContext, current_state: S) -> Vec<TypeId> {
+        let mut missing = Vec::new();
+        for &type_id in self.available_at(current_state).iter() {
+            if !ctx.has_type_id(&type_id) { missing.push(type_id); }
+        }
+        missing
     }
 
     /// Generate Mermaid data-flow diagram.

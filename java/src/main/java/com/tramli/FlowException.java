@@ -2,6 +2,8 @@ package com.tramli;
 
 public class FlowException extends RuntimeException {
     private final String code;
+    private java.util.Set<Class<?>> availableTypes;
+    private java.util.Set<Class<?>> missingTypes;
 
     public FlowException(String code, String message) {
         super(message);
@@ -14,6 +16,19 @@ public class FlowException extends RuntimeException {
     }
 
     public String code() { return code; }
+
+    /** Types that were available in context when the error occurred. */
+    public java.util.Set<Class<?>> availableTypes() { return availableTypes; }
+
+    /** Types that were expected but missing (if applicable). */
+    public java.util.Set<Class<?>> missingTypes() { return missingTypes; }
+
+    /** Attach context snapshot to this exception. */
+    public FlowException withContextSnapshot(java.util.Set<Class<?>> available, java.util.Set<Class<?>> missing) {
+        this.availableTypes = available;
+        this.missingTypes = missing;
+        return this;
+    }
 
     public static FlowException invalidTransition(FlowState from, FlowState to) {
         return new FlowException("INVALID_TRANSITION",
