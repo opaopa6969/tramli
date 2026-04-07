@@ -28,6 +28,7 @@ State machines where **invalid transitions cannot exist** — enforced at build 
 - [8-Item Build Validation](#8-item-build-validation) — what `build()` checks
 - [requires / produces Contract](#requires--produces-contract) — how data flows between processors
 - [Mermaid Diagram Generation](#mermaid-diagram-generation) — code = diagram, always
+- [Data-Flow Graph](#data-flow-graph) — automatic data dependency analysis
 - [Error Handling](#error-handling) — guard rejection, max retries, error transitions
 - [Why LLMs Love This](#why-llms-love-this)
 - [Performance](#performance)
@@ -391,6 +392,68 @@ MermaidGenerator.writeToFile(definition, Path.of("docs/diagrams"));
 The diagram is generated **from the [FlowDefinition](#flowdefinition)** — the same object that the [engine](#flowengine) uses. It cannot be out of date.
 
 CI integration: generate → compare with committed `.mmd` files → fail if different. Forces developers to update diagrams when changing flows.
+
+---
+
+## Data-Flow Graph
+
+Every `build()` also constructs a **DataFlowGraph** — a bipartite graph of data types and processors derived from [requires/produces](#requires--produces-contract) declarations. Access it via `def.dataFlowGraph()`.
+
+### Dual View: State Transitions + Data Flow
+
+The state diagram shows **control flow** (what states exist and how they connect). The data-flow diagram shows **data flow** (what data each processor needs and produces):
+
+```java
+// State transition diagram (existing)
+String states = MermaidGenerator.generate(orderFlow);
+
+// Data-flow diagram (new)
+String dataFlow = MermaidGenerator.generateDataFlow(orderFlow);
+```
+
+```mermaid
+flowchart LR
+    initial -->|produces| OrderRequest
+    OrderRequest -->|requires| OrderInit
+    OrderInit -->|produces| PaymentIntent
+    PaymentIntent -->|requires| PaymentGuard
+    PaymentGuard -->|produces| PaymentResult
+    PaymentResult -->|requires| ShipProcessor
+    ShipProcessor -->|produces| ShipmentInfo
+```
+
+### Query API
+
+```java
+DataFlowGraph<OrderState> graph = orderFlow.dataFlowGraph();
+
+// What data is available when the flow reaches PAYMENT_PENDING?
+Set<Class<?>> available = graph.availableAt(PAYMENT_PENDING);
+// → {OrderRequest, PaymentIntent}
+
+// Who produces PaymentIntent?
+List<NodeInfo> producers = graph.producersOf(PaymentIntent.class);
+// → [{name: "OrderInit", from: CREATED, to: PAYMENT_PENDING}]
+
+// Who consumes OrderRequest?
+List<NodeInfo> consumers = graph.consumersOf(OrderRequest.class);
+// → [{name: "OrderInit", from: CREATED, to: PAYMENT_PENDING}]
+
+// Dead data: produced but never required downstream
+Set<Class<?>> dead = graph.deadData();
+// → {ShipmentInfo}  (terminal data — no downstream consumer)
+```
+
+### Why This Matters
+
+| Without data-flow graph | With data-flow graph |
+|------------------------|---------------------|
+| "What data is available at state X?" → read all processor code | `graph.availableAt(X)` |
+| "If I change PaymentIntent, what breaks?" → grep | `graph.consumersOf(PaymentIntent.class)` |
+| "Any unused data accumulating?" → manual review | `graph.deadData()` |
+| "Explain the data pipeline to a new team member" → meeting | Show the Mermaid diagram |
+
+This is the same advantage that Airflow/Temporal users wish they had: **build-time, static data-flow analysis.** Those tools use dynamic XCom/payloads with no static guarantees. tramli's `requires/produces` declarations enable verification before any code runs.
 
 ---
 

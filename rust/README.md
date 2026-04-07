@@ -8,6 +8,8 @@ Constrained flow engine for Rust. State machines that prevent invalid transition
 - **Zero external dependencies**
 - **Intentionally synchronous** — state transitions take microseconds; async I/O happens outside the engine
 - **Type-safe context** — `FlowContext` stores data keyed by `TypeId` with compile-time safety
+- **Data-flow graph** — automatic data dependency analysis via `def.data_flow_graph()`
+- **Mermaid generation** — state diagram + data-flow diagram from code
 
 ## Quick start
 
