@@ -3,6 +3,15 @@
 All notable changes to tramli are documented here. Versions are published to
 crates.io, npm (@unlaxer/tramli), and Maven Central (org.unlaxer:tramli).
 
+## [1.5.2] - 2026-04-07
+
+### Fixed
+- `withPlugin()` StackOverflow — reuse parent DataFlowGraph instead of rebuilding
+
+### Added
+- +30 tests for v1.3–v1.5 APIs (total 119 tests across 3 languages)
+- CHANGELOG.md
+
 ## [1.5.1] - 2026-04-07
 
 ### Added
