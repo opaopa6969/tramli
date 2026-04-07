@@ -62,6 +62,17 @@ export class FlowInstance<S extends string> {
 
   get activeSubFlow(): FlowInstance<any> | null { return this._activeSubFlow; }
 
+  /** Return a copy with the given version. For FlowStore optimistic locking. */
+  withVersion(newVersion: number): FlowInstance<S> {
+    const copy = FlowInstance.restore(
+      this.id, this.sessionId, this.definition, this.context,
+      this._currentState, this.createdAt, this.expiresAt,
+      this._guardFailureCount, newVersion, this._exitState,
+    );
+    copy.setActiveSubFlow(this._activeSubFlow);
+    return copy;
+  }
+
   /** @internal */ transitionTo(state: S): void { this._currentState = state; }
   /** @internal */ incrementGuardFailure(): void { this._guardFailureCount++; }
   /** @internal */ complete(exitState: string): void { this._exitState = exitState; }

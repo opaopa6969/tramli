@@ -69,6 +69,17 @@ public final class FlowInstance<S extends Enum<S> & FlowState> {
     /** Active sub-flow instance, or null if not in a sub-flow. */
     public FlowInstance<?> activeSubFlow() { return activeSubFlow; }
 
+    /**
+     * Return a copy with the given version. For FlowStore implementations
+     * that need to update the version after save (e.g., optimistic locking).
+     */
+    public FlowInstance<S> withVersion(int newVersion) {
+        var copy = new FlowInstance<>(id, sessionId, definition, context,
+                currentState, createdAt, expiresAt, guardFailureCount, newVersion, exitState);
+        copy.activeSubFlow = this.activeSubFlow;
+        return copy;
+    }
+
     void transitionTo(S newState) { this.currentState = newState; }
     void incrementGuardFailure() { this.guardFailureCount++; }
     void complete(String exitState) { this.exitState = exitState; }

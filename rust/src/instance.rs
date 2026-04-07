@@ -52,6 +52,16 @@ impl<S: FlowState> FlowInstance<S> {
     pub fn exit_state(&self) -> Option<&str> { self.exit_state.as_deref() }
     pub fn is_completed(&self) -> bool { self.exit_state.is_some() }
 
+    /// Return a copy with the given version. For FlowStore optimistic locking.
+    pub fn with_version(&self, new_version: u32) -> Self {
+        Self::restore(
+            self.id.clone(), self.session_id.clone(), self.definition.clone(),
+            FlowContext::new(self.id.clone()), // context is shared via Arc in real impls
+            self.current_state, self.created_at, self.expires_at,
+            self.guard_failure_count, new_version, self.exit_state.clone(),
+        )
+    }
+
     pub(crate) fn transition_to(&mut self, state: S) { self.current_state = state; }
     pub(crate) fn increment_guard_failure(&mut self) { self.guard_failure_count += 1; }
     pub(crate) fn complete(&mut self, exit_state: impl Into<String>) { self.exit_state = Some(exit_state.into()); }
