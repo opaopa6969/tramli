@@ -17,3 +17,4 @@
 | [DD-013](DD-013-all-languages-sync-core.md) | ⚠️ draft: 全言語 sync コアに統一（DD-006 撤回検討） | — | 2026-04-07 |
 | [DD-014](DD-014-data-flow-derived-not-defined.md) | draft: data-flow は定義ではなく導出 | — | 2026-04-07 |
 | [DD-015](DD-015-dataflow-graph-core.md) | DataFlowGraph をコアに + v0.2.0 スコープ | [dataflow-brainstorm](../sessions/2026-04-07-tramli-dataflow-brainstorm.md) | 2026-04-07 |
+| [DD-016](DD-016-v1-release.md) | tramli v1.0.0 リリース | [v1-readiness](../sessions/2026-04-07-tramli-v1-readiness.md) | 2026-04-07 |

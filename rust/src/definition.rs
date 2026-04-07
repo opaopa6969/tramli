@@ -285,6 +285,15 @@ fn check_rp_from<S: FlowState>(def: &FlowDefinition<S>, state: S, available: &Ha
             new_avail.extend(p.produces());
         }
         check_rp_from(def, t.to, &new_avail, state_available, errors);
+
+        // Error path analysis: if processor fails, its produces are NOT available
+        if t.processor.is_some() {
+            if let Some(&error_target) = def.error_transitions.get(&t.from) {
+                let mut error_avail = state_available.get(&state).unwrap().clone();
+                if let Some(g) = &t.guard { error_avail.extend(g.produces()); }
+                check_rp_from(def, error_target, &error_avail, state_available, errors);
+            }
+        }
     }
 }
 

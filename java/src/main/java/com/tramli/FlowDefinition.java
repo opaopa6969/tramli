@@ -351,6 +351,19 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
                     newAvailable.addAll(t.processor().produces());
                 }
                 checkRequiresProducesFrom(def, t.to(), newAvailable, stateAvailable, errors);
+
+                // Error path analysis: if processor fails, available set does NOT include
+                // the processor's produces. Check error transition target's requirements.
+                if (t.processor() != null) {
+                    S errorTarget = def.errorTransitions.get(t.from());
+                    if (errorTarget != null) {
+                        Set<Class<?>> errorAvailable = new HashSet<>(stateAvailable.get(state));
+                        // guard produces are available (guard passed before processor ran)
+                        if (t.guard() != null) errorAvailable.addAll(t.guard().produces());
+                        // but processor produces are NOT available (processor failed)
+                        checkRequiresProducesFrom(def, errorTarget, errorAvailable, stateAvailable, errors);
+                    }
+                }
             }
         }
 

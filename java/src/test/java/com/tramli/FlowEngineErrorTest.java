@@ -240,4 +240,52 @@ class FlowEngineErrorTest {
         assertEquals("INVALID_FLOW_DEFINITION", ex.code());
         assertTrue(ex.getMessage().contains("auto/branch and external"));
     }
+
+    // ─── Error Path Data-Flow Analysis ──────────────────────
+
+    enum ErrorPath implements FlowState {
+        START(false, true), MID(false, false), ERR(false, false), DONE(true, false);
+        private final boolean terminal, initial;
+        ErrorPath(boolean t, boolean i) { terminal = t; initial = i; }
+        @Override public boolean isTerminal() { return terminal; }
+        @Override public boolean isInitial() { return initial; }
+    }
+
+    record ErrInput(String v) {}
+    record ErrMiddle(String v) {}
+
+    @Test
+    void errorPathRequiresUnsatisfied_buildFails() {
+        // ERR state has a processor that requires ErrMiddle,
+        // but ErrMiddle is only produced by the processor at START→MID.
+        // If that processor fails, ErrMiddle is NOT available.
+        // Error path: START→ERR (error), ERR processor requires ErrMiddle → build should fail.
+        var ex = assertThrows(FlowException.class, () ->
+                Tramli.define("errpath", ErrorPath.class)
+                        .initiallyAvailable(ErrInput.class)
+                        .from(ErrorPath.START).auto(ErrorPath.MID,
+                                ok("P1", Set.of(ErrInput.class), Set.of(ErrMiddle.class)))
+                        .from(ErrorPath.MID).auto(ErrorPath.DONE,
+                                ok("P2", Set.of(ErrMiddle.class), Set.of()))
+                        .onError(ErrorPath.START, ErrorPath.ERR)
+                        .from(ErrorPath.ERR).auto(ErrorPath.DONE,
+                                ok("ErrProc", Set.of(ErrMiddle.class), Set.of()))
+                        .build());
+
+        assertTrue(ex.getMessage().contains("ErrMiddle"));
+        assertTrue(ex.getMessage().contains("may not be available"));
+    }
+
+    @Test
+    void errorPathToTerminal_buildSucceeds() {
+        // Error target is terminal — no processor requirements to check
+        var def = Tramli.define("errterm", TwoStep.class)
+                .initiallyAvailable(Input.class)
+                .from(TwoStep.INIT).auto(TwoStep.DONE,
+                        ok("P1", Set.of(Input.class), Set.of(Middle.class)))
+                .onAnyError(TwoStep.ERROR)
+                .build();
+
+        assertNotNull(def);
+    }
 }

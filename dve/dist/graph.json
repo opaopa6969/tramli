@@ -1,16 +1,1470 @@
 {
   "version": "1.0.0",
-  "generated_at": "2026-04-06T22:58:57.765Z",
+  "generated_at": "2026-04-07T04:12:59.282Z",
   "stats": {
-    "sessions": 0,
-    "gaps": 0,
-    "decisions": 0,
+    "sessions": 12,
+    "gaps": 9,
+    "decisions": 14,
     "annotations": 0,
-    "specs": 0
+    "specs": 9
   },
-  "nodes": [],
-  "edges": [],
-  "warnings": [],
+  "nodes": [
+    {
+      "type": "session",
+      "id": "2026-04-07-tramli-design-review-r2",
+      "data": {
+        "id": "2026-04-07-tramli-design-review-r2",
+        "date": "2026-04-07",
+        "theme": "tramli-design-review-r2",
+        "flow": "🔍 design-review",
+        "structure": "roundtable",
+        "characters": [
+          "☕ ヤン",
+          "👤 今泉",
+          "🎩 千石",
+          "⚔ リヴァイ",
+          "😰 僕"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-design-review-r2.md",
+        "content": "**Decisions:** [DD-001](../decisions/DD-001-ttl-semantics.md)\n\n# DGE Session: tramli 設計レビュー — Round 2 (自動反復)\n\n- **Date**: 2026-04-07\n- **Flow**: 🔍 design-review (auto-iterate round 2/5)\n- **Pattern**: protocol-design + escalation-chain\n- **Characters**: ☕ ヤン, 👤 今泉, 🎩 千石, ⚔ リヴァイ, 😰 僕\n- **Focus**: Round 1 の C/H Gap 7件の解決策探索\n\n## 解決策まとめ\n\n### v0.1.0 コード修正 (3件)\n\n#### Gap #3 + #4: processor 例外ハンドリング + External 実行順序統一\n- processor 実行前に `ctx.snapshot()` でバックアップ\n- FlowContext に `restoreFrom(Map)` メソッド追加\n- 例外時は restore + handleError(error transition へ)\n- External 遷移: transitionTo を processor 実行の **後** に移動（Auto と統一）\n- executeAutoChain: try-catch で processor を囲み、失敗時は chain 中断 + handleError\n\n#### Gap #7: auto+external 混在検出\n- `checkAutoExternalConflict()` を 9番目のバリデーションとして追加\n- 同一ステートに auto/branch と external が共存する場合にビルドエラー\n\n### v0.1.0 文書化 (3件)\n\n#### Gap #1 + #2: FlowStore 契約明記\n- FlowStore Javadoc にスレッディング（single-threaded per flow）、アトミシティ（logical unit, save is authoritative）、バージョン（optimistic locking support）を明記\n\n#### Gap #5: TTL セマンティクス\n- 「TTL = external resume の有効期限」と決定\n- auto-chain 中は TTL チェックしない（プロセッサは高速であること）\n- GuardOutput.Expired は guard 独自の期限切れで FlowInstance TTL とは独立\n- StateProcessor 契約: 「高速であること、外部 I/O を含むべきではない」\n\n### v0.2.0 先送り (1件)\n\n#### Gap #6: フロー定義バージョニング\n- FlowInstance にバージョン情報を持たせ、resume 時に互換性チェック\n\n## 新規 Gap\n\n- **v0.1.0 スコープ定義の欠如** (Low) — リリース対象と利用者像が未定義\n"
+      },
+      "confidence": 0.6,
+      "warnings": [
+        "No gap markers found"
+      ]
+    },
+    {
+      "type": "dialogue",
+      "id": "2026-04-07-tramli-design-review-r2#dialogue",
+      "data": {
+        "session_id": "2026-04-07-tramli-design-review-r2",
+        "has_content": true,
+        "scene_count": 0,
+        "char_count": 5
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "session",
+      "id": "2026-04-07-tramli-design-review-r3",
+      "data": {
+        "id": "2026-04-07-tramli-design-review-r3",
+        "date": "2026-04-07",
+        "theme": "tramli-design-review-r3",
+        "flow": "🔍 design-review",
+        "structure": "roundtable",
+        "characters": [
+          "☕ ヤン",
+          "👤 今泉",
+          "🧑‍🏫 金八",
+          "🎭 ソクラテス",
+          "📊 ビーン"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-design-review-r3.md",
+        "content": "**Decisions:** [DD-002](../decisions/DD-002-no-compensation-no-per-state-timeout.md)\n\n# DGE Session: tramli 設計レビュー — Round 3 (自動反復)\n\n- **Date**: 2026-04-07\n- **Flow**: 🔍 design-review (auto-iterate round 3/5)\n- **Pattern**: expertise-contrast + migration-path\n- **Characters**: ☕ ヤン, 👤 今泉, 🧑‍🏫 金八, 🎭 ソクラテス, 📊 ビーン\n- **Focus**: Medium 以下の Gap 深掘り + 初心者体験 + シリアライゼーション + 可観測性\n\n## 新規 Gap\n\n### Getting Started / チュートリアルの欠如 (Medium)\n- Class キー設計パターン（専用 record で包む）が言語化されていない\n- initiallyAvailable の意味が自明でない\n- README は哲学寄りで、初心者が最初の10分で動かせるガイドがない\n\n### FlowContext のシリアライゼーションガイダンス欠如 (Medium)\n- Class キーの永続化戦略（FQCN? レジストリ?）が未定義\n- Jackson optional なのにシリアライズ方法の指針がない\n\n## 昇格\n\n### Gap #12: FlowInstance の再構築が外部パッケージから不可能 → Medium → High\n- guardFailureCount, version, exitState, createdAt のセッター/コンストラクタ引数がパッケージプライベート\n- 外部パッケージの FlowStore 実装は FlowInstance を復元できない\n\n### Gap #16: 異常系テストの不足 → Low → Medium\n- OSS ライブラリとしての信頼性指標に直結\n- Round 2 の processor 例外修正と同時にテスト追加すべき\n\n## 解決策確定\n\n### Gap #9: 可観測性\n- v0.1.0: TransitionRecord に `Instant timestamp` 追加\n- v0.2.0: FlowEvent + FlowListener パターンへ拡張\n\n### Gap #11 (補償) / #13 (per-state タイムアウト): v0.2.0+ 先送り確定\n- guard の Expired + error state processor で近似可能\n- 設計判断として記録推奨\n"
+      },
+      "confidence": 0.6,
+      "warnings": [
+        "No gap markers found"
+      ]
+    },
+    {
+      "type": "dialogue",
+      "id": "2026-04-07-tramli-design-review-r3#dialogue",
+      "data": {
+        "session_id": "2026-04-07-tramli-design-review-r3",
+        "has_content": true,
+        "scene_count": 0,
+        "char_count": 3
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "session",
+      "id": "2026-04-07-tramli-design-review-r4",
+      "data": {
+        "id": "2026-04-07-tramli-design-review-r4",
+        "date": "2026-04-07",
+        "theme": "tramli-design-review-r4",
+        "flow": "🔍 design-review",
+        "structure": "roundtable",
+        "characters": [
+          "☕ ヤン",
+          "👤 今泉",
+          "🕵 右京",
+          "⚔ リヴァイ",
+          "🎩 千石"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-design-review-r4.md",
+        "content": "# DGE Session: tramli 設計レビュー — Round 4 (自動反復)\n\n- **Date**: 2026-04-07\n- **Flow**: 🔍 design-review (auto-iterate round 4/5)\n- **Pattern**: protocol-design + phase-minimization\n- **Characters**: ☕ ヤン, 👤 今泉, 🕵 右京, ⚔ リヴァイ, 🎩 千石\n- **Focus**: #12 解決策確定 + Medium 掃討 + コードレビュー指摘拾い上げ\n\n## 解決策確定\n\n### Gap #12: FlowInstance 再構築不能 (High → 解決)\n- `FlowInstance.restore()` public static factory を追加\n- 全フィールドコンストラクタはパッケージプライベート\n- 既存コンストラクタは変更なし\n- Javadoc: 「FlowStore 実装者が永続化から復元するために使用」\n\n### コードレビュー指摘 #1: checkRequiresProduces visited 共有問題\n- intersection ベースの合流点処理\n- visited を `Map<S, Set<Class<?>>>` に置き換え\n- 合流時は available の intersection を取る\n- DAG 保証によりパス爆発なし、収束保証あり\n\n### Gap #8: 例外カタログ\n- FlowEngine class-level Javadoc にメソッド別例外リスト追加\n\n### Gap #10: FlowContext Class キー制約\n- FlowContext Javadoc + README に「専用 record 型をキーに使え」記載\n\n### Gap #16: 異常系テスト不足\n- FlowEngineErrorTest として 7 テストケースを追加\n  1. processorThrows_routesToErrorState\n  2. processorThrows_contextIsRestored\n  3. branchReturnsUnknownLabel_routesToErrorState\n  4. maxChainDepthExceeded_throwsFlowException\n  5. ttlExpired_resumeCompletesAsExpired\n  6. guardRejectedMaxRetries_routesToErrorState\n  7. autoAndExternalConflict_buildFails\n\n### Gap #17: Getting Started 欠如\n- README にクイックスタートセクション追加（実装タスク）\n\n### Gap #18: FlowContext シリアライゼーション指針\n- FlowStore Javadoc に永続化ガイダンス追加\n\n## v0.1.0 実装タスク総まとめ（Round 1-4 の全解決策）\n\n### コード修正 (5件)\n1. processor 例外 → snapshot/restore + handleError (Gap #3, #4)\n2. External 遷移の実行順序を process→transition に統一 (Gap #4)\n3. checkAutoExternalConflict バリデーション追加 (Gap #7)\n4. FlowInstance.restore() factory 追加 (Gap #12)\n5. checkRequiresProduces を intersection 方式に修正 (コードレビュー #1)\n6. TransitionRecord に timestamp 追加 (Gap #9)\n\n### テスト追加 (1件)\n7. FlowEngineErrorTest — 7 テストケース (Gap #16)\n\n### 文書化 (5件)\n8. FlowStore Javadoc — スレッディング・アトミシティ・バージョン契約 (Gap #1, #2)\n9. FlowStore Javadoc — シリアライゼーションガイダンス (Gap #18)\n10. FlowEngine Javadoc — 例外カタログ (Gap #8)\n11. FlowContext Javadoc — Class キー制約 + 型ラッパー指針 (Gap #10)\n12. StateProcessor / TransitionGuard Javadoc — 契約（高速であること、TTL との関係）(Gap #5)\n13. README — クイックスタートセクション (Gap #17)\n14. README — TTL セマンティクス一文 (Gap #5)\n\n### v0.2.0 先送り (3件)\n- フロー定義バージョニング (Gap #6)\n- 補償機構 (Gap #11)\n- per-state タイムアウト (Gap #13)\n- FlowListener / FlowEvent パターン (Gap #9 拡張)\n"
+      },
+      "confidence": 0.6,
+      "warnings": [
+        "No gap markers found"
+      ]
+    },
+    {
+      "type": "dialogue",
+      "id": "2026-04-07-tramli-design-review-r4#dialogue",
+      "data": {
+        "session_id": "2026-04-07-tramli-design-review-r4",
+        "has_content": true,
+        "scene_count": 0,
+        "char_count": 4
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "session",
+      "id": "2026-04-07-tramli-design-review",
+      "data": {
+        "id": "2026-04-07-tramli-design-review",
+        "date": "2026-04-07",
+        "theme": "tramli-design-review",
+        "flow": "🔍 design-review",
+        "structure": "🗣 座談会",
+        "characters": [
+          "☕ ヤン",
+          "👤 今泉",
+          "🏥 ハウス",
+          "🕵 右京",
+          "⚔ リヴァイ"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-design-review.md",
+        "content": "# DGE Session: tramli フローエンジン設計レビュー\n\n- **Date**: 2026-04-07\n- **Flow**: 🔍 design-review\n- **Structure**: 🗣 座談会\n- **Template**: api-design\n- **Pattern**: pre-release (concurrent-operation, escalation-chain, scale-break, security-adversary)\n- **Characters**: ☕ ヤン, 👤 今泉, 🏥 ハウス, 🕵 右京, ⚔ リヴァイ\n\n## Scene 1: 基本契約 — 「そもそも誰が使うの？」\n\n**先輩（ナレーション）**: tramli は Java 21 向けの制約付きフローエンジンだ。ビルド時に8つのバリデーションで不正な状態遷移を弾き、ランタイムの「あれ、このデータどこ？」を撲滅する設計思想。FlowEngine は約120行。今日は v0.1.0 のリリース前レビューとして、設計の「書いてないこと」を洗い出す。\n\n---\n\n**👤 今泉**: えっと、基本的なことを聞いていいですか。この FlowDefinition って、一度 `build()` したら不変なんですよね。で、FlowEngine はステートレスで、FlowStore に状態を預ける。…そもそも、**同じフローを2人が同時に resume したらどうなるんですか？**\n\n**🕵 右京**: *紅茶のカップを置く。* 細かいことが気になるんですよ。`FlowInstance` には `version` フィールドがあります。`FlowInstance.java:15` に。そして `setVersion()` も `FlowInstance.java:48` に。しかしですね、**FlowEngine のどこにも version を読んでいる箇所がない**。`InMemoryFlowStore.save()` も version を一切チェックしていません。楽観ロックの *骨格だけ* 作って、 *肉がない* 状態です。\n\n**☕ ヤン**: *紅茶を啜る。* それ、InMemoryFlowStore はテスト用でしょう？本番の FlowStore 実装者が楽観ロックを入れればいい話じゃないですか。\n\n**🕵 右京**: いいえ、ヤンさん。問題はそこではありません。FlowStore *インターフェース* に楽観ロックの契約が **書かれていない** んです。`loadForUpdate` という名前は「更新のためにロードする」と読めますが、Javadoc もない。実装者は何を保証すべきかわからない。SELECT FOR UPDATE なのか、version チェックなのか、何もしなくていいのか。\n\n**👤 今泉**: 要するに、FlowStore を自分で実装する人は、**何を守ればいいのかわからない** ってことですか？\n\n**🕵 右京**: その通りです。\n\n→ Gap 発見: **FlowStore の永続化契約が未定義** — loadForUpdate のセマンティクス、version による楽観ロック、atomicity の要件が FlowStore インターフェースに明文化されていない。\n\n---\n\n**🏥 ハウス**: *椅子を後ろに傾ける。* 全員嘘をついている。version フィールドの話はいい。だが **もっと根本的な問題がある**。FlowEngine.startFlow() を見ろ。24行目で UUID を生成して、34行目で `store.create(flow)`。ここまではいい。だがその直後、35行目で `executeAutoChain(flow)` を呼んでいる。auto-chain の中で状態が3回遷移する。そして36行目で `store.save(flow)`。\n\n**☕ ヤン**: …何が問題なんです？\n\n**🏥 ハウス**: **auto-chain の途中で JVM が死んだらどうなる？** store.create() は呼ばれた。フローは初期状態で永続化されている。だが auto-chain で3つ進んだ途中の状態遷移は recordTransition() で記録されてるのか？ *いや、されている*。だが最終状態は save() されていない。**transition log と flow の状態が不整合になる**。\n\n**⚔ リヴァイ**: *腕を組む。* 汚い。つまり startFlow も resumeAndExecute も、**auto-chain 全体が one atomic operation になっている前提** で書かれてるが、FlowStore にはその保証がない。recordTransition が途中まで書かれて save が来ない、というのは本番で確実に起きる。\n\n→ Gap 発見: **auto-chain のアトミシティが保証されていない** — executeAutoChain 中の recordTransition と最終 save が一つのトランザクションで実行される保証がない。JVM クラッシュ時にログと状態が不整合になる。\n\n---\n\n## Scene 2: 例外と回復 — 「死に方が雑」\n\n**先輩（ナレーション）**: コードレビューで「processor 例外時のロールバックなし」が指摘されていた。ここをもう少し深掘りする。\n\n---\n\n**👤 今泉**: processor が例外を投げた場合の話ですよね。えっと、FlowEngine の129行目、`autoOrBranch.processor().process(flow.context())` — これが飛んだら？\n\n**⚔ リヴァイ**: executeAutoChain にはtry-catchがない。例外はそのまま startFlow か resumeAndExecute の呼び出し元に飛ぶ。だが問題は、**processor の中で context.put() していたら、その途中のデータは残る** ということだ。\n\n**🏥 ハウス**: *立ち上がる。* しかも、もっと面白いケースがある。FlowEngine.java の83行目を見ろ。`resumeAndExecute` の guard Accepted ブロック。\n\n```java\nflow.transitionTo(transition.to());        // 状態遷移完了\nstore.recordTransition(...);                // ログ記録\nif (transition.processor() != null) {\n    transition.processor().process(flow.context());  // ← ここで爆発\n}\n```\n\n状態遷移は **もう済んでいる**。store にも記録されている。だが processor が死んだ。で、例外が飛ぶ。**呼び出し元は何を見る？** flow オブジェクトは遷移済みの状態。だが `store.save(flow)` は108行目だからまだ呼ばれていない。**メモリ上の flow とストア上の flow が乖離する**。\n\n**👤 今泉**: そもそも、エラーが起きたときに **どこに遷移すべきか** って決まってるんですか？ `onError` と `onAnyError` はありますけど、これって guard の maxRetries 超過時しか使われてないですよね？\n\n**🕵 右京**: *資料をめくる。* その通りです。`handleError` は `FlowEngine.java:156` にありますが、呼び出し元は89行目の `guard rejection maxRetries 超過時` のみです。**processor 例外時には handleError が呼ばれない**。error transition という仕組みがあるのに、processor の例外ではそれが使われない。これは設計の矛盾です。\n\n**☕ ヤン**: まあ、processor は「例外を投げない」のが契約だ、と言い張ることもできますけど。\n\n**🏥 ハウス**: *首を振る。* 契約だと言い張るなら、**どこかに書け**。StateProcessor のJavadocにも FlowEngine のドキュメントにも「processor は例外を投げてはならない」とは書かれていない。暗黙の契約は契約じゃない。\n\n→ Gap 発見: **processor/branch 例外時のエラーハンドリング戦略が未定義** — error transition は guard 失敗にのみ対応。processor 例外時は状態とストアが不整合になり、error transition にも遷移しない。例外契約も明文化されていない。\n\n---\n\n**⚔ リヴァイ**: それに関連して。BranchProcessor.decide() が例外を投げた場合も同じだ。FlowEngine.java:137 で `branch.decide(flow.context())` が飛んだら、何の保護もない。\n\n**👤 今泉**: あと、decide() が知らないラベルを返した場合は140行目で `UNKNOWN_BRANCH` 例外になりますけど、**これも error transition に行かない** ですよね？ FlowException が飛ぶだけ。\n\n**🕵 右京**: 細かいことですが、`UNKNOWN_BRANCH` は FlowException、つまり RuntimeException です。つまりフローの利用者は **全ての resumeAndExecute / startFlow 呼び出しを try-catch で囲まなければ安全ではない**。しかし、どの例外がどの状況で飛ぶかのリストが… *紅茶を飲む* …ありませんね。\n\n→ Gap 発見: **例外カタログの欠如** — FlowException のエラーコード一覧はあるが、どのメソッドがどの例外をどの条件で投げるかの体系的な文書がない。利用者は防御的にならざるを得ない。\n\n---\n\n## Scene 3: 時間と生存 — 「TTL の穴」\n\n**先輩（ナレーション）**: tramli には TTL（Time To Live）がある。フロー定義で Duration を指定し、FlowInstance に expiresAt を設定する。だが、その TTL チェックのタイミングに議論がある。\n\n---\n\n**☕ ヤン**: *紅茶を注ぎ足す。* TTL チェックは FlowEngine.java:58 の一箇所だけ。`resumeAndExecute` の冒頭で `Instant.now().isAfter(flow.expiresAt())` を見て、超えてたら EXPIRED で complete。シンプルでいいんじゃないですか。\n\n**🏥 ハウス**: シンプルすぎる。2つのシナリオを考えろ。\n\n**シナリオ A**: auto-chain が10ステップある。最初の resumeAndExecute 時点では TTL 内だった。だが auto-chain の途中で TTL を超えた。**フローは最後まで走り切る**。10ステップ目が「決済確定」だったら？ TTL 超過後に決済が走る。\n\n**👤 今泉**: そもそも、auto-chain って最大深度10ですよね。10ステップあるフローで、1ステップに数秒かかったら… **TTL が1分とかだと普通に超えますよね？**\n\n**🏥 ハウス**: **シナリオ B** はもっと悪い。`startFlow` には TTL チェックがない。FlowEngine.java:21-38 を見ろ。expiresAt を計算して（31行目）flow を作って、そのまま executeAutoChain に入る。**startFlow の時点で既に TTL が 0 秒だったとしても、auto-chain は全部走る**。\n\n**☕ ヤン**: …まあ、TTL 0秒で startFlow する奴がいるかって話ですけど。\n\n**🏥 ハウス**: いるかどうかは問題じゃない。**仕様としてどうあるべきかが決まっていない** のが問題だ。TTL は「最初の external resume までの猶予」なのか、「フロー全体の生存期間」なのか。\n\n**🕵 右京**: *メモを取る。* ハウスさんの指摘を補強しますと、TransitionGuard にも `Expired` という GuardOutput がありますね。これは guard が自主的に「期限切れ」を返すもの。しかし、**この Expired と FlowInstance の TTL ベースの EXPIRED は別物** です。同じ概念に見えて、実は独立したメカニズム。利用者はどちらを使うべきなのか。\n\n→ Gap 発見: **TTL のセマンティクスが未定義** — TTL チェックは resumeAndExecute 冒頭のみ。auto-chain 中の超過は無視される。startFlow には TTL チェックがない。GuardOutput.Expired との関係も不明確。\n\n---\n\n## Scene 4: 拡張性と運用 — 「本番に持っていけるか」\n\n**先輩（ナレーション）**: v0.1.0 としての完成度は高い。だがライブラリとして外部に公開するなら、利用者が本番で使うときのことを考える必要がある。\n\n---\n\n**⚔ リヴァイ**: 本番の話をしよう。**フロー定義を変えたい場合**。例えば v1 の定義で作られたフローが store に残ってる状態で、v2 の定義をデプロイする。`loadForUpdate` は FlowDefinition を引数に取る。だが **store に保存されているフローが v1 で作られたことを知る手段がない**。\n\n**👤 今泉**: FlowInstance に definition への参照がありますよね。`FlowInstance.java:11` に `private final FlowDefinition<S> definition`。\n\n**⚔ リヴァイ**: それは **メモリ上の** 参照だ。永続化して復元したとき、**どの FlowDefinition で作られたか** は失われる。InMemoryFlowStore は FlowInstance をそのまま保持してるから問題にならないが、RDB に保存して復元するとき、フロー定義のバージョンをどう扱うかの指針がない。\n\n**🕵 右京**: もう一つ。FlowInstance のコンストラクタで `definition` を受け取りますが、`loadForUpdate` で渡される definition は **呼び出し側が指定する現在のバージョン** です。つまり、v1 で作られたフローを v2 の definition で resume できてしまう。状態遷移マップが変わっていたら… *紅茶を飲む* …何が起きるか予測がつきませんね。\n\n→ Gap 発見: **フロー定義のバージョニング戦略がない** — FlowInstance にはどの定義バージョンで作られたかの記録がない。定義変更時の互換性チェック、マイグレーション戦略が未定義。\n\n---\n\n**🏥 ハウス**: 運用の話をしよう。フローが途中で止まった。**なぜ止まったか、どうやって調べる？**\n\n**☕ ヤン**: transition log があるでしょう。InMemoryFlowStore.transitionLog() で。\n\n**🏥 ハウス**: *杖で床を叩く。* ログに何が入ってる？ `flowId, from, to, trigger`。以上。**タイムスタンプがない**。`TransitionRecord` は `FlowEngine.java` の recordTransition で作られるが、InMemoryFlowStore の `TransitionRecord` レコードを見ろ。`record TransitionRecord(String flowId, String from, String to, String trigger)`。**いつ遷移したかわからない**。\n\n**👤 今泉**: あと、guard が Rejected を返したとき、**なぜ reject されたかのログもない** ですよね？ `rejected.reason()` は取れるけど、どこにも記録されない。FlowEngine.java:87-93 で `flow.incrementGuardFailure()` して終わり。\n\n**🏥 ハウス**: つまり本番で「このフローなぜ CANCELLED になったんですか」と聞かれたとき、答える手段がない。\n\n→ Gap 発見: **可観測性（Observability）の欠如** — TransitionRecord にタイムスタンプがない。guard rejection の reason が記録されない。フローの「なぜこの状態にいるか」を後から追跡する手段が不足。\n\n---\n\n**⚔ リヴァイ**: テストの話もしておく。InvalidTransitionTest は全状態ペアの補集合を自動生成して検証している。堅い。だが **auto-chain の異常系テストがない**。processor が例外を投げたら？ BranchProcessor が未知のラベルを返したら？ MAX_CHAIN_DEPTH に到達したら？ これらは OrderFlowTest で暗黙的にカバーされてるかもしれないが、**境界値テストが独立して存在しない**。\n\n**☕ ヤン**: まあ、v0.1.0 だし、テストは後から足せばいいんじゃないですか。\n\n**⚔ リヴァイ**: *冷たい目。* テストを「後で」と言った奴で、後で書いた奴を見たことがない。\n\n→ Gap 発見: **異常系・境界値テストの不足** — processor 例外、branch 未知ラベル、MAX_CHAIN_DEPTH 到達、TTL 境界などの異常系テストがない。\n\n---\n\n**🕵 右京**: 最後に一つ。 *資料を広げる。* FlowContext のデータモデルについてです。`Map<Class<?>, Object>` でキーが Class。つまり **同じ型のデータは1つしか持てない**。例えば `String` 型のデータが2つ必要なとき — 注文IDと顧客ID — どちらも `String.class` では入らない。\n\n**☕ ヤン**: だから OrderRequest とか PaymentConfirmation とかラッパー型を作る設計でしょう。\n\n**🕵 右京**: はい。ですが **その設計方針がドキュメント化されていない**。初めて使う人が `ctx.put(String.class, orderId)` と書いて、次の processor で `ctx.put(String.class, customerId)` と書いたら、**黙って上書きされます**。エラーにもなりません。\n\n**🏥 ハウス**: 症状は「データが消えた」。原因は「同じ型で2回 put した」。**最も診断しづらいバグの一つだ**。\n\n→ Gap 発見: **FlowContext の Class キー制約が暗黙的** — 同一型は1エントリのみの制約がドキュメント化されていない。プリミティブ型やString での上書き事故が起きうる。checkRequiresProduces は型の存在チェックのみで、上書き衝突は検出しない。\n\n---\n\n**☕ ヤン**: *紅茶を飲み干す。* まとめると、**コードの品質は高い**。120行のエンジン、8つのビルド時バリデーション、sealed interface — unlaxer 譲りの「制約で正しさを保証する」哲学はしっかり生きてる。ただ、**「書いてあること」は綺麗だけど、「書いてないこと」が多い**。特に FlowStore の契約、例外時の挙動、TTL のセマンティクス。v0.1.0 としては十分だけど、他人に使わせるなら…\n\n**⚔ リヴァイ**: 書け。契約を。テストを。\n\n**🏥 ハウス**: Vicodin くれ。\n"
+      },
+      "confidence": 0.9,
+      "warnings": []
+    },
+    {
+      "type": "dialogue",
+      "id": "2026-04-07-tramli-design-review#dialogue",
+      "data": {
+        "session_id": "2026-04-07-tramli-design-review",
+        "has_content": true,
+        "scene_count": 4,
+        "char_count": 41
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "gap",
+      "id": "2026-04-07-tramli-design-review#G-001",
+      "data": {
+        "id": "2026-04-07-tramli-design-review#G-001",
+        "session_id": "2026-04-07-tramli-design-review",
+        "summary": "**FlowStore の永続化契約が未定義** — loadForUpdate のセマンティクス、version による楽観ロック、atomicity の要件が FlowStore インターフェースに明文化されていない。",
+        "category": "",
+        "severity": "Unknown",
+        "status": "Active",
+        "line_ref": 28,
+        "discovered_by": []
+      },
+      "confidence": 0.7,
+      "warnings": [
+        "severity not found (no gap table or pre-v3 format)"
+      ]
+    },
+    {
+      "type": "gap",
+      "id": "2026-04-07-tramli-design-review#G-002",
+      "data": {
+        "id": "2026-04-07-tramli-design-review#G-002",
+        "session_id": "2026-04-07-tramli-design-review",
+        "summary": "**auto-chain のアトミシティが保証されていない** — executeAutoChain 中の recordTransition と最終 save が一つのトランザクションで実行される保証がない。JVM クラッシュ時にログと状態が不整合になる。",
+        "category": "",
+        "severity": "Unknown",
+        "status": "Active",
+        "line_ref": 40,
+        "discovered_by": []
+      },
+      "confidence": 0.7,
+      "warnings": [
+        "severity not found (no gap table or pre-v3 format)"
+      ]
+    },
+    {
+      "type": "gap",
+      "id": "2026-04-07-tramli-design-review#G-003",
+      "data": {
+        "id": "2026-04-07-tramli-design-review#G-003",
+        "session_id": "2026-04-07-tramli-design-review",
+        "summary": "**processor/branch 例外時のエラーハンドリング戦略が未定義** — error transition は guard 失敗にのみ対応。processor 例外時は状態とストアが不整合になり、error transition にも遷移しない。例外契約も明文化されていない。",
+        "category": "",
+        "severity": "Unknown",
+        "status": "Active",
+        "line_ref": 74,
+        "discovered_by": []
+      },
+      "confidence": 0.7,
+      "warnings": [
+        "severity not found (no gap table or pre-v3 format)"
+      ]
+    },
+    {
+      "type": "gap",
+      "id": "2026-04-07-tramli-design-review#G-004",
+      "data": {
+        "id": "2026-04-07-tramli-design-review#G-004",
+        "session_id": "2026-04-07-tramli-design-review",
+        "summary": "**例外カタログの欠如** — FlowException のエラーコード一覧はあるが、どのメソッドがどの例外をどの条件で投げるかの体系的な文書がない。利用者は防御的にならざるを得ない。",
+        "category": "",
+        "severity": "Unknown",
+        "status": "Active",
+        "line_ref": 84,
+        "discovered_by": []
+      },
+      "confidence": 0.7,
+      "warnings": [
+        "severity not found (no gap table or pre-v3 format)"
+      ]
+    },
+    {
+      "type": "gap",
+      "id": "2026-04-07-tramli-design-review#G-005",
+      "data": {
+        "id": "2026-04-07-tramli-design-review#G-005",
+        "session_id": "2026-04-07-tramli-design-review",
+        "summary": "**TTL のセマンティクスが未定義** — TTL チェックは resumeAndExecute 冒頭のみ。auto-chain 中の超過は無視される。startFlow には TTL チェックがない。GuardOutput.Expired との関係も不明確。",
+        "category": "",
+        "severity": "Unknown",
+        "status": "Active",
+        "line_ref": 110,
+        "discovered_by": []
+      },
+      "confidence": 0.7,
+      "warnings": [
+        "severity not found (no gap table or pre-v3 format)"
+      ]
+    },
+    {
+      "type": "gap",
+      "id": "2026-04-07-tramli-design-review#G-006",
+      "data": {
+        "id": "2026-04-07-tramli-design-review#G-006",
+        "session_id": "2026-04-07-tramli-design-review",
+        "summary": "**フロー定義のバージョニング戦略がない** — FlowInstance にはどの定義バージョンで作られたかの記録がない。定義変更時の互換性チェック、マイグレーション戦略が未定義。",
+        "category": "",
+        "severity": "Unknown",
+        "status": "Active",
+        "line_ref": 128,
+        "discovered_by": []
+      },
+      "confidence": 0.7,
+      "warnings": [
+        "severity not found (no gap table or pre-v3 format)"
+      ]
+    },
+    {
+      "type": "gap",
+      "id": "2026-04-07-tramli-design-review#G-007",
+      "data": {
+        "id": "2026-04-07-tramli-design-review#G-007",
+        "session_id": "2026-04-07-tramli-design-review",
+        "summary": "**可観測性（Observability）の欠如** — TransitionRecord にタイムスタンプがない。guard rejection の reason が記録されない。フローの「なぜこの状態にいるか」を後から追跡する手段が不足。",
+        "category": "",
+        "severity": "Unknown",
+        "status": "Active",
+        "line_ref": 142,
+        "discovered_by": []
+      },
+      "confidence": 0.7,
+      "warnings": [
+        "severity not found (no gap table or pre-v3 format)"
+      ]
+    },
+    {
+      "type": "gap",
+      "id": "2026-04-07-tramli-design-review#G-008",
+      "data": {
+        "id": "2026-04-07-tramli-design-review#G-008",
+        "session_id": "2026-04-07-tramli-design-review",
+        "summary": "**異常系・境界値テストの不足** — processor 例外、branch 未知ラベル、MAX_CHAIN_DEPTH 到達、TTL 境界などの異常系テストがない。",
+        "category": "",
+        "severity": "Unknown",
+        "status": "Active",
+        "line_ref": 152,
+        "discovered_by": []
+      },
+      "confidence": 0.7,
+      "warnings": [
+        "severity not found (no gap table or pre-v3 format)"
+      ]
+    },
+    {
+      "type": "gap",
+      "id": "2026-04-07-tramli-design-review#G-009",
+      "data": {
+        "id": "2026-04-07-tramli-design-review#G-009",
+        "session_id": "2026-04-07-tramli-design-review",
+        "summary": "**FlowContext の Class キー制約が暗黙的** — 同一型は1エントリのみの制約がドキュメント化されていない。プリミティブ型やString での上書き事故が起きうる。checkRequiresProduces は型の存在チェックのみで、上書き衝突は検出しない。",
+        "category": "",
+        "severity": "Unknown",
+        "status": "Active",
+        "line_ref": 164,
+        "discovered_by": []
+      },
+      "confidence": 0.7,
+      "warnings": [
+        "severity not found (no gap table or pre-v3 format)"
+      ]
+    },
+    {
+      "type": "session",
+      "id": "2026-04-07-tramli-multilang-r2",
+      "data": {
+        "id": "2026-04-07-tramli-multilang-r2",
+        "date": "2026-04-07",
+        "theme": "tramli-multilang-r2",
+        "flow": "🔍 design-review",
+        "structure": "roundtable",
+        "characters": [
+          "☕ ヤン",
+          "👤 今泉",
+          "🎩 千石",
+          "⚔ リヴァイ",
+          "🕵 右京"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-multilang-r2.md",
+        "content": "# DGE Session: tramli マルチ言語展開 — Round 2\n\n- **Date**: 2026-04-07\n- **Flow**: 🔍 design-review (round 2)\n- **Pattern**: before-after + protocol-design\n- **Characters**: ☕ ヤン, 👤 今泉, 🎩 千石, ⚔ リヴァイ, 🕵 右京\n- **Focus**: TypeScript 移植の詳細設計\n\n## 解決策確定\n\n### FlowContext キー方式 (Gap #3)\n- `FlowKey<T>` branded string パターン\n- `flowKey<T>(name)` で型と名前を一度に定義\n- ランタイムは string、型推論で T を返す\n\n### FlowState モデリング (Gap #4)\n- string literal union + `as const satisfies Record<S, StateConfig>`\n- Builder は `<S extends string>` ジェネリクスで from/to を制約\n\n### Builder DSL (Gap #5)\n- Java 版とほぼ同一の API 表面\n- build() で 9 バリデーション全実装（ランタイム）\n\n### GuardOutput (Gap #6)\n- discriminated union: `{ type: 'accepted' | 'rejected' | 'expired', ... }`\n\n### バリデーション (Gap #7)\n- build() ランタイムで Java 版と同等の 9 チェック\n\n## 新規 Gap\n\n### FlowEngine の async 対応\n- TypeScript 版は FlowEngine/processor/guard すべて async\n- 「高速であるべき」の指針は JSDoc で維持\n- Java 版との契約差異として明記\n\n### TypeScript パッケージ構造\n- ESM, tsc のみ, ゼロ依存, Node 18+\n- ~10 ファイル、~800 行\n\n## TS ファイル構成 (確定)\n\n```\nsrc/\n  index.ts           — public API re-exports\n  tramli.ts          — static factory (define, engine)\n  types.ts           — FlowState, Transition, StateProcessor, TransitionGuard, etc.\n  flow-key.ts        — FlowKey<T> branded type + flowKey() helper\n  flow-context.ts    — FlowContext (Map<string, unknown>)\n  flow-definition.ts — FlowDefinition + Builder + 9 validations\n  flow-engine.ts     — FlowEngine (async)\n  flow-instance.ts   — FlowInstance + restore()\n  flow-error.ts      — FlowError + static factories\n  flow-store.ts      — FlowStore interface (in types.ts)\n  in-memory-flow-store.ts — InMemoryFlowStore\n  mermaid-generator.ts — MermaidGenerator\n```\n"
+      },
+      "confidence": 0.6,
+      "warnings": [
+        "No gap markers found"
+      ]
+    },
+    {
+      "type": "dialogue",
+      "id": "2026-04-07-tramli-multilang-r2#dialogue",
+      "data": {
+        "session_id": "2026-04-07-tramli-multilang-r2",
+        "has_content": true,
+        "scene_count": 0,
+        "char_count": 4
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "session",
+      "id": "2026-04-07-tramli-multilang-r3",
+      "data": {
+        "id": "2026-04-07-tramli-multilang-r3",
+        "date": "2026-04-07",
+        "theme": "tramli-multilang-r3",
+        "flow": "🔍 design-review",
+        "structure": "roundtable",
+        "characters": [
+          "☕ ヤン",
+          "👤 今泉",
+          "📊 ビーン",
+          "🧑‍🏫 金八",
+          "🎩 千石"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-multilang-r3.md",
+        "content": "# DGE Session: tramli マルチ言語展開 — Round 3\n\n- **Date**: 2026-04-07\n- **Flow**: 🔍 design-review (round 3)\n- **Pattern**: cross-persona-conflict + zero-state\n- **Characters**: ☕ ヤン, 👤 今泉, 📊 ビーン, 🧑‍🏫 金八, 🎩 千石\n- **Focus**: 共有テストスイート詳細 + takt/AskOS 統合パターン + async エッジケース\n\n## 解決策確定\n\n### Gap #8: 共有テストスイート\n- YAML フォーマット確定（states, transitions, error_transitions, scenarios）\n- guard_decision/guard_produces でガードをモック化\n- context は型存在チェックのみ（値は検証しない）\n- 14 テストケース（シナリオ 5 + バリデーション 9）\n- 新言語の受け入れ基準 = 全テスト通過\n\n### takt 統合パターン\n- external 遷移 = 非同期イベント待ち（エージェント完了）\n- auto 遷移 = 自動処理（ディスパッチ）\n- branch = 判定分岐（レビュー結果）\n- REVISION→AGENT_WORKING ループは external が切断点\n\n### async エラーハンドリング\n- try/catch + await で Java 版と同等\n- unhandled rejection は利用者責任（JSDoc 明記）\n"
+      },
+      "confidence": 0.6,
+      "warnings": [
+        "No gap markers found"
+      ]
+    },
+    {
+      "type": "dialogue",
+      "id": "2026-04-07-tramli-multilang-r3#dialogue",
+      "data": {
+        "session_id": "2026-04-07-tramli-multilang-r3",
+        "has_content": true,
+        "scene_count": 0,
+        "char_count": 4
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "session",
+      "id": "2026-04-07-tramli-multilang-r4",
+      "data": {
+        "id": "2026-04-07-tramli-multilang-r4",
+        "date": "2026-04-07",
+        "theme": "tramli-multilang-r4",
+        "flow": "🔍 design-review",
+        "structure": "roundtable",
+        "characters": [
+          "☕ ヤン",
+          "👤 今泉",
+          "😈 Red Team",
+          "🕵 右京",
+          "⚔ リヴァイ"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-multilang-r4.md",
+        "content": "# DGE Session: tramli マルチ言語展開 — Round 4\n\n- **Date**: 2026-04-07\n- **Flow**: 🔍 design-review (round 4)\n- **Pattern**: protocol-design + security-adversary\n- **Characters**: ☕ ヤン, 👤 今泉, 😈 Red Team, 🕵 右京, ⚔ リヴァイ\n- **Focus**: HTTP API 先送り判断 + tramli-ts リポ構成 + v0.1.0 最終スコープ\n\n## 設計判断\n\n### HTTP API は v0.2.0 先送り\n- v0.1.0 はネイティブライブラリ（Java + TS）に集中\n- HTTP API は外部キック/管理コンソール需要時に Javalin ベースで tramli-http モジュール提供\n- 認証はアプリ側責務、tramli-http はミドルウェアフック提供\n\n### tramli-ts リポ構成\n- vitest + tsc, ゼロ runtime 依存\n- @unlaxer/tramli on npm\n- shared-tests は Java リポをソースオブトゥルースとしてコピー管理\n\n### v0.1.0 最終スコープ\n- Java: deploy 済み\n- TypeScript: ~800 lines, ~10 files, async FlowEngine\n- shared-tests: 14 YAML cases\n\n### v0.2.0 予定\n- Java: FlowListener, バージョニング, YAML テストハーネス, tramli-http\n- TS: 永続化 FlowStore, takt 統合サンプル\n"
+      },
+      "confidence": 0.6,
+      "warnings": [
+        "No gap markers found"
+      ]
+    },
+    {
+      "type": "dialogue",
+      "id": "2026-04-07-tramli-multilang-r4#dialogue",
+      "data": {
+        "session_id": "2026-04-07-tramli-multilang-r4",
+        "has_content": true,
+        "scene_count": 0,
+        "char_count": 4
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "session",
+      "id": "2026-04-07-tramli-multilang-strategy",
+      "data": {
+        "id": "2026-04-07-tramli-multilang-strategy",
+        "date": "2026-04-07",
+        "theme": "tramli-multilang-strategy",
+        "flow": "🔍 design-review",
+        "structure": "🗣 座談会",
+        "characters": [
+          "☕ ヤン",
+          "👤 今泉",
+          "🦅 鷲津",
+          "🎭 ソクラテス",
+          "⚔ リヴァイ"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-multilang-strategy.md",
+        "content": "# DGE Session: tramli マルチ言語展開戦略\n\n- **Date**: 2026-04-07\n- **Flow**: 🔍 design-review\n- **Structure**: 🗣 座談会\n- **Template**: feature-planning\n- **Pattern**: new-project + delegation-matrix\n- **Characters**: ☕ ヤン, 👤 今泉, 🦅 鷲津, 🎭 ソクラテス, ⚔ リヴァイ\n\n## Gap 一覧\n\n### Scene 1: ネイティブ vs HTTP API\n1. **ネイティブ移植 vs HTTP API の責務分離** — ネイティブがフロー定義・実行の本体。HTTP API は状態公開・監視用。プロセッサのリモート実行は設計思想に反する。\n2. **移植対象言語の優先度** — TypeScript のみ即時需要あり（takt, AskOS）。Rust/Python/C# は需要発生時。\n\n### Scene 2: TypeScript 移植の技術課題\n3. **TypeScript での FlowState モデリング** — string literal union + Record。enum は使わない。\n4. **FlowContext のキー方式** — クラスコンストラクタをキーにする方式。Java 版の「型＝キー」哲学を維持。\n\n### Scene 3: DSL と型\n5. **Builder DSL の TypeScript 移植方針** — Java 版とほぼ同一の API 表面。build() で 9 バリデーション。\n\n### Scene 4: プロジェクト構造\n6. **共有テストスイートの設計** — YAML ベースのテストケース定義で状態遷移シーケンスを言語横断検証。\n7. **HTTP API のスコープ** — Java FlowEngine のリモートファサード。状態取得、遷移履歴、resume。\n8. **パッケージ名とバージョニング** — npm は tramli or @unlaxer/tramli。バージョンは言語間独立。\n"
+      },
+      "confidence": 0.6,
+      "warnings": [
+        "No gap markers found"
+      ]
+    },
+    {
+      "type": "dialogue",
+      "id": "2026-04-07-tramli-multilang-strategy#dialogue",
+      "data": {
+        "session_id": "2026-04-07-tramli-multilang-strategy",
+        "has_content": true,
+        "scene_count": 4,
+        "char_count": 3
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "session",
+      "id": "2026-04-07-tramli-rust-async-diagnosis",
+      "data": {
+        "id": "2026-04-07-tramli-rust-async-diagnosis",
+        "date": "2026-04-07",
+        "theme": "tramli-rust-async-diagnosis",
+        "flow": "🏥 症例検討",
+        "structure": "roundtable",
+        "characters": [
+          "☕ ヤン",
+          "👤 今泉",
+          "🦀 Rust Async 専門家 (ad-hoc)",
+          "⚔ リヴァイ",
+          "🏥 ハウス"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-rust-async-diagnosis.md",
+        "content": "# DGE Session: tramli-rust async stack overflow 診断\n\n- **Date**: 2026-04-07\n- **Flow**: 🏥 症例検討\n- **Pattern**: escalation-chain\n- **Characters**: ☕ ヤン, 👤 今泉, 🦀 Rust Async 専門家 (ad-hoc), ⚔ リヴァイ, 🏥 ハウス\n- **Input**: ASYNC_STACK_ISSUE.md, docs/async-integration.md\n\n## 診断\n\n**症状**: stack overflow (3状態以上のフロー)\n**誤診**: async Future のスタックサイズ爆発\n**正診**: **不要な async 化** — tramli のエンジン処理 (2μs) に async は不要\n\n## 根拠\n\n1. `docs/async-integration.md` が「tramli is intentionally synchronous」と明記\n2. エンジン内部に I/O 待ちは一切ない（HashMap lookup, clone, enum set のみ）\n3. Rust の async は Future state machine のサイズ増大、Pin 制約、Send bound 伝播のコストを伴う\n4. 2μs の処理にこのコストを払う理由がない\n5. DD-010「native async fn in trait」は設計ミス\n\n## 処方\n\n1. **FlowEngine を完全 sync 化** — async fn → fn, Pin<Box<Future>> 不要\n2. **StateProcessor/TransitionGuard/BranchProcessor も sync** — process(&mut ctx) -> Result<(), FlowError>\n3. **take/put_back パターン不要** — &mut self の borrow が .await をまたがない\n4. **volta-gateway では Mutex<FlowEngine> で包む** — ロック保持 μs、contention 実質ゼロ\n5. **DD-010 を Supersede** → DD-012 作成\n\n## TS 版への影響\n\nなし。DD-006 (async) は維持。TS では async のコストが小さく、エコシステム的にも自然。\n"
+      },
+      "confidence": 0.6,
+      "warnings": [
+        "No gap markers found"
+      ]
+    },
+    {
+      "type": "dialogue",
+      "id": "2026-04-07-tramli-rust-async-diagnosis#dialogue",
+      "data": {
+        "session_id": "2026-04-07-tramli-rust-async-diagnosis",
+        "has_content": true,
+        "scene_count": 0,
+        "char_count": 5
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "session",
+      "id": "2026-04-07-tramli-rust-design",
+      "data": {
+        "id": "2026-04-07-tramli-rust-design",
+        "date": "2026-04-07",
+        "theme": "tramli-rust-design",
+        "flow": "🔍 design-review",
+        "structure": "🗣 座談会",
+        "characters": [
+          "☕ ヤン",
+          "👤 今泉",
+          "⚔ リヴァイ",
+          "🎩 千石",
+          "😈 Red Team"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-rust-design.md",
+        "content": "# DGE Session: tramli Rust 版 — volta-gateway 向け\n\n- **Date**: 2026-04-07\n- **Flow**: 🔍 design-review\n- **Structure**: 🗣 座談会\n- **Pattern**: pre-release + concurrent-operation\n- **Characters**: ☕ ヤン, 👤 今泉, ⚔ リヴァイ, 🎩 千石, 😈 Red Team\n\n## 設計決定\n\n### snapshot/restore: CloneAny trait (案A)\n- `trait CloneAny: Any + Clone + Send` で全ユーザー型に Clone を要求\n- `HashMap<TypeId, Box<dyn CloneAny>>` で snapshot = HashMap::clone()\n- `#[derive(Clone)]` で対応。Rust らしい型制約\n\n### FlowContext: TypeId キー\n- `put<T: CloneAny>(value: T)` — 型自体がキー\n- `get<T: CloneAny>() -> Result<&T, FlowError>` — downcast_ref\n- requires/produces は `requires!` マクロで簡略化\n\n### エラー処理: Result ベース\n- processor: `async fn process(&self, ctx: &mut FlowContext) -> Result<(), FlowError>`\n- `FlowError { code, message, source: Option<Box<dyn Error + Send + Sync>> }`\n- engine は match で error transition へルーティング\n\n### GuardOutput: Rust enum\n- `Accepted { data }` / `Rejected { reason }` / `Expired`\n- `guard_data!` マクロで HashMap 構築を簡略化\n\n### FlowState: trait + 手動 impl\n- `trait FlowState: Clone + Copy + Eq + Hash + Debug + Send + Sync + 'static`\n- `all_states()` で全列挙\n- v0.2.0 で derive macro 検討\n\n### async: native async fn in trait\n- Rust 1.75+ — `async-trait` クレート不要\n- runtime-agnostic (tokio 非依存)\n- 同期プロセッサも async fn で書く（await なし）\n\n### スレッド安全性\n- CloneAny: `Send` 必須\n- processor/guard: `Send + Sync`\n- FlowDefinition: `Arc` で共有、`Send + Sync`\n- FlowInstance: `Send` のみ（排他アクセスは FlowStore で保証）\n\n### クレート構造\n- 単一クレート `tramli` on crates.io\n- ~975 lines, ~12 files\n- MSRV 1.75.0\n- ゼロ外部依存\n"
+      },
+      "confidence": 0.6,
+      "warnings": [
+        "No gap markers found"
+      ]
+    },
+    {
+      "type": "dialogue",
+      "id": "2026-04-07-tramli-rust-design#dialogue",
+      "data": {
+        "session_id": "2026-04-07-tramli-rust-design",
+        "has_content": true,
+        "scene_count": 0,
+        "char_count": 5
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "session",
+      "id": "2026-04-07-tramli-rust-r2-volta-patterns",
+      "data": {
+        "id": "2026-04-07-tramli-rust-r2-volta-patterns",
+        "date": "2026-04-07",
+        "theme": "tramli-rust-r2-volta-patterns",
+        "flow": "🔍 design-review",
+        "structure": "roundtable",
+        "characters": [
+          "☕ ヤン",
+          "👤 今泉",
+          "😈 Red Team",
+          "🏥 ハウス",
+          "⚔ リヴァイ"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-rust-r2-volta-patterns.md",
+        "content": "# DGE Session: tramli Rust 版 — Round 2 (volta-gateway フローパターン)\n\n- **Date**: 2026-04-07\n- **Flow**: 🔍 design-review (round 2)\n- **Pattern**: escalation-chain + concurrent-operation\n- **Characters**: ☕ ヤン, 👤 今泉, 😈 Red Team, 🏥 ハウス, ⚔ リヴァイ\n\n## 設計決定\n\n### tramli の適用範囲\n- ✅ upstream ヘルスチェック、サーキットブレーカー、設定ホットリロード、TLS 証明書管理\n- ❌ リクエストライフサイクル（パイプライン/ミドルウェアが適切）\n- ❌ レートリミッター（atomic counter が適切）\n- tramli は「長命なインフラ状態」を管理。リクエスト単位では使わない\n\n### allow_perpetual()\n- terminal なしの永続ループフローを許容する Builder オプション\n- デフォルトは terminal 必須（安全側）\n- サーキットブレーカー、ヘルスチェック等で必要\n- Rust 版のみ追加。Java/TS へのバックポートは需要待ち\n\n### サーキットブレーカーパターン\n- Closed/Open/HalfOpen — 全遷移 external（タイマーは外部管理）\n- tramli は遷移順序の正しさを保証。タイミングは外部の責務\n\n### 設定ホットリロードパターン\n- Running→Validating→Draining→Swapping→Running\n- Validating スキップ防止、Failed からの自動復旧を tramli が保証\n\n### マルチインスタンス管理\n- upstream ごとに FlowInstance\n- FlowStore の並行アクセスは外部ロック（v0.1.0）\n"
+      },
+      "confidence": 0.6,
+      "warnings": [
+        "No gap markers found"
+      ]
+    },
+    {
+      "type": "dialogue",
+      "id": "2026-04-07-tramli-rust-r2-volta-patterns#dialogue",
+      "data": {
+        "session_id": "2026-04-07-tramli-rust-r2-volta-patterns",
+        "has_content": true,
+        "scene_count": 0,
+        "char_count": 5
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "session",
+      "id": "2026-04-07-tramli-rust-r3-integration",
+      "data": {
+        "id": "2026-04-07-tramli-rust-r3-integration",
+        "date": "2026-04-07",
+        "theme": "tramli-rust-r3-integration",
+        "flow": "🔍 design-review",
+        "structure": "roundtable",
+        "characters": [
+          "☕ ヤン",
+          "👤 今泉",
+          "🏥 ハウス",
+          "📊 ビーン",
+          "⚔ リヴァイ"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-rust-r3-integration.md",
+        "content": "# DGE Session: tramli Rust 版 — Round 3 (volta-gateway 統合パターン)\n\n- **Date**: 2026-04-07\n- **Flow**: 🔍 design-review (round 3)\n- **Pattern**: escalation-chain + disaster-recovery\n- **Characters**: ☕ ヤン, 👤 今泉, 🏥 ハウス, 📊 ビーン, ⚔ リヴァイ\n\n## 設計決定\n\n### TLS 証明書管理 (ACME) パターン\n- Valid→Expiring→Ordering→Challenging→Finalizing→Valid/Failed\n- Challenging 状態で ACME challenge endpoint を有効化（フロー状態の外部参照）\n- Failed からは旧証明書で自動復旧\n\n### フロー状態の外部参照パターン\n- FlowInstance.current_state() をリクエストパスから読み取り\n- load_balancer が circuit_breaker の状態を参照して routing 判断\n- tramli の追加機能不要\n\n### フロー間イベント伝播パターン\n- processor 内で別フローの resume_and_execute を呼ぶ\n- HealthCheck の probe success → CircuitBreaker の resume トリガー\n- 循環依存はアプリ設計の責務\n\n### Graceful shutdown\n- tramli の外で管理（resume 停止 + await + ログ）\n- 全フローが起動時に再初期化可能 → v0.1.0 では永続化不要\n\n### 可観測性\n- tramli は current_state() と TransitionRecord を提供\n- メトリクス変換、管理エンドポイントは volta-gateway 側\n\n### volta-gateway 統合アーキテクチャ\n```\nvolta-gateway\n├── request_handler     ← tramli 不使用、状態読み取りのみ\n├── infra_manager       ← tramli がここに住む\n│   ├── health_checker  × N upstreams\n│   ├── circuit_breakers × N upstreams\n│   ├── config_reloader × 1\n│   └── cert_manager    × N domains\n├── admin_api           ← FlowInstance.current_state() 読み取り\n└── lifecycle           ← startup: 全フロー初期化, shutdown: graceful\n```\n"
+      },
+      "confidence": 0.6,
+      "warnings": [
+        "No gap markers found"
+      ]
+    },
+    {
+      "type": "dialogue",
+      "id": "2026-04-07-tramli-rust-r3-integration#dialogue",
+      "data": {
+        "session_id": "2026-04-07-tramli-rust-r3-integration",
+        "has_content": true,
+        "scene_count": 0,
+        "char_count": 5
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "decision",
+      "id": "DD-001",
+      "data": {
+        "id": "DD-001",
+        "title": "TTL は external resume の有効期限",
+        "date": "",
+        "rationale": "TTL は「フロー全体の生存期間」ではなく「external resume（resumeAndExecute）の有効期限」とする。auto-chain 中の TTL チェックは行わない。startFlow 時の TTL チェックも行わない。 - auto-chain のプロセッサは高速（外部 I/O を含まない）であることが契約。TTL が問題になる時間スケールでは動かない。 - startFlow は開始直後であり、TTL 超過は論理的に起きない。 - auto-chain 中に TTL チェックを入れると、途中の状態で EXPIRED 完了するケースが増え、フロー設計が複雑になる。 - GuardOutput.Expired は guard 独自の期限切れメカニズムであり、FlowInstance の TTL とは独立。guard が業務的な期限を判断する手段として使う。 千石: 「書いてないことを書くだけです」 ヤン: 「auto-chain のプロセッサが外部 API 呼んで5分かかるケースは？」 千石: 「auto-chain のプロセッサは高速であること — を契約に追加」",
+        "status": "active",
+        "supersedes": [],
+        "superseded_by": [],
+        "gap_refs": [],
+        "session_refs": [
+          "2026-04-07-tramli-design-review-r2"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-001-ttl-semantics.md",
+        "content": "# DD-001: TTL は external resume の有効期限\n\n**Date:** 2026-04-07\n**Session:** [tramli-design-review-r2](../sessions/2026-04-07-tramli-design-review-r2.md)\n**Gap:** #5 (TTL のセマンティクス未定義)\n\n## Decision\n\nTTL は「フロー全体の生存期間」ではなく「external resume（resumeAndExecute）の有効期限」とする。auto-chain 中の TTL チェックは行わない。startFlow 時の TTL チェックも行わない。\n\n## Rationale\n\n- auto-chain のプロセッサは高速（外部 I/O を含まない）であることが契約。TTL が問題になる時間スケールでは動かない。\n- startFlow は開始直後であり、TTL 超過は論理的に起きない。\n- auto-chain 中に TTL チェックを入れると、途中の状態で EXPIRED 完了するケースが増え、フロー設計が複雑になる。\n- GuardOutput.Expired は guard 独自の期限切れメカニズムであり、FlowInstance の TTL とは独立。guard が業務的な期限を判断する手段として使う。\n\n千石: 「書いてないことを書くだけです」  \nヤン: 「auto-chain のプロセッサが外部 API 呼んで5分かかるケースは？」  \n千石: 「auto-chain のプロセッサは高速であること — を契約に追加」\n\n## Alternatives considered\n\n- **auto-chain 中もステップごとに TTL チェック**: 途中 EXPIRED のハンドリングが複雑。プロセッサが高速なら実益なし。\n- **TTL をフロー全体の生存期間とする**: セマンティクスは直感的だが、auto-chain 中断の実装コストに見合わない。\n"
+      },
+      "confidence": 0.7,
+      "warnings": [
+        "date not found"
+      ]
+    },
+    {
+      "type": "decision",
+      "id": "DD-002",
+      "data": {
+        "id": "DD-002",
+        "title": "補償機構と per-state タイムアウトは v0.1.0 に入れない",
+        "date": "",
+        "rationale": "Saga パターンの補償ステップとステートごとのタイムアウト/リトライ設定は v0.1.0 のスコープ外とする。v0.2.0 以降で検討する。 tramli の設計哲学は「制約で正しさを保証する」。補償や per-state タイムアウトは正しさの保証ではなく機能の拡張であり、120行のエンジンが膨張する。 **補償**: error state の processor が補償ロジックを実行すれば近似可能。エンジンが補償を知る必要はない。Spring State Machine も Temporal も補償は別レイヤー。 **Per-state タイムアウト**: TransitionGuard が `Instant.now()` を見て業務的な期限を判断し `GuardOutput.Expired` を返せば近似可能。「決済待ち30分」は guard の責務。 ヤン: 「tramli の本分は不正な遷移を防ぐこと。それ以上を盛ると120行が300行になる」 金八: 「何を入れないかを決めることも設計だ」 ビーン: 「OSS で補償を v1.0 前に入れたものは少ない」",
+        "status": "active",
+        "supersedes": [],
+        "superseded_by": [],
+        "gap_refs": [],
+        "session_refs": [
+          "2026-04-07-tramli-design-review-r3"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-002-no-compensation-no-per-state-timeout.md",
+        "content": "# DD-002: 補償機構と per-state タイムアウトは v0.1.0 に入れない\n\n**Date:** 2026-04-07\n**Session:** [tramli-design-review-r3](../sessions/2026-04-07-tramli-design-review-r3.md)\n**Gap:** #11 (補償機構の欠如), #13 (per-state タイムアウト設定の欠如)\n\n## Decision\n\nSaga パターンの補償ステップとステートごとのタイムアウト/リトライ設定は v0.1.0 のスコープ外とする。v0.2.0 以降で検討する。\n\n## Rationale\n\ntramli の設計哲学は「制約で正しさを保証する」。補償や per-state タイムアウトは正しさの保証ではなく機能の拡張であり、120行のエンジンが膨張する。\n\n**補償**: error state の processor が補償ロジックを実行すれば近似可能。エンジンが補償を知る必要はない。Spring State Machine も Temporal も補償は別レイヤー。\n\n**Per-state タイムアウト**: TransitionGuard が `Instant.now()` を見て業務的な期限を判断し `GuardOutput.Expired` を返せば近似可能。「決済待ち30分」は guard の責務。\n\nヤン: 「tramli の本分は不正な遷移を防ぐこと。それ以上を盛ると120行が300行になる」  \n金八: 「何を入れないかを決めることも設計だ」  \nビーン: 「OSS で補償を v1.0 前に入れたものは少ない」\n\n## Alternatives considered\n\n- **DSL に compensation step を追加**: 表現力は上がるが、エンジンの複雑度が倍増。v0.1.0 の「小さくて正しい」方針に反する。\n- **Transition ごとに timeout Duration を持たせる**: FlowEngine にタイマー管理が必要になり、スレッドモデルの前提が変わる。\n"
+      },
+      "confidence": 0.7,
+      "warnings": [
+        "date not found"
+      ]
+    },
+    {
+      "type": "decision",
+      "id": "DD-003",
+      "data": {
+        "id": "DD-003",
+        "title": "マルチ言語はネイティブ移植が本線、HTTP API は監視レイヤー",
+        "date": "",
+        "rationale": "各言語へのネイティブライブラリ移植を本線とする。HTTP API はフロー状態の外部公開・監視用に限定し、プロセッサ/ガードのリモート実行は行わない。 tramli の核心的価値（ビルド時 9 種バリデーション、型安全な FlowContext、sealed GuardOutput、auto-chain 高速実行）はすべてプロセス内実行を前提としている。HTTP API 化すると： - プロセッサ実行に Webhook が必要 → auto-chain で 4 回の HTTP ラウンドトリップ - ビルド時バリデーションが効かない（フロー定義はラムダを含み JSON 化困難） - 「高速 auto-chain」の設計思想が崩壊 リヴァイ: 「Webhook にしたら auto-chain のたびに HTTP ラウンドトリップが走る。設計思想が崩壊する」 ヤン: 「ネイティブ移植が本線。HTTP API はオプショナルな監視レイヤー」",
+        "status": "active",
+        "supersedes": [],
+        "superseded_by": [],
+        "gap_refs": [],
+        "session_refs": [
+          "2026-04-07-tramli-multilang-strategy"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-003-native-over-http.md",
+        "content": "# DD-003: マルチ言語はネイティブ移植が本線、HTTP API は監視レイヤー\n\n**Date:** 2026-04-07\n**Session:** [multilang-strategy](../sessions/2026-04-07-tramli-multilang-strategy.md)\n**Gap:** #1 (ネイティブ vs HTTP), #2 (プロセッサ実行モデル)\n\n## Decision\n\n各言語へのネイティブライブラリ移植を本線とする。HTTP API はフロー状態の外部公開・監視用に限定し、プロセッサ/ガードのリモート実行は行わない。\n\n## Rationale\n\ntramli の核心的価値（ビルド時 9 種バリデーション、型安全な FlowContext、sealed GuardOutput、auto-chain 高速実行）はすべてプロセス内実行を前提としている。HTTP API 化すると：\n- プロセッサ実行に Webhook が必要 → auto-chain で 4 回の HTTP ラウンドトリップ\n- ビルド時バリデーションが効かない（フロー定義はラムダを含み JSON 化困難）\n- 「高速 auto-chain」の設計思想が崩壊\n\nリヴァイ: 「Webhook にしたら auto-chain のたびに HTTP ラウンドトリップが走る。設計思想が崩壊する」\nヤン: 「ネイティブ移植が本線。HTTP API はオプショナルな監視レイヤー」\n\n## Alternatives considered\n\n- **HTTP API 中心 + thin client**: 移植コストゼロだが tramli の価値の大半が失われる\n- **gRPC + ストリーミング**: Webhook より低遅延だが、各言語で gRPC クライアント必要。ネイティブ移植と同等以上の複雑さ\n"
+      },
+      "confidence": 0.7,
+      "warnings": [
+        "date not found"
+      ]
+    },
+    {
+      "type": "decision",
+      "id": "DD-004",
+      "data": {
+        "id": "DD-004",
+        "title": "v0.1.0 の移植対象は TypeScript のみ",
+        "date": "",
+        "rationale": "v0.1.0 では TypeScript のみ移植する。Rust / Python / C# は需要が発生した時点で検討する。 プロジェクト構成（TS 15件、Python 3件、Rust 1件、C# 1件）から、TypeScript が唯一の即時需要。takt（エージェントオーケストレーション）と AskOS（ポートフォリオ管理）にフロー制御の統合余地がある。 - Python: フロー制御の需要なし（ユーティリティ/CLI 系） - Rust: 言語親和性は高いが使う場所がない（syslenz はシステム監視） - C#: プロジェクト 1 件（Windows 専用） 鷲津: 「ROI が合うのは TypeScript だけだ」 ヤン: 「使う場所がある言語だけでいい」",
+        "status": "active",
+        "supersedes": [],
+        "superseded_by": [],
+        "gap_refs": [],
+        "session_refs": [
+          "2026-04-07-tramli-multilang-strategy"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-004-typescript-only-v010.md",
+        "content": "# DD-004: v0.1.0 の移植対象は TypeScript のみ\n\n**Date:** 2026-04-07\n**Session:** [multilang-strategy](../sessions/2026-04-07-tramli-multilang-strategy.md)\n**Gap:** #5 (移植対象言語の優先度)\n\n## Decision\n\nv0.1.0 では TypeScript のみ移植する。Rust / Python / C# は需要が発生した時点で検討する。\n\n## Rationale\n\nプロジェクト構成（TS 15件、Python 3件、Rust 1件、C# 1件）から、TypeScript が唯一の即時需要。takt（エージェントオーケストレーション）と AskOS（ポートフォリオ管理）にフロー制御の統合余地がある。\n\n- Python: フロー制御の需要なし（ユーティリティ/CLI 系）\n- Rust: 言語親和性は高いが使う場所がない（syslenz はシステム監視）\n- C#: プロジェクト 1 件（Windows 専用）\n\n鷲津: 「ROI が合うのは TypeScript だけだ」\nヤン: 「使う場所がある言語だけでいい」\n\n## Alternatives considered\n\n- **TypeScript + Rust 同時**: Rust はコンパイル時保証が活きるが、具体的な統合先がない。需要駆動で判断する方が効率的。\n"
+      },
+      "confidence": 0.7,
+      "warnings": [
+        "date not found"
+      ]
+    },
+    {
+      "type": "decision",
+      "id": "DD-005",
+      "data": {
+        "id": "DD-005",
+        "title": "TypeScript の FlowContext キーは FlowKey branded string",
+        "date": "",
+        "rationale": "TypeScript 版の FlowContext は `FlowKey<T>` branded string パターンを採用する。 ```typescript type FlowKey<T> = string & { __type: T }; function flowKey<T>(name: string): FlowKey<T> { return name as FlowKey<T>; } ``` Java の `Class<?>` キーに相当する仕組みが TypeScript に必要。4 案を比較した結果： - class をキー: Java に最も近いが TS では class 強制が不自然 - string キー + ジェネリクス: 文字列衝突リスク、typo リスク - Symbol キー: 衝突なし・型安全だが、シリアライゼーション困難 - **FlowKey branded string**: 文字列ベース（デバッグ・シリアライゼーション容易）かつ型推論で T を返す 千石: 「flowKey<T>(name) で型と名前を一度に定義 — Java の record 宣言に対応」 右京: 「requires/produces も FlowKey[] として宣言でき、checkRequiresProduces がそのまま移植可能」",
+        "status": "active",
+        "supersedes": [],
+        "superseded_by": [],
+        "gap_refs": [],
+        "session_refs": [
+          "2026-04-07-tramli-multilang-r2"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-005-flowkey-branded-string.md",
+        "content": "# DD-005: TypeScript の FlowContext キーは FlowKey branded string\n\n**Date:** 2026-04-07\n**Session:** [multilang-r2](../sessions/2026-04-07-tramli-multilang-r2.md)\n**Gap:** #3 (FlowContext の Class<?> キーが他言語で再現不可)\n\n## Decision\n\nTypeScript 版の FlowContext は `FlowKey<T>` branded string パターンを採用する。\n\n```typescript\ntype FlowKey<T> = string & { __type: T };\nfunction flowKey<T>(name: string): FlowKey<T> { return name as FlowKey<T>; }\n```\n\n## Rationale\n\nJava の `Class<?>` キーに相当する仕組みが TypeScript に必要。4 案を比較した結果：\n\n- class をキー: Java に最も近いが TS では class 強制が不自然\n- string キー + ジェネリクス: 文字列衝突リスク、typo リスク\n- Symbol キー: 衝突なし・型安全だが、シリアライゼーション困難\n- **FlowKey branded string**: 文字列ベース（デバッグ・シリアライゼーション容易）かつ型推論で T を返す\n\n千石: 「flowKey<T>(name) で型と名前を一度に定義 — Java の record 宣言に対応」\n右京: 「requires/produces も FlowKey[] として宣言でき、checkRequiresProduces がそのまま移植可能」\n\n## Alternatives considered\n\n- **class コンストラクタをキー**: Java に最も近いが、TS の interface/type 文化と衝突\n- **Symbol キー**: 衝突なしだが JSON シリアライゼーション不可\n"
+      },
+      "confidence": 0.7,
+      "warnings": [
+        "date not found"
+      ]
+    },
+    {
+      "type": "decision",
+      "id": "DD-006",
+      "data": {
+        "id": "DD-006",
+        "title": "TypeScript 版の FlowEngine は全 async",
+        "date": "",
+        "rationale": "TypeScript 版は FlowEngine, StateProcessor, TransitionGuard, BranchProcessor すべて async (Promise ベース) とする。Java 版の「プロセッサは高速であること」の指針は JSDoc で維持する。 Java は同期が自然、TypeScript は async が自然。TS エコシステムでは DB アクセスすら async であり、sync only を強制すると使いづらい。 - `startFlow()` → `Promise<FlowInstance<S>>` - `resumeAndExecute()` → `Promise<FlowInstance<S>>` - `processor.process()` → `Promise<void>` - `guard.validate()` → `Promise<GuardOutput>` auto-chain は `await` で順次実行。try/catch + snapshot/restore のエラーハンドリングは Java 版と同等に機能する（async/await の try-catch は同期例外と Promise rejection の両方を捕捉）。 右京: 「Java は同期が自然で async は明示的。TypeScript は async が自然で sync は特殊ケース」 千石: 「API は async だけど、契約は高速。使い方の問題」",
+        "status": "active",
+        "supersedes": [],
+        "superseded_by": [],
+        "gap_refs": [],
+        "session_refs": [
+          "2026-04-07-tramli-multilang-r2"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-006-async-flow-engine.md",
+        "content": "# DD-006: TypeScript 版の FlowEngine は全 async\n\n**Date:** 2026-04-07\n**Session:** [multilang-r2](../sessions/2026-04-07-tramli-multilang-r2.md)\n\n## Decision\n\nTypeScript 版は FlowEngine, StateProcessor, TransitionGuard, BranchProcessor すべて async (Promise ベース) とする。Java 版の「プロセッサは高速であること」の指針は JSDoc で維持する。\n\n## Rationale\n\nJava は同期が自然、TypeScript は async が自然。TS エコシステムでは DB アクセスすら async であり、sync only を強制すると使いづらい。\n\n- `startFlow()` → `Promise<FlowInstance<S>>`\n- `resumeAndExecute()` → `Promise<FlowInstance<S>>`\n- `processor.process()` → `Promise<void>`\n- `guard.validate()` → `Promise<GuardOutput>`\n\nauto-chain は `await` で順次実行。try/catch + snapshot/restore のエラーハンドリングは Java 版と同等に機能する（async/await の try-catch は同期例外と Promise rejection の両方を捕捉）。\n\n右京: 「Java は同期が自然で async は明示的。TypeScript は async が自然で sync は特殊ケース」\n千石: 「API は async だけど、契約は高速。使い方の問題」\n\n## Alternatives considered\n\n- **sync only（Java と同じ）**: TS エコシステムで不自然。DB や外部 API を使うプロセッサが書けない。\n"
+      },
+      "confidence": 0.7,
+      "warnings": [
+        "date not found"
+      ]
+    },
+    {
+      "type": "decision",
+      "id": "DD-007",
+      "data": {
+        "id": "DD-007",
+        "title": "HTTP API は v0.2.0 に先送り",
+        "date": "",
+        "rationale": "HTTP API（tramli-http モジュール）は v0.2.0 に先送りする。v0.1.0 はネイティブライブラリ（Java + TypeScript）に集中する。 HTTP API の主なユースケース（管理コンソール、外部キック、モニタリング、デバッグ）のうち、v0.1.0 で必須なものはない。TypeScript 版のネイティブライブラリが takt/AskOS の直接的な需要に応える。 v0.2.0 では Javalin ベースの tramli-http を別モジュールとして提供予定。認証はアプリ側責務。 ヤン: 「v0.1.0 では HTTP API は不要。TS 版のネイティブライブラリが先」 Red Team: 「resume は書き込み API。認証なしで公開したら誰でもフローを進行させられる」",
+        "status": "active",
+        "supersedes": [],
+        "superseded_by": [],
+        "gap_refs": [],
+        "session_refs": [
+          "2026-04-07-tramli-multilang-r4"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-007-http-api-deferred.md",
+        "content": "# DD-007: HTTP API は v0.2.0 に先送り\n\n**Date:** 2026-04-07\n**Session:** [multilang-r4](../sessions/2026-04-07-tramli-multilang-r4.md)\n\n## Decision\n\nHTTP API（tramli-http モジュール）は v0.2.0 に先送りする。v0.1.0 はネイティブライブラリ（Java + TypeScript）に集中する。\n\n## Rationale\n\nHTTP API の主なユースケース（管理コンソール、外部キック、モニタリング、デバッグ）のうち、v0.1.0 で必須なものはない。TypeScript 版のネイティブライブラリが takt/AskOS の直接的な需要に応える。\n\nv0.2.0 では Javalin ベースの tramli-http を別モジュールとして提供予定。認証はアプリ側責務。\n\nヤン: 「v0.1.0 では HTTP API は不要。TS 版のネイティブライブラリが先」\nRed Team: 「resume は書き込み API。認証なしで公開したら誰でもフローを進行させられる」\n\n## Alternatives considered\n\n- **v0.1.0 に HTTP API 含める**: スコープ膨張。TS 版の優先度が下がる。\n- **Spring Boot starter**: unlaxer プロジェクトに Spring はない。過剰。\n"
+      },
+      "confidence": 0.7,
+      "warnings": [
+        "date not found"
+      ]
+    },
+    {
+      "type": "decision",
+      "id": "DD-008",
+      "data": {
+        "id": "DD-008",
+        "title": "Rust 版は volta-proxy 向けに作る。Python/C# は作らない",
+        "date": "",
+        "rationale": "- **Rust**: volta-proxy（Traefik/nginx 代替）の設計フェーズで tramli-rust を作る - **Python**: 作らない。大きなものを作らない言語なので需要なし - **C#**: 作らない。GUI 系で出番はあるが優先度低 volta-proxy は本番インフラ（リバースプロキシ）であり、状態遷移のバグが直接障害につながる。Rust のコンパイル時保証 + tramli のビルド時バリデーション 9 種で二重に防御する意義がある。 Python は ユーティリティ/CLI 系のプロジェクトが中心で、フロー制御の需要がない。C# は Windows GUI 系で tramli が活きる場面はあるが、プロジェクト数（1件）に対して移植コストが見合わない。",
+        "status": "active",
+        "supersedes": [],
+        "superseded_by": [],
+        "gap_refs": [],
+        "session_refs": [
+          "2026-04-07-tramli-multilang-strategy"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-008-rust-for-volta-proxy-python-csharp-skip.md",
+        "content": "# DD-008: Rust 版は volta-proxy 向けに作る。Python/C# は作らない\n\n**Date:** 2026-04-07\n**Session:** [multilang-strategy](../sessions/2026-04-07-tramli-multilang-strategy.md)\n**Supersedes:** DD-004 の「Rust/Python/C# は需要発生時」を具体化\n\n## Decision\n\n- **Rust**: volta-proxy（Traefik/nginx 代替）の設計フェーズで tramli-rust を作る\n- **Python**: 作らない。大きなものを作らない言語なので需要なし\n- **C#**: 作らない。GUI 系で出番はあるが優先度低\n\n## Rationale\n\nvolta-proxy は本番インフラ（リバースプロキシ）であり、状態遷移のバグが直接障害につながる。Rust のコンパイル時保証 + tramli のビルド時バリデーション 9 種で二重に防御する意義がある。\n\nPython は ユーティリティ/CLI 系のプロジェクトが中心で、フロー制御の需要がない。C# は Windows GUI 系で tramli が活きる場面はあるが、プロジェクト数（1件）に対して移植コストが見合わない。\n\n## Rust 版の事前検討事項\n\nDGE Round 1 素の LLM レビューで指摘された課題:\n\n1. **所有権モデルと snapshot/restore の衝突** — processor 実行中に context の `&mut self` を持ちつつ snapshot の不変参照も保持する必要がある。`Clone` + 値渡し、または processor にクローンを渡して結果を merge する設計への変更が必要\n2. **FlowContext のキー** — `TypeId` + `Any` トレイトオブジェクト、または `HashMap<TypeId, Box<dyn Any>>` で Java の `Class<?>` キーを模倣\n3. **GuardOutput** — Rust の `enum` で自然に表現可能（最も Java に近い）\n4. **FlowState** — `enum` + trait impl で Java の `Enum<S> & FlowState` に対応\n5. **async** — `async-trait` または Rust 1.75+ のネイティブ async trait\n\nvolta-proxy の設計フェーズに入ったら、これらを DGE で詰めてから実装に入る。\n"
+      },
+      "confidence": 0.7,
+      "warnings": [
+        "date not found"
+      ]
+    },
+    {
+      "type": "decision",
+      "id": "DD-009",
+      "data": {
+        "id": "DD-009",
+        "title": "allow_perpetual() — terminal なし永続ループフロー",
+        "date": "",
+        "rationale": "Rust 版 Builder に `allow_perpetual()` を追加。terminal 状態なしのフローを許容する。デフォルトは terminal 必須（安全側）。 volta-gateway のインフラ状態（サーキットブレーカー、ヘルスチェック）は永続ループ。「Closed→Open→HalfOpen→Closed」に終了状態はない。Java 版の checkPathToTerminal がこれを弾く。 ハウス: 「tramli は『フローは最終的に完了する』と仮定している。だがサーキットブレーカーは終わらない」 Red Team: 「デフォルトは terminal 必須。間違えて terminal を忘れたフローが黙って通るのは危険」 Java/TS へのバックポートは需要待ち（takt で永続監視ループが必要になったら）。",
+        "status": "active",
+        "supersedes": [],
+        "superseded_by": [],
+        "gap_refs": [],
+        "session_refs": [
+          "2026-04-07-tramli-rust-r2-volta-patterns"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-009-allow-perpetual.md",
+        "content": "# DD-009: allow_perpetual() — terminal なし永続ループフロー\n\n**Date:** 2026-04-07\n**Session:** [rust-r2](../sessions/2026-04-07-tramli-rust-r2-volta-patterns.md)\n\n## Decision\n\nRust 版 Builder に `allow_perpetual()` を追加。terminal 状態なしのフローを許容する。デフォルトは terminal 必須（安全側）。\n\n## Rationale\n\nvolta-gateway のインフラ状態（サーキットブレーカー、ヘルスチェック）は永続ループ。「Closed→Open→HalfOpen→Closed」に終了状態はない。Java 版の checkPathToTerminal がこれを弾く。\n\nハウス: 「tramli は『フローは最終的に完了する』と仮定している。だがサーキットブレーカーは終わらない」\nRed Team: 「デフォルトは terminal 必須。間違えて terminal を忘れたフローが黙って通るのは危険」\n\nJava/TS へのバックポートは需要待ち（takt で永続監視ループが必要になったら）。\n\n## Alternatives considered\n\n- **ダミー terminal 状態を追加（Shutdown）**: 概念的に不自然。サーキットブレーカーに「終了」はない。\n"
+      },
+      "confidence": 0.7,
+      "warnings": [
+        "date not found"
+      ]
+    },
+    {
+      "type": "decision",
+      "id": "DD-010",
+      "data": {
+        "id": "DD-010",
+        "title": "Rust 版の型設計 — CloneAny + TypeId + native async",
+        "date": "",
+        "rationale": "1. **FlowContext**: `HashMap<TypeId, Box<dyn CloneAny>>` — 全ユーザー型に `Clone + Send + 'static` を要求 2. **snapshot/restore**: HashMap::clone() で実現（CloneAny が clone_box() を提供） 3. **エラー**: `Result<(), FlowError>` ベース。FlowError に source フィールド 4. **async**: Rust 1.75+ の native async fn in trait。runtime-agnostic 5. **スレッド安全性**: processor/guard は `Send + Sync`、FlowInstance は `Send` のみ snapshot/restore は tramli の核心機能（TECH-001）。Rust では `Box<dyn Any>` が Clone 非対応のため、`CloneAny` trait を定義して clone_box() 経由で HashMap 全体を clone する。`#[derive(Clone)]` で対応可能なので負担は小さい。 volta-gateway はマルチスレッドのため Send+Sync が必須。FlowDefinition は Arc で共有、FlowInstance はリクエストスレッドが排他所有。 リヴァイ: 「Clone はほぼ全ての Rust 型が derive できる。コンパイルエラーで気づける。Rust らしい」 ヤン: 「Rust の enum + match が Java の sealed interface と完全等価。最も Java に近い言語は実は Rust」",
+        "status": "active",
+        "supersedes": [],
+        "superseded_by": [],
+        "gap_refs": [],
+        "session_refs": [
+          "2026-04-07-tramli-rust-design"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-010-rust-clone-any-typeid-async.md",
+        "content": "# DD-010: Rust 版の型設計 — CloneAny + TypeId + native async\n\n**Date:** 2026-04-07\n**Superseded by:** [DD-012](DD-012-rust-sync-engine.md) (async 部分のみ撤回)\n**Session:** [rust-design](../sessions/2026-04-07-tramli-rust-design.md)\n\n## Decision\n\n1. **FlowContext**: `HashMap<TypeId, Box<dyn CloneAny>>` — 全ユーザー型に `Clone + Send + 'static` を要求\n2. **snapshot/restore**: HashMap::clone() で実現（CloneAny が clone_box() を提供）\n3. **エラー**: `Result<(), FlowError>` ベース。FlowError に source フィールド\n4. **async**: Rust 1.75+ の native async fn in trait。runtime-agnostic\n5. **スレッド安全性**: processor/guard は `Send + Sync`、FlowInstance は `Send` のみ\n\n## Rationale\n\nsnapshot/restore は tramli の核心機能（TECH-001）。Rust では `Box<dyn Any>` が Clone 非対応のため、`CloneAny` trait を定義して clone_box() 経由で HashMap 全体を clone する。`#[derive(Clone)]` で対応可能なので負担は小さい。\n\nvolta-gateway はマルチスレッドのため Send+Sync が必須。FlowDefinition は Arc で共有、FlowInstance はリクエストスレッドが排他所有。\n\nリヴァイ: 「Clone はほぼ全ての Rust 型が derive できる。コンパイルエラーで気づける。Rust らしい」\nヤン: 「Rust の enum + match が Java の sealed interface と完全等価。最も Java に近い言語は実は Rust」\n"
+      },
+      "confidence": 0.7,
+      "warnings": [
+        "date not found"
+      ]
+    },
+    {
+      "type": "decision",
+      "id": "DD-011",
+      "data": {
+        "id": "DD-011",
+        "title": "volta-gateway での tramli 適用範囲",
+        "date": "",
+        "rationale": "tramli は volta-gateway の **infra_manager** 内で「長命なインフラ状態」のみ管理する。リクエストライフサイクルには使わない。 対象フロー: - upstream ヘルスチェック（× N upstreams） - サーキットブレーカー（× N upstreams） - 設定ホットリロード（× 1） - TLS 証明書管理 / ACME（× N domains） 対象外: - リクエストライフサイクル（ミドルウェアパイプライン） - レートリミッター（atomic counter） 毎秒数万リクエストが来るプロキシで、リクエストごとに FlowInstance を生成するのは過剰。tramli はインフラ状態（分〜時間の寿命）の遷移正しさを保証し、リクエスト処理（ミリ秒の寿命）はパイプラインで処理する。 load_balancer は circuit_breaker.current_state() を読み取り専用で参照。フロー間イベント伝播は processor 内の resume_and_execute で実現。graceful shutdown は tramli の外で管理。",
+        "status": "active",
+        "supersedes": [],
+        "superseded_by": [],
+        "gap_refs": [],
+        "session_refs": [
+          "2026-04-07-tramli-rust-r2-volta-patterns",
+          "2026-04-07-tramli-rust-r3-integration"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-011-volta-gateway-tramli-scope.md",
+        "content": "# DD-011: volta-gateway での tramli 適用範囲\n\n**Date:** 2026-04-07\n**Session:** [rust-r2](../sessions/2026-04-07-tramli-rust-r2-volta-patterns.md), [rust-r3](../sessions/2026-04-07-tramli-rust-r3-integration.md)\n\n## Decision\n\ntramli は volta-gateway の **infra_manager** 内で「長命なインフラ状態」のみ管理する。リクエストライフサイクルには使わない。\n\n対象フロー:\n- upstream ヘルスチェック（× N upstreams）\n- サーキットブレーカー（× N upstreams）\n- 設定ホットリロード（× 1）\n- TLS 証明書管理 / ACME（× N domains）\n\n対象外:\n- リクエストライフサイクル（ミドルウェアパイプライン）\n- レートリミッター（atomic counter）\n\n## Rationale\n\n毎秒数万リクエストが来るプロキシで、リクエストごとに FlowInstance を生成するのは過剰。tramli はインフラ状態（分〜時間の寿命）の遷移正しさを保証し、リクエスト処理（ミリ秒の寿命）はパイプラインで処理する。\n\nload_balancer は circuit_breaker.current_state() を読み取り専用で参照。フロー間イベント伝播は processor 内の resume_and_execute で実現。graceful shutdown は tramli の外で管理。\n"
+      },
+      "confidence": 0.7,
+      "warnings": [
+        "date not found"
+      ]
+    },
+    {
+      "type": "decision",
+      "id": "DD-012",
+      "data": {
+        "id": "DD-012",
+        "title": "Rust 版 FlowEngine は完全 sync",
+        "date": "",
+        "rationale": "Rust 版の FlowEngine, StateProcessor, TransitionGuard, BranchProcessor は全て同期（sync）とする。DD-010 の async 部分を撤回。CloneAny + TypeId の設計は維持。 tramli のエンジン処理は ~2μs。async にする理由がない。async 化は： - Future state machine のサイズ爆発 → stack overflow - Pin<Box<dyn Future>> → trait の dyn 非互換 - Send bound の伝播 → 型制約の爆発 - take/put_back パターン → 不自然なコード `docs/async-integration.md` のパターンが正解: ``` SM start() (sync, μs) → async I/O (外部) → SM resume() (sync, μs) ``` External 遷移が async 境界のマーカー。SM 内部は sync。 volta-gateway では `Mutex<FlowEngine>` で包んで async 世界に晒す。ロック保持 μs で contention は実質ゼロ。 ハウス: 「症状は stack overflow。病名は不要な async 化」 Rust Async 専門家: 「sync コアを Mutex で包んで async 世界に晒す。hyper, axum, tonic — 全て同じパターン」 ヤン: 「三つ目の言語で、設計の本質が見えた。tramli は sync」",
+        "status": "active",
+        "supersedes": [],
+        "superseded_by": [],
+        "gap_refs": [],
+        "session_refs": [
+          "2026-04-07-tramli-rust-async-diagnosis"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-012-rust-sync-engine.md",
+        "content": "# DD-012: Rust 版 FlowEngine は完全 sync\n\n**Date:** 2026-04-07\n**Session:** [rust-async-diagnosis](../sessions/2026-04-07-tramli-rust-async-diagnosis.md)\n**Supersedes:** DD-010 (CloneAny + TypeId + native async — async 部分のみ撤回)\n\n## Decision\n\nRust 版の FlowEngine, StateProcessor, TransitionGuard, BranchProcessor は全て同期（sync）とする。DD-010 の async 部分を撤回。CloneAny + TypeId の設計は維持。\n\n## Rationale\n\ntramli のエンジン処理は ~2μs。async にする理由がない。async 化は：\n- Future state machine のサイズ爆発 → stack overflow\n- Pin<Box<dyn Future>> → trait の dyn 非互換\n- Send bound の伝播 → 型制約の爆発\n- take/put_back パターン → 不自然なコード\n\n`docs/async-integration.md` のパターンが正解:\n```\nSM start() (sync, μs) → async I/O (外部) → SM resume() (sync, μs)\n```\n\nExternal 遷移が async 境界のマーカー。SM 内部は sync。\n\nvolta-gateway では `Mutex<FlowEngine>` で包んで async 世界に晒す。ロック保持 μs で contention は実質ゼロ。\n\nハウス: 「症状は stack overflow。病名は不要な async 化」\nRust Async 専門家: 「sync コアを Mutex で包んで async 世界に晒す。hyper, axum, tonic — 全て同じパターン」\nヤン: 「三つ目の言語で、設計の本質が見えた。tramli は sync」\n\n## TS 版への影響\n\nなし。DD-006 (async) は維持。TS では async のコストが小さく stack overflow も起きていない。\n\n## Alternatives considered\n\n- **全メソッドを Pin<Box<dyn Future>> で返す**: 試行済み。stack overflow は解決せず\n- **store を Arc<Mutex> にする**: 複雑さが増すだけで根本解決にならない\n- **processor に owned FlowContext を渡す**: API が Java/TS と大きく乖離\n"
+      },
+      "confidence": 0.7,
+      "warnings": [
+        "date not found"
+      ]
+    },
+    {
+      "type": "decision",
+      "id": "DD-013",
+      "data": {
+        "id": "DD-013",
+        "title": "全言語 sync コアに統一（DD-006 撤回検討）",
+        "date": "",
+        "rationale": "全言語の FlowEngine / StateProcessor / TransitionGuard / BranchProcessor を sync に統一する。 - **Java**: 変更なし（元々 sync） - **TypeScript**: DD-006 を Supersede し、async → sync に変更 - **Rust**: DD-012 の通り sync async I/O は全言語で `async-integration.md` パターンを適用: ``` SM start() (sync, μs) → async I/O (外部) → SM resume() (sync, μs) ``` ### 現状の API 不一致 | 言語 | processor.process() | engine.startFlow() | |------|--------------------|--------------------| | Java | `void` (sync) | sync | | TypeScript | `Promise<void>` (async) | `Promise<FlowInstance>` (async) | | Rust | `Result<(), FlowError>` (sync) | sync | 3 言語間で API が割れている。共有テストスイート（TECH-009）で振る舞い一致を保証する前提なのに、呼び出しパターンが言語ごとに異なる。 ### sync 統一の根拠 1. `async-integration.md`: 「tramli is intentionally synchronous. It makes judgments in microseconds」 2. Rust 版の stack overflow 診断で、async の不要性が技術的に確認された 3. 3 言語の API 一貫性は共有テストスイートの前提条件 4. sync は全言語で最もシンプル、テストしやすい、ポータブル ### TypeScript での影響 ```typescript // Before (async) const flow = await engine.startFlow(def, sessionId, data); const resumed = await engine.resumeAndExecute(flowId, def); // After (sync) const flow = engine.startFlow(def, sessionId, data); const resumed = engine.resumeAndExecute(flowId, def); // async I/O は外部 const authResult = await checkAuth(request);  // ← async はここ engine.resumeAndExecute(flowId, def, new Map([...]));  // ← sync ``` TS の async overhead は小さいが、sync に揃えることで: - API が Java/Rust と完全一致 - テストから async ボイラープレートが消える - `async-integration.md` のパターンが全言語で統一 ### async が将来必要になった場合 全言語で feature flag / optional module として提供: - Java: `tramli-async` モジュール（`CompletableFuture` 版） - TypeScript: `@unlaxer/tramli-async`（または export path `tramli/async`） - Rust: `features = [\"async\"]`",
+        "status": "active",
+        "supersedes": [],
+        "superseded_by": [],
+        "gap_refs": [],
+        "session_refs": [],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-013-all-languages-sync-core.md",
+        "content": "# DD-013: 全言語 sync コアに統一（DD-006 撤回検討）\n\n**Date:** 2026-04-07\n**Session:** tramli-rust async 診断後の議論\n**Status:** draft — レビュー待ち\n\n## Decision (案)\n\n全言語の FlowEngine / StateProcessor / TransitionGuard / BranchProcessor を sync に統一する。\n\n- **Java**: 変更なし（元々 sync）\n- **TypeScript**: DD-006 を Supersede し、async → sync に変更\n- **Rust**: DD-012 の通り sync\n\nasync I/O は全言語で `async-integration.md` パターンを適用:\n```\nSM start() (sync, μs) → async I/O (外部) → SM resume() (sync, μs)\n```\n\n## Rationale\n\n### 現状の API 不一致\n\n| 言語 | processor.process() | engine.startFlow() |\n|------|--------------------|--------------------|\n| Java | `void` (sync) | sync |\n| TypeScript | `Promise<void>` (async) | `Promise<FlowInstance>` (async) |\n| Rust | `Result<(), FlowError>` (sync) | sync |\n\n3 言語間で API が割れている。共有テストスイート（TECH-009）で振る舞い一致を保証する前提なのに、呼び出しパターンが言語ごとに異なる。\n\n### sync 統一の根拠\n\n1. `async-integration.md`: 「tramli is intentionally synchronous. It makes judgments in microseconds」\n2. Rust 版の stack overflow 診断で、async の不要性が技術的に確認された\n3. 3 言語の API 一貫性は共有テストスイートの前提条件\n4. sync は全言語で最もシンプル、テストしやすい、ポータブル\n\n### TypeScript での影響\n\n```typescript\n// Before (async)\nconst flow = await engine.startFlow(def, sessionId, data);\nconst resumed = await engine.resumeAndExecute(flowId, def);\n\n// After (sync)\nconst flow = engine.startFlow(def, sessionId, data);\nconst resumed = engine.resumeAndExecute(flowId, def);\n\n// async I/O は外部\nconst authResult = await checkAuth(request);  // ← async はここ\nengine.resumeAndExecute(flowId, def, new Map([...]));  // ← sync\n```\n\nTS の async overhead は小さいが、sync に揃えることで:\n- API が Java/Rust と完全一致\n- テストから async ボイラープレートが消える\n- `async-integration.md` のパターンが全言語で統一\n\n### async が将来必要になった場合\n\n全言語で feature flag / optional module として提供:\n- Java: `tramli-async` モジュール（`CompletableFuture` 版）\n- TypeScript: `@unlaxer/tramli-async`（または export path `tramli/async`）\n- Rust: `features = [\"async\"]`\n\n## Open Questions（レビューで確認したい）\n\n1. TS 版を sync に変更すると `@unlaxer/tramli@0.1.0` との後方互換性が壊れる。`0.2.0` でリリースするか？\n2. TS の Node.js エコシステムで sync API は受け入れられるか？（DB アクセス等は async が標準）\n3. processor 内で軽い async I/O（メトリクス送信等）をしたいユースケースをどう扱うか？\n"
+      },
+      "confidence": 0.7,
+      "warnings": [
+        "date not found",
+        "no session references found"
+      ]
+    },
+    {
+      "type": "decision",
+      "id": "DD-014",
+      "data": {
+        "id": "DD-014",
+        "title": "data-flow は定義するのではなく導出する",
+        "date": "",
+        "rationale": "data-flow を別途定義する仕組みは作らない。processor の `requires()/produces()` から自動導出する。可視化が必要なら MermaidGenerator に data-flow モードを追加して自動生成する。 - `checkRequiresProduces` がビルド時に data-flow 整合性を検証済み。明示定義なしで正しさは保証されている - 明示的 data-flow 定義を入れると requires/produces と同じ情報を2箇所で書くことになる（DRY 違反） - 「定義から自動生成」が tramli の哲学（MermaidGenerator と同じアプローチ）",
+        "status": "active",
+        "supersedes": [],
+        "superseded_by": [],
+        "gap_refs": [],
+        "session_refs": [],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-014-data-flow-derived-not-defined.md",
+        "content": "---\nstatus: draft\n---\n\n# DD-014: data-flow は定義するのではなく導出する\n\n**Date:** 2026-04-07\n\n## Decision\n\ndata-flow を別途定義する仕組みは作らない。processor の `requires()/produces()` から自動導出する。可視化が必要なら MermaidGenerator に data-flow モードを追加して自動生成する。\n\n## Rationale\n\n- `checkRequiresProduces` がビルド時に data-flow 整合性を検証済み。明示定義なしで正しさは保証されている\n- 明示的 data-flow 定義を入れると requires/produces と同じ情報を2箇所で書くことになる（DRY 違反）\n- 「定義から自動生成」が tramli の哲学（MermaidGenerator と同じアプローチ）\n\n## 将来の検討\n\nMermaidGenerator に data-flow 可視化モードを追加:\n```\nOrderRequest → [OrderInit] → PaymentIntent → [PaymentGuard] → PaymentResult → [ShipProcessor] → ShipmentInfo\n```\n状態遷移図とは別に、データの流れを図示する。\n"
+      },
+      "confidence": 0.7,
+      "warnings": [
+        "date not found",
+        "no session references found"
+      ]
+    },
+    {
+      "type": "spec",
+      "id": "TECH-001-processor-error-handling",
+      "data": {
+        "id": "TECH-001-processor-error-handling",
+        "title": "TECH-001: processor 例外ハンドリング + External 実行順序統一",
+        "type": "TECH",
+        "status": "draft",
+        "decision_refs": [],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/specs/TECH-001-processor-error-handling.md",
+        "content": "<!-- ⚠️ DGE 生成 Spec — status: draft — 人間レビュー必須 -->\n\n# TECH-001: processor 例外ハンドリング + External 実行順序統一\n\n**Status:** draft\n**Gap:** #3 (processor 例外), #4 (External 実行順序不整合)\n**Session:** [R2](../sessions/2026-04-07-tramli-design-review-r2.md)\n\n## 変更内容\n\nprocessor/branch 実行時の例外を catch し、context を復元した上で error transition に遷移する。同時に External 遷移の実行順序を Auto と統一する。\n\n## 変更箇所\n\n### 1. FlowContext — `restoreFrom()` 追加\n\n```java\n// FlowContext.java に追加\npublic void restoreFrom(Map<Class<?>, Object> snapshot) {\n    attributes.clear();\n    attributes.putAll(snapshot);\n}\n```\n\n### 2. FlowEngine — executeAutoChain 修正\n\n```java\n// FlowEngine.java executeAutoChain() 内\n// Auto 遷移部分を try-catch で囲む\nif (autoOrBranch.isAuto()) {\n    Map<Class<?>, Object> backup = flow.context().snapshot();\n    try {\n        if (autoOrBranch.processor() != null) \n            autoOrBranch.processor().process(flow.context());\n        S from = flow.currentState();\n        flow.transitionTo(autoOrBranch.to());\n        store.recordTransition(flow.id(), from, autoOrBranch.to(),\n                autoOrBranch.processor() != null ? autoOrBranch.processor().name() : \"auto\",\n                flow.context());\n    } catch (Exception e) {\n        flow.context().restoreFrom(backup);\n        handleError(flow, flow.currentState());\n        return;\n    }\n} else {\n    // Branch 遷移も同様に try-catch\n    Map<Class<?>, Object> backup = flow.context().snapshot();\n    try {\n        BranchProcessor branch = autoOrBranch.branch();\n        String label = branch.decide(flow.context());\n        S target = autoOrBranch.branchTargets().get(label);\n        if (target == null) {\n            throw new FlowException(\"UNKNOWN_BRANCH\",\n                    \"Branch '\" + branch.name() + \"' returned unknown label: \" + label);\n        }\n        Transition<S> specific = transitions.stream()\n                .filter(t -> t.isBranch() && t.to() == target)\n                .findFirst().orElse(autoOrBranch);\n        if (specific.processor() != null) specific.processor().process(flow.context());\n        S from = flow.currentState();\n        flow.transitionTo(target);\n        store.recordTransition(flow.id(), from, target, branch.name() + \":\" + label, flow.context());\n    } catch (Exception e) {\n        flow.context().restoreFrom(backup);\n        handleError(flow, flow.currentState());\n        return;\n    }\n}\n```\n\n### 3. FlowEngine — resumeAndExecute External 遷移修正\n\n```java\n// guard Accepted ブロック — 実行順序を process → transitionTo に変更\ncase TransitionGuard.GuardOutput.Accepted accepted -> {\n    Map<Class<?>, Object> backup = flow.context().snapshot();\n    for (var entry : accepted.data().entrySet()) {\n        putRaw(flow.context(), entry.getKey(), entry.getValue());\n    }\n    try {\n        if (transition.processor() != null) {\n            transition.processor().process(flow.context());\n        }\n        S from = flow.currentState();\n        flow.transitionTo(transition.to());\n        store.recordTransition(flow.id(), from, transition.to(), guard.name(), flow.context());\n    } catch (Exception e) {\n        flow.context().restoreFrom(backup);\n        handleError(flow, currentState);\n        store.save(flow);\n        return flow;\n    }\n}\n```\n\n## 影響範囲\n\n- FlowContext: 1メソッド追加（`restoreFrom`）\n- FlowEngine: `executeAutoChain` と `resumeAndExecute` の2メソッド修正\n- 既存テスト: 動作変更なし（正常系のフローは同じ）\n- 新規テスト: TECH-005 参照\n\n## 注意事項\n\n- `handleError` が error transition を見つけられない場合は `TERMINAL_ERROR` で complete（既存動作）\n- `UNKNOWN_BRANCH` 例外も catch され error transition に遷移する（従来は呼び出し元に飛んでいた）\n"
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "spec",
+      "id": "TECH-002-build-validation-auto-external",
+      "data": {
+        "id": "TECH-002-build-validation-auto-external",
+        "title": "TECH-002: auto+external 混在検出バリデーション",
+        "type": "TECH",
+        "status": "draft",
+        "decision_refs": [],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/specs/TECH-002-build-validation-auto-external.md",
+        "content": "<!-- ⚠️ DGE 生成 Spec — status: draft — 人間レビュー必須 -->\n\n# TECH-002: auto+external 混在検出バリデーション\n\n**Status:** draft\n**Gap:** #7 (ビルダーで auto+external 混在が未検出)\n**Session:** [R2](../sessions/2026-04-07-tramli-design-review-r2.md)\n\n## 変更内容\n\nFlowDefinition.Builder の validate() に9番目のチェック `checkAutoExternalConflict` を追加。同一ステートから auto/branch と external の両方が定義されている場合にビルドエラーとする。\n\n## 変更箇所\n\n### FlowDefinition.java — validate() に追加\n\n```java\nprivate void checkAutoExternalConflict(FlowDefinition<S> def, List<String> errors) {\n    for (S state : def.allStates()) {\n        List<Transition<S>> transitions = def.transitionsFrom(state);\n        boolean hasAuto = transitions.stream().anyMatch(t -> t.isAuto() || t.isBranch());\n        boolean hasExternal = transitions.stream().anyMatch(Transition::isExternal);\n        if (hasAuto && hasExternal) {\n            errors.add(\"State \" + state.name() + \n                \" has both auto/branch and external transitions — \" +\n                \"auto takes priority, making external unreachable\");\n        }\n    }\n}\n```\n\nvalidate() メソッド内で既存チェックの後に呼び出す。\n\n## 影響範囲\n\n- FlowDefinition: 1メソッド追加 + validate() に1行追加\n- 既存テスト: 影響なし（既存のフロー定義にこのパターンはない）\n- 新規テスト: `autoAndExternalConflict_buildFails` (TECH-005 参照)\n"
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "spec",
+      "id": "TECH-003-flow-instance-restore",
+      "data": {
+        "id": "TECH-003-flow-instance-restore",
+        "title": "TECH-003: FlowInstance.restore() factory メソッド",
+        "type": "TECH",
+        "status": "draft",
+        "decision_refs": [],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/specs/TECH-003-flow-instance-restore.md",
+        "content": "<!-- ⚠️ DGE 生成 Spec — status: draft — 人間レビュー必須 -->\n\n# TECH-003: FlowInstance.restore() factory メソッド\n\n**Status:** draft\n**Gap:** #12 (FlowInstance の再構築が外部パッケージから不可能)\n**Session:** [R4](../sessions/2026-04-07-tramli-design-review-r4.md)\n\n## 変更内容\n\n外部パッケージの FlowStore 実装者が永続化データから FlowInstance を復元するための public static factory メソッドを追加。\n\n## 変更箇所\n\n### FlowInstance.java\n\n```java\n// 全フィールドコンストラクタ（パッケージプライベート）\nFlowInstance(String id, String sessionId, FlowDefinition<S> definition,\n             FlowContext context, S currentState, Instant createdAt,\n             Instant expiresAt, int guardFailureCount, int version,\n             String exitState) {\n    this.id = id;\n    this.sessionId = sessionId;\n    this.definition = definition;\n    this.context = context;\n    this.currentState = currentState;\n    this.createdAt = createdAt;\n    this.expiresAt = expiresAt;\n    this.guardFailureCount = guardFailureCount;\n    this.version = version;\n    this.exitState = exitState;\n}\n\n/**\n * Restore a FlowInstance from persisted state.\n * Used by FlowStore implementations to reconstruct instances loaded from storage.\n *\n * @param createdAt  the original creation timestamp (not Instant.now())\n * @param exitState  null if the flow is still active\n */\npublic static <S extends Enum<S> & FlowState> FlowInstance<S> restore(\n        String id, String sessionId, FlowDefinition<S> definition,\n        FlowContext context, S currentState, Instant createdAt,\n        Instant expiresAt, int guardFailureCount, int version,\n        String exitState) {\n    return new FlowInstance<>(id, sessionId, definition, context,\n            currentState, createdAt, expiresAt, guardFailureCount,\n            version, exitState);\n}\n```\n\n`createdAt` フィールドを `final` から非 final に変更するか、全フィールドコンストラクタで直接設定。既存の public コンストラクタは変更なし。\n\n## 影響範囲\n\n- FlowInstance: コンストラクタ1つ + static factory 1つ追加\n- 既存コード: 変更なし（既存コンストラクタは維持）\n- InMemoryFlowStore: 変更不要（同パッケージなのでパッケージプライベートにもアクセス可能）\n"
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "spec",
+      "id": "TECH-004-requires-produces-intersection",
+      "data": {
+        "id": "TECH-004-requires-produces-intersection",
+        "title": "TECH-004: checkRequiresProduces を intersection 方式に修正",
+        "type": "TECH",
+        "status": "draft",
+        "decision_refs": [],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/specs/TECH-004-requires-produces-intersection.md",
+        "content": "<!-- ⚠️ DGE 生成 Spec — status: draft — 人間レビュー必須 -->\n\n# TECH-004: checkRequiresProduces を intersection 方式に修正\n\n**Status:** draft\n**Gap:** コードレビュー指摘 #1 (visited 共有問題)\n**Session:** [R4](../sessions/2026-04-07-tramli-design-review-r4.md)\n\n## 変更内容\n\ncheckRequiresProduces の DFS で visited セットを共有していたため、分岐後の合流点で片方のパスしか検証されない問題を修正。合流点では available の intersection を取る方式に変更。\n\n## 変更箇所\n\n### FlowDefinition.java — checkRequiresProduces 書き換え\n\n```java\nprivate void checkRequiresProduces(FlowDefinition<S> def, List<String> errors) {\n    if (def.initialState == null) return;\n    Map<S, Set<Class<?>>> stateAvailable = new EnumMap<>(stateClass);\n    checkRequiresProducesFrom(def, def.initialState,\n            new HashSet<>(initiallyAvailable), stateAvailable, errors);\n}\n\nprivate void checkRequiresProducesFrom(FlowDefinition<S> def, S state,\n        Set<Class<?>> available, Map<S, Set<Class<?>>> stateAvailable,\n        List<String> errors) {\n\n    if (stateAvailable.containsKey(state)) {\n        Set<Class<?>> existing = stateAvailable.get(state);\n        // available が既知の available のサブセットなら再探索不要\n        if (existing.containsAll(available)) return;\n        // intersection: 全パスで共通して利用可能なもののみ残す\n        existing.retainAll(available);\n    } else {\n        stateAvailable.put(state, new HashSet<>(available));\n    }\n\n    for (Transition<S> t : def.transitionsFrom(state)) {\n        Set<Class<?>> newAvailable = new HashSet<>(stateAvailable.get(state));\n        if (t.guard() != null) {\n            for (Class<?> req : t.guard().requires()) {\n                if (!newAvailable.contains(req))\n                    errors.add(\"Guard '\" + t.guard().name() + \"' at \" + t.from().name() +\n                            \" requires \" + req.getSimpleName() + \" but it may not be available\");\n            }\n            newAvailable.addAll(t.guard().produces());\n        }\n        if (t.branch() != null) {\n            for (Class<?> req : t.branch().requires()) {\n                if (!newAvailable.contains(req))\n                    errors.add(\"Branch '\" + t.branch().name() + \"' at \" + t.from().name() +\n                            \" requires \" + req.getSimpleName() + \" but it may not be available\");\n            }\n        }\n        if (t.processor() != null) {\n            for (Class<?> req : t.processor().requires()) {\n                if (!newAvailable.contains(req))\n                    errors.add(\"Processor '\" + t.processor().name() + \"' at \" + t.from().name() +\n                            \" -> \" + t.to().name() + \" requires \" + req.getSimpleName() +\n                            \" but it may not be available\");\n            }\n            newAvailable.addAll(t.processor().produces());\n        }\n        checkRequiresProducesFrom(def, t.to(), newAvailable, stateAvailable, errors);\n    }\n}\n```\n\n## 動作の変化\n\n**Before**: 分岐 A→C (produces X), 分岐 B→C (produces なし) の場合、A が先に探索されると C で X が available と判定。B→C パスでは C が visited 済みのためスキップ。C 以降で X を requires するプロセッサはエラーにならない（false negative）。\n\n**After**: A→C 探索後、B→C で C に到達。available の intersection を取り、X は除外される。C 以降で X を requires するプロセッサがエラーになる（正しい動作）。\n\n## 影響範囲\n\n- FlowDefinition: `checkRequiresProduces` + `checkRequiresProducesFrom` の2メソッド書き換え\n- 既存テスト: 分岐→合流パターンがなければ影響なし\n- checkDag() で DAG が保証されているため、無限ループの心配なし\n"
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "spec",
+      "id": "TECH-005-error-tests",
+      "data": {
+        "id": "TECH-005-error-tests",
+        "title": "TECH-005: 異常系・境界値テスト追加",
+        "type": "TECH",
+        "status": "draft",
+        "decision_refs": [],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/specs/TECH-005-error-tests.md",
+        "content": "<!-- ⚠️ DGE 生成 Spec — status: draft — 人間レビュー必須 -->\n\n# TECH-005: 異常系・境界値テスト追加\n\n**Status:** draft\n**Gap:** #16 (異常系テスト不足)\n**Session:** [R4](../sessions/2026-04-07-tramli-design-review-r4.md)\n\n## 変更内容\n\nFlowEngineErrorTest クラスを新規作成し、7つの異常系テストケースを追加。\n\n## テストケース\n\n### 1. processorThrows_routesToErrorState\n- processor が RuntimeException をスロー\n- error transition で CANCELLED に遷移することを検証\n- 前提: TECH-001 の修正が適用済み\n\n### 2. processorThrows_contextIsRestored\n- processor が途中まで context.put() した後に例外\n- context が processor 実行前の snapshot に復元されていることを検証\n- 前提: TECH-001 の restoreFrom が実装済み\n\n### 3. branchReturnsUnknownLabel_routesToErrorState\n- BranchProcessor.decide() が未マッピングのラベルを返す\n- error transition で CANCELLED に遷移することを検証\n- 前提: TECH-001 の修正が適用済み（UNKNOWN_BRANCH も catch される）\n\n### 4. maxChainDepthExceeded_throwsFlowException\n- 11ステップの auto-chain を持つフロー定義（checkDag は循環のみチェックするため、長い線形チェーンは通る）\n- MAX_CHAIN_DEPTH (10) 超過で FlowException(\"MAX_CHAIN_DEPTH\") がスローされることを検証\n\n### 5. ttlExpired_resumeCompletesAsExpired\n- TTL を Duration.ZERO で定義し、startFlow 後に少し待って resumeAndExecute\n- flow.exitState() が \"EXPIRED\" であることを検証\n\n### 6. guardRejectedMaxRetries_routesToErrorState\n- guard が常に Rejected を返す\n- maxGuardRetries 回の resumeAndExecute 後、error transition で CANCELLED に遷移\n- (既存 OrderFlowTest.paymentRejected と類似だが、独立テストとして明示)\n\n### 7. autoAndExternalConflict_buildFails\n- 同一ステートに auto と external を定義\n- build() で FlowException がスローされることを検証\n- 前提: TECH-002 のバリデーションが実装済み\n\n## ファイル\n\n`src/test/java/com/tramli/FlowEngineErrorTest.java` (新規作成)\n"
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "spec",
+      "id": "TECH-006-transition-record-timestamp",
+      "data": {
+        "id": "TECH-006-transition-record-timestamp",
+        "title": "TECH-006: TransitionRecord にタイムスタンプ追加",
+        "type": "TECH",
+        "status": "draft",
+        "decision_refs": [],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/specs/TECH-006-transition-record-timestamp.md",
+        "content": "<!-- ⚠️ DGE 生成 Spec — status: draft — 人間レビュー必須 -->\n\n# TECH-006: TransitionRecord にタイムスタンプ追加\n\n**Status:** draft\n**Gap:** #9 (可観測性の欠如)\n**Session:** [R3](../sessions/2026-04-07-tramli-design-review-r3.md)\n\n## 変更内容\n\nTransitionRecord に `Instant timestamp` フィールドを追加。FlowStore.recordTransition() の呼び出し時に `Instant.now()` を記録。\n\n## 変更箇所\n\n### InMemoryFlowStore.java — TransitionRecord 修正\n\n```java\n// Before\npublic record TransitionRecord(String flowId, String from, String to, String trigger) {}\n\n// After\npublic record TransitionRecord(String flowId, String from, String to, \n                                String trigger, Instant timestamp) {}\n```\n\n### FlowStore.java — recordTransition シグネチャは変更なし\n\nFlowStore インターフェースの `recordTransition` は FlowContext を受け取っており、タイムスタンプは実装側で付与する。InMemoryFlowStore の実装内で `Instant.now()` を呼ぶ。\n\n```java\n// InMemoryFlowStore.recordTransition() 修正\n@Override\npublic <S extends Enum<S> & FlowState> void recordTransition(\n        String flowId, S from, S to, String trigger, FlowContext ctx) {\n    transitionLog.add(new TransitionRecord(\n            flowId, from.name(), to.name(), trigger, Instant.now()));\n}\n```\n\n## 影響範囲\n\n- InMemoryFlowStore: TransitionRecord にフィールド追加 + recordTransition 修正\n- FlowStore インターフェース: 変更なし\n- 既存テスト: TransitionRecord の参照箇所で timestamp フィールドの追加に伴うコンパイルエラー修正が必要\n"
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "spec",
+      "id": "TECH-007-javadoc-contracts",
+      "data": {
+        "id": "TECH-007-javadoc-contracts",
+        "title": "TECH-007: Javadoc による API 契約明文化",
+        "type": "TECH",
+        "status": "draft",
+        "decision_refs": [
+          "DD-001"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/specs/TECH-007-javadoc-contracts.md",
+        "content": "<!-- ⚠️ DGE 生成 Spec — status: draft — 人間レビュー必須 -->\n\n# TECH-007: Javadoc による API 契約明文化\n\n**Status:** draft\n**Gap:** #1 (FlowStore 契約), #2 (アトミシティ), #5 (TTL), #8 (例外カタログ), #10 (Class キー制約), #18 (シリアライゼーション指針)\n**Decision:** [DD-001](../decisions/DD-001-ttl-semantics.md)\n**Session:** [R2](../sessions/2026-04-07-tramli-design-review-r2.md), [R4](../sessions/2026-04-07-tramli-design-review-r4.md)\n\n## 変更内容\n\n既存インターフェース・クラスの Javadoc を追加/拡充し、暗黙の契約を明文化する。コード変更なし。\n\n## 対象ファイルと追加内容\n\n### 1. FlowStore.java — インターフェース Javadoc\n\n```java\n/**\n * Persistence contract for flow instances.\n *\n * <h3>Threading</h3>\n * FlowEngine assumes single-threaded access per flow instance.\n * Implementations MUST ensure that concurrent calls to\n * {@link #loadForUpdate} for the same flowId are serialized\n * (e.g., SELECT FOR UPDATE, or application-level locking).\n *\n * <h3>Atomicity</h3>\n * {@link #create}/{@link #save} and {@link #recordTransition} calls between\n * them form a logical unit. Implementations SHOULD execute them within a\n * single transaction where possible. If partial writes occur, the flow state\n * ({@link #save}) is authoritative over the transition log.\n *\n * <h3>Optimistic Locking</h3>\n * {@link FlowInstance#version()} supports optimistic locking. Implementations\n * SHOULD increment version on {@link #save} and reject saves with stale versions.\n *\n * <h3>Serialization</h3>\n * {@link FlowInstance} contains a {@link FlowDefinition} reference which holds\n * lambdas and cannot be serialized. Persist only the instance metadata\n * (id, sessionId, currentState, createdAt, expiresAt, guardFailureCount,\n * version, exitState) and the context attributes. Use\n * {@link FlowInstance#restore} to reconstruct at load time, re-attaching\n * the current {@link FlowDefinition}.\n *\n * <p>For {@link FlowContext} attributes ({@code Map<Class<?>, Object>}),\n * serialize using {@code Class.getName()} as key and your chosen format\n * (e.g., Jackson JSON) for values. Jackson is an optional dependency.\n */\n```\n\n### 2. FlowEngine.java — クラス Javadoc（例外カタログ）\n\n```java\n/**\n * Generic engine that drives all flow state machines.\n *\n * <h3>Exceptions</h3>\n * <ul>\n *   <li>{@code FLOW_NOT_FOUND} — {@link #resumeAndExecute} with unknown or completed flowId</li>\n *   <li>{@code INVALID_TRANSITION} — {@link #resumeAndExecute} when no external transition exists from current state</li>\n *   <li>{@code MAX_CHAIN_DEPTH} — auto-chain exceeded 10 steps (possible definition issue)</li>\n *   <li>{@code EXPIRED} — flow TTL exceeded at {@link #resumeAndExecute} entry</li>\n * </ul>\n * Processor and branch exceptions are caught and routed to error transitions\n * (see {@link FlowDefinition.Builder#onError} / {@link FlowDefinition.Builder#onAnyError}).\n */\n```\n\n### 3. StateProcessor.java — 契約追加\n\n```java\n/**\n * Processes a state transition.\n *\n * <h3>Contract</h3>\n * <ul>\n *   <li>Processors SHOULD be fast and avoid external I/O (network calls,\n *       file system access). External interactions belong in\n *       {@link TransitionGuard} or external transitions.</li>\n *   <li>If a processor throws, the engine restores the context to its\n *       pre-execution state and routes to the error transition.</li>\n *   <li>{@link #requires()} types MUST be present in the context when\n *       the processor executes. This is validated at build time.</li>\n *   <li>{@link #produces()} types are added to the context after execution.\n *       Use dedicated record types as keys, not primitives or String.</li>\n * </ul>\n */\n```\n\n### 4. TransitionGuard.java — TTL との関係\n\n```java\n/**\n * Guards an External transition. Pure function — must not mutate FlowContext.\n * Accepted data is merged into context by the engine.\n *\n * <h3>TTL vs GuardOutput.Expired</h3>\n * {@link FlowInstance} TTL is checked at {@code resumeAndExecute} entry and\n * represents the flow-level expiration (see DD-001). {@link GuardOutput.Expired}\n * is a guard-level expiration for business logic (e.g., payment window closed).\n * They are independent mechanisms.\n *\n * <h3>maxRetries()</h3>\n * Currently unused by FlowEngine — the engine uses\n * {@link FlowDefinition#maxGuardRetries()} for all guards.\n * Per-guard retry limits are planned for a future version.\n */\n```\n\n### 5. FlowContext.java — Class キー制約\n\n```java\n/**\n * Accumulator for flow data. Each processor puts its produces,\n * subsequent processors get their requires. Keyed by Class —\n * each data type appears at most once.\n *\n * <h3>Key Design Pattern</h3>\n * Use dedicated record types as keys (e.g., {@code OrderRequest.class},\n * {@code PaymentResult.class}), not primitive wrappers or {@code String.class}.\n * Putting the same Class key twice silently overwrites the previous value.\n * The {@code requires/produces} build-time validation checks type presence\n * but does not detect overwrite conflicts.\n */\n```\n\n## 影響範囲\n\n- コード変更なし（Javadoc のみ）\n- 5ファイルの class-level または interface-level Javadoc を追加/拡充\n"
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "spec",
+      "id": "TECH-008-tramli-ts-core",
+      "data": {
+        "id": "TECH-008-tramli-ts-core",
+        "title": "TECH-008: tramli-ts コアライブラリ",
+        "type": "TECH",
+        "status": "draft",
+        "decision_refs": [
+          "DD-003",
+          "DD-004",
+          "DD-005",
+          "DD-006"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/specs/TECH-008-tramli-ts-core.md",
+        "content": "<!-- ⚠️ DGE 生成 Spec — status: draft — 人間レビュー必須 -->\n\n# TECH-008: tramli-ts コアライブラリ\n\n**Status:** draft\n**Decision:** [DD-003](../decisions/DD-003-native-over-http.md), [DD-004](../decisions/DD-004-typescript-only-v010.md), [DD-005](../decisions/DD-005-flowkey-branded-string.md), [DD-006](../decisions/DD-006-async-flow-engine.md)\n**Session:** [multilang-r2](../sessions/2026-04-07-tramli-multilang-r2.md)\n\n## 概要\n\nJava 版 tramli の TypeScript ネイティブ移植。`@unlaxer/tramli` として npm publish。\n\n## リポジトリ\n\n`tramli-ts` — Java 版とは独立リポ。\n\n## パッケージ\n\n```json\n{\n  \"name\": \"@unlaxer/tramli\",\n  \"version\": \"0.1.0\",\n  \"type\": \"module\",\n  \"exports\": { \".\": { \"import\": \"./dist/index.js\", \"types\": \"./dist/index.d.ts\" } },\n  \"files\": [\"dist\"],\n  \"engines\": { \"node\": \">=18\" },\n  \"license\": \"MIT\",\n  \"scripts\": {\n    \"build\": \"tsc\",\n    \"test\": \"vitest run\",\n    \"prepublishOnly\": \"npm run build && npm test\"\n  },\n  \"devDependencies\": {\n    \"typescript\": \"^5.5\",\n    \"vitest\": \"^2.0\",\n    \"yaml\": \"^2.5\"\n  }\n}\n```\n\nゼロ runtime 依存。\n\n## ファイル構成 (~800 lines)\n\n```\nsrc/\n  index.ts           (~15)  — public API re-exports\n  tramli.ts          (~20)  — static factory (define, engine)\n  types.ts           (~80)  — FlowState, Transition, StateProcessor, TransitionGuard, etc.\n  flow-key.ts        (~10)  — FlowKey<T> branded type + flowKey() helper\n  flow-context.ts    (~50)  — FlowContext (snapshot, restoreFrom)\n  flow-definition.ts (~300) — FlowDefinition + Builder + 9 validations\n  flow-engine.ts     (~180) — FlowEngine (async)\n  flow-instance.ts   (~40)  — FlowInstance + restore()\n  flow-error.ts      (~30)  — FlowError + static factories\n  in-memory-flow-store.ts (~40) — InMemoryFlowStore\n  mermaid-generator.ts (~50) — MermaidGenerator\n```\n\n## 主要設計パターン（Java → TypeScript）\n\n### 1. FlowState: string literal union + Record\n\n```typescript\n// ユーザー定義\ntype OrderState = 'CREATED' | 'PAYMENT_PENDING' | 'PAYMENT_CONFIRMED' | 'SHIPPED' | 'CANCELLED';\n\nconst stateConfig = {\n  CREATED:           { terminal: false, initial: true },\n  PAYMENT_PENDING:   { terminal: false, initial: false },\n  PAYMENT_CONFIRMED: { terminal: false, initial: false },\n  SHIPPED:           { terminal: true,  initial: false },\n  CANCELLED:         { terminal: true,  initial: false },\n} as const satisfies Record<OrderState, { terminal: boolean; initial: boolean }>;\n```\n\n### 2. FlowKey: branded string\n\n```typescript\ntype FlowKey<T> = string & { __type: T };\nfunction flowKey<T>(name: string): FlowKey<T> { return name as FlowKey<T>; }\n\n// ユーザー定義\ninterface OrderRequest { itemId: string; quantity: number }\nconst OrderRequest = flowKey<OrderRequest>('OrderRequest');\n```\n\n### 3. GuardOutput: discriminated union\n\n```typescript\ntype GuardOutput =\n  | { type: 'accepted'; data?: Map<string, unknown> }\n  | { type: 'rejected'; reason: string }\n  | { type: 'expired' };\n```\n\n### 4. StateProcessor / TransitionGuard / BranchProcessor\n\n```typescript\ninterface StateProcessor<S extends string> {\n  name: string;\n  requires: FlowKey<unknown>[];\n  produces: FlowKey<unknown>[];\n  process(ctx: FlowContext): Promise<void> | void;\n}\n\ninterface TransitionGuard<S extends string> {\n  name: string;\n  requires: FlowKey<unknown>[];\n  produces: FlowKey<unknown>[];\n  maxRetries: number;\n  validate(ctx: FlowContext): Promise<GuardOutput> | GuardOutput;\n}\n\ninterface BranchProcessor<S extends string> {\n  name: string;\n  requires: FlowKey<unknown>[];\n  decide(ctx: FlowContext): Promise<string> | string;\n}\n```\n\n### 5. Builder DSL\n\n```typescript\nconst def = Tramli.define<OrderState>('order', stateConfig)\n  .ttl(hours(24))\n  .maxGuardRetries(3)\n  .initiallyAvailable(OrderRequest)\n  .from('CREATED').auto('PAYMENT_PENDING', orderInit)\n  .from('PAYMENT_PENDING').external('PAYMENT_CONFIRMED', paymentGuard)\n  .from('PAYMENT_CONFIRMED').auto('SHIPPED', ship)\n  .onAnyError('CANCELLED')\n  .build();\n```\n\n### 6. FlowEngine (async)\n\n```typescript\nclass FlowEngine {\n  async startFlow<S extends string>(\n    definition: FlowDefinition<S>, sessionId: string,\n    initialData: Map<string, unknown>\n  ): Promise<FlowInstance<S>>\n\n  async resumeAndExecute<S extends string>(\n    flowId: string, definition: FlowDefinition<S>,\n    externalData?: Map<string, unknown>\n  ): Promise<FlowInstance<S>>\n}\n```\n\n## 9 Build-time Validations (build() ランタイム)\n\nJava 版と同一:\n1. checkInitialState\n2. checkReachability\n3. checkPathToTerminal\n4. checkDag\n5. checkExternalUniqueness\n6. checkBranchCompleteness\n7. checkRequiresProduces (intersection 方式)\n8. checkAutoExternalConflict\n9. checkTerminalNoOutgoing\n\n## テスト\n\n- vitest\n- Java 版と同等のテストケース（OrderFlow, FlowContext, InvalidTransition, FlowEngineError）\n- shared-tests YAML ハーネス (TECH-009)\n\n## 実装順序\n\n1. types.ts + flow-key.ts + flow-error.ts (基盤)\n2. flow-context.ts (データ層)\n3. flow-definition.ts + Builder + 9 validations (定義層)\n4. flow-instance.ts + in-memory-flow-store.ts (永続化層)\n5. flow-engine.ts (実行層)\n6. mermaid-generator.ts (ユーティリティ)\n7. テスト\n8. npm publish\n"
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "spec",
+      "id": "TECH-009-shared-test-suite",
+      "data": {
+        "id": "TECH-009-shared-test-suite",
+        "title": "TECH-009: 共有テストスイート",
+        "type": "TECH",
+        "status": "draft",
+        "decision_refs": [],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/specs/TECH-009-shared-test-suite.md",
+        "content": "<!-- ⚠️ DGE 生成 Spec — status: draft — 人間レビュー必須 -->\n\n# TECH-009: 共有テストスイート\n\n**Status:** draft\n**Session:** [multilang-r3](../sessions/2026-04-07-tramli-multilang-r3.md)\n\n## 概要\n\n言語横断の振る舞い一致を保証する YAML ベースのテストケース。\n\n## 配置\n\nJava リポ `tramli/shared-tests/cases/*.yaml` をソースオブトゥルース。\nTS リポにコピー管理（CI で同期）。\n\n## YAML フォーマット\n\n```yaml\nname: test-case-name\ndescription: \"What this tests\"\n\nstates:\n  STATE_NAME: { terminal: bool, initial: bool }\n\ntransitions:\n  - { from: STATE, to: STATE, type: auto|external|branch }\n\nerror_transitions:\n  STATE: ERROR_STATE    # or _any: ERROR_STATE\n\nttl: PT24H              # ISO 8601 duration\nmax_guard_retries: 3\n\n# バリデーション失敗テスト用\nexpect_build_error: true\nexpect_error_contains: \"substring\"\n\n# シナリオテスト用\nscenarios:\n  - name: scenario-name\n    initial_data:\n      TypeName: { field: value }\n    steps:\n      - action: start|resume\n        guard_decision: accepted|rejected|expired  # resume 時\n        guard_produces:                             # accepted 時\n          TypeName: { field: value }\n        expect_state: STATE\n        expect_completed: true|false\n        expect_exit_state: STATE\n        expect_context_has: [TypeName, ...]\n```\n\n## テストケース一覧 (14)\n\n### シナリオテスト (5)\n1. `order-happy-path.yaml` — 基本フロー: start → auto → external → auto → complete\n2. `order-payment-rejected.yaml` — guard rejection → maxRetries → error state\n3. `order-ttl-expired.yaml` — TTL 超過 → EXPIRED\n4. `error-processor-throws.yaml` — processor 例外 → context restore → error state\n5. `error-unknown-branch.yaml` — branch 未知ラベル → error state\n\n### バリデーションテスト (9)\n6. `validation-no-initial-state.yaml`\n7. `validation-unreachable-state.yaml`\n8. `validation-no-path-to-terminal.yaml`\n9. `validation-dag-cycle.yaml`\n10. `validation-external-uniqueness.yaml`\n11. `validation-branch-completeness.yaml`\n12. `validation-requires-produces.yaml`\n13. `validation-auto-external-conflict.yaml`\n14. `validation-terminal-outgoing.yaml`\n\n## テストハーネス\n\n各言語で実装:\n1. YAML パース → フロー定義構築（Builder → build()）\n2. シナリオ実行（start/resume + guard モック）\n3. アサーション（state, completed, context keys）\n\n### TypeScript ハーネス\n- `tests/shared/harness.ts` — YAML → FlowDefinition 変換 + モックガード生成\n- `tests/shared/shared-tests.test.ts` — vitest で cases/*.yaml を parameterized 実行\n- 依存: `yaml` パッケージ (devDependency)\n\n### Java ハーネス (v0.2.0)\n- SnakeYAML + JUnit 5 @ParameterizedTest\n"
+      },
+      "confidence": 1,
+      "warnings": []
+    }
+  ],
+  "edges": [
+    {
+      "source": "2026-04-07-tramli-design-review-r2",
+      "target": "2026-04-07-tramli-design-review-r2#dialogue",
+      "type": "contains",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-07-tramli-design-review-r3",
+      "target": "2026-04-07-tramli-design-review-r3#dialogue",
+      "type": "contains",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-07-tramli-design-review-r4",
+      "target": "2026-04-07-tramli-design-review-r4#dialogue",
+      "type": "contains",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-07-tramli-design-review",
+      "target": "2026-04-07-tramli-design-review#dialogue",
+      "type": "contains",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-07-tramli-design-review#dialogue",
+      "target": "2026-04-07-tramli-design-review#G-001",
+      "type": "discovers",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-07-tramli-design-review#dialogue",
+      "target": "2026-04-07-tramli-design-review#G-002",
+      "type": "discovers",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-07-tramli-design-review#dialogue",
+      "target": "2026-04-07-tramli-design-review#G-003",
+      "type": "discovers",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-07-tramli-design-review#dialogue",
+      "target": "2026-04-07-tramli-design-review#G-004",
+      "type": "discovers",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-07-tramli-design-review#dialogue",
+      "target": "2026-04-07-tramli-design-review#G-005",
+      "type": "discovers",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-07-tramli-design-review#dialogue",
+      "target": "2026-04-07-tramli-design-review#G-006",
+      "type": "discovers",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-07-tramli-design-review#dialogue",
+      "target": "2026-04-07-tramli-design-review#G-007",
+      "type": "discovers",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-07-tramli-design-review#dialogue",
+      "target": "2026-04-07-tramli-design-review#G-008",
+      "type": "discovers",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-07-tramli-design-review#dialogue",
+      "target": "2026-04-07-tramli-design-review#G-009",
+      "type": "discovers",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-07-tramli-multilang-r2",
+      "target": "2026-04-07-tramli-multilang-r2#dialogue",
+      "type": "contains",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-07-tramli-multilang-r3",
+      "target": "2026-04-07-tramli-multilang-r3#dialogue",
+      "type": "contains",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-07-tramli-multilang-r4",
+      "target": "2026-04-07-tramli-multilang-r4#dialogue",
+      "type": "contains",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-07-tramli-multilang-strategy",
+      "target": "2026-04-07-tramli-multilang-strategy#dialogue",
+      "type": "contains",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-07-tramli-rust-async-diagnosis",
+      "target": "2026-04-07-tramli-rust-async-diagnosis#dialogue",
+      "type": "contains",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-07-tramli-rust-design",
+      "target": "2026-04-07-tramli-rust-design#dialogue",
+      "type": "contains",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-07-tramli-rust-r2-volta-patterns",
+      "target": "2026-04-07-tramli-rust-r2-volta-patterns#dialogue",
+      "type": "contains",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-07-tramli-rust-r3-integration",
+      "target": "2026-04-07-tramli-rust-r3-integration#dialogue",
+      "type": "contains",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-07-tramli-design-review-r2",
+      "target": "DD-001",
+      "type": "resolves",
+      "confidence": "inferred",
+      "evidence": "DD references session without specific gap numbers"
+    },
+    {
+      "source": "2026-04-07-tramli-design-review-r3",
+      "target": "DD-002",
+      "type": "resolves",
+      "confidence": "inferred",
+      "evidence": "DD references session without specific gap numbers"
+    },
+    {
+      "source": "2026-04-07-tramli-multilang-strategy",
+      "target": "DD-003",
+      "type": "resolves",
+      "confidence": "inferred",
+      "evidence": "DD references session without specific gap numbers"
+    },
+    {
+      "source": "2026-04-07-tramli-multilang-strategy",
+      "target": "DD-004",
+      "type": "resolves",
+      "confidence": "inferred",
+      "evidence": "DD references session without specific gap numbers"
+    },
+    {
+      "source": "2026-04-07-tramli-multilang-r2",
+      "target": "DD-005",
+      "type": "resolves",
+      "confidence": "inferred",
+      "evidence": "DD references session without specific gap numbers"
+    },
+    {
+      "source": "2026-04-07-tramli-multilang-r2",
+      "target": "DD-006",
+      "type": "resolves",
+      "confidence": "inferred",
+      "evidence": "DD references session without specific gap numbers"
+    },
+    {
+      "source": "2026-04-07-tramli-multilang-r4",
+      "target": "DD-007",
+      "type": "resolves",
+      "confidence": "inferred",
+      "evidence": "DD references session without specific gap numbers"
+    },
+    {
+      "source": "2026-04-07-tramli-multilang-strategy",
+      "target": "DD-008",
+      "type": "resolves",
+      "confidence": "inferred",
+      "evidence": "DD references session without specific gap numbers"
+    },
+    {
+      "source": "2026-04-07-tramli-rust-r2-volta-patterns",
+      "target": "DD-009",
+      "type": "resolves",
+      "confidence": "inferred",
+      "evidence": "DD references session without specific gap numbers"
+    },
+    {
+      "source": "2026-04-07-tramli-rust-design",
+      "target": "DD-010",
+      "type": "resolves",
+      "confidence": "inferred",
+      "evidence": "DD references session without specific gap numbers"
+    },
+    {
+      "source": "2026-04-07-tramli-rust-r2-volta-patterns",
+      "target": "DD-011",
+      "type": "resolves",
+      "confidence": "inferred",
+      "evidence": "DD references session without specific gap numbers"
+    },
+    {
+      "source": "2026-04-07-tramli-rust-r3-integration",
+      "target": "DD-011",
+      "type": "resolves",
+      "confidence": "inferred",
+      "evidence": "DD references session without specific gap numbers"
+    },
+    {
+      "source": "2026-04-07-tramli-rust-async-diagnosis",
+      "target": "DD-012",
+      "type": "resolves",
+      "confidence": "inferred",
+      "evidence": "DD references session without specific gap numbers"
+    },
+    {
+      "source": "DD-001",
+      "target": "TECH-007-javadoc-contracts",
+      "type": "produces",
+      "confidence": "inferred",
+      "evidence": "Spec references DD-001"
+    },
+    {
+      "source": "DD-003",
+      "target": "TECH-008-tramli-ts-core",
+      "type": "produces",
+      "confidence": "inferred",
+      "evidence": "Spec references DD-003"
+    },
+    {
+      "source": "DD-004",
+      "target": "TECH-008-tramli-ts-core",
+      "type": "produces",
+      "confidence": "inferred",
+      "evidence": "Spec references DD-004"
+    },
+    {
+      "source": "DD-005",
+      "target": "TECH-008-tramli-ts-core",
+      "type": "produces",
+      "confidence": "inferred",
+      "evidence": "Spec references DD-005"
+    },
+    {
+      "source": "DD-006",
+      "target": "TECH-008-tramli-ts-core",
+      "type": "produces",
+      "confidence": "inferred",
+      "evidence": "Spec references DD-006"
+    }
+  ],
+  "warnings": [
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-design-review-r2.md",
+      "message": "No gap markers found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-design-review-r3.md",
+      "message": "No gap markers found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-design-review-r4.md",
+      "message": "No gap markers found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-design-review.md",
+      "message": "2026-04-07-tramli-design-review#G-001: severity not found (no gap table or pre-v3 format)"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-design-review.md",
+      "message": "2026-04-07-tramli-design-review#G-002: severity not found (no gap table or pre-v3 format)"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-design-review.md",
+      "message": "2026-04-07-tramli-design-review#G-003: severity not found (no gap table or pre-v3 format)"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-design-review.md",
+      "message": "2026-04-07-tramli-design-review#G-004: severity not found (no gap table or pre-v3 format)"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-design-review.md",
+      "message": "2026-04-07-tramli-design-review#G-005: severity not found (no gap table or pre-v3 format)"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-design-review.md",
+      "message": "2026-04-07-tramli-design-review#G-006: severity not found (no gap table or pre-v3 format)"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-design-review.md",
+      "message": "2026-04-07-tramli-design-review#G-007: severity not found (no gap table or pre-v3 format)"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-design-review.md",
+      "message": "2026-04-07-tramli-design-review#G-008: severity not found (no gap table or pre-v3 format)"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-design-review.md",
+      "message": "2026-04-07-tramli-design-review#G-009: severity not found (no gap table or pre-v3 format)"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-multilang-r2.md",
+      "message": "No gap markers found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-multilang-r3.md",
+      "message": "No gap markers found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-multilang-r4.md",
+      "message": "No gap markers found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-multilang-strategy.md",
+      "message": "No gap markers found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-rust-async-diagnosis.md",
+      "message": "No gap markers found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-rust-design.md",
+      "message": "No gap markers found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-rust-r2-volta-patterns.md",
+      "message": "No gap markers found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-rust-r3-integration.md",
+      "message": "No gap markers found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-001-ttl-semantics.md",
+      "message": "DD-001: date not found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-002-no-compensation-no-per-state-timeout.md",
+      "message": "DD-002: date not found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-003-native-over-http.md",
+      "message": "DD-003: date not found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-004-typescript-only-v010.md",
+      "message": "DD-004: date not found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-005-flowkey-branded-string.md",
+      "message": "DD-005: date not found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-006-async-flow-engine.md",
+      "message": "DD-006: date not found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-007-http-api-deferred.md",
+      "message": "DD-007: date not found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-008-rust-for-volta-proxy-python-csharp-skip.md",
+      "message": "DD-008: date not found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-009-allow-perpetual.md",
+      "message": "DD-009: date not found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-010-rust-clone-any-typeid-async.md",
+      "message": "DD-010: date not found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-011-volta-gateway-tramli-scope.md",
+      "message": "DD-011: date not found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-012-rust-sync-engine.md",
+      "message": "DD-012: date not found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-013-all-languages-sync-core.md",
+      "message": "DD-013: date not found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-013-all-languages-sync-core.md",
+      "message": "DD-013: no session references found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-014-data-flow-derived-not-defined.md",
+      "message": "DD-014: date not found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-014-data-flow-derived-not-defined.md",
+      "message": "DD-014: no session references found"
+    }
+  ],
   "glossary": [
     {
       "term": "ContextBundle",
@@ -62,6 +1516,76 @@
       "definition": "DGE の会話劇セッション。キャラクターが設計について議論し Gap を発見する",
       "source": "system",
       "aliases": []
+    },
+    {
+      "term": "DD-001",
+      "definition": "TTL は external resume の有効期限",
+      "source": "DD-001"
+    },
+    {
+      "term": "DD-002",
+      "definition": "補償機構と per-state タイムアウトは v0.1.0 に入れない",
+      "source": "DD-002"
+    },
+    {
+      "term": "DD-003",
+      "definition": "マルチ言語はネイティブ移植が本線、HTTP API は監視レイヤー",
+      "source": "DD-003"
+    },
+    {
+      "term": "DD-004",
+      "definition": "v0.1.0 の移植対象は TypeScript のみ",
+      "source": "DD-004"
+    },
+    {
+      "term": "DD-005",
+      "definition": "TypeScript の FlowContext キーは FlowKey branded string",
+      "source": "DD-005"
+    },
+    {
+      "term": "DD-006",
+      "definition": "TypeScript 版の FlowEngine は全 async",
+      "source": "DD-006"
+    },
+    {
+      "term": "DD-007",
+      "definition": "HTTP API は v0.2.0 に先送り",
+      "source": "DD-007"
+    },
+    {
+      "term": "DD-008",
+      "definition": "Rust 版は volta-proxy 向けに作る。Python/C# は作らない",
+      "source": "DD-008"
+    },
+    {
+      "term": "DD-009",
+      "definition": "allow_perpetual() — terminal なし永続ループフロー",
+      "source": "DD-009"
+    },
+    {
+      "term": "DD-010",
+      "definition": "Rust 版の型設計 — CloneAny + TypeId + native async",
+      "source": "DD-010"
+    },
+    {
+      "term": "DD-011",
+      "definition": "volta-gateway での tramli 適用範囲",
+      "source": "DD-011"
+    },
+    {
+      "term": "DD-012",
+      "definition": "Rust 版 FlowEngine は完全 sync",
+      "source": "DD-012"
+    },
+    {
+      "term": "DD-013",
+      "definition": "全言語 sync コアに統一（DD-006 撤回検討）",
+      "source": "DD-013"
+    },
+    {
+      "term": "DD-014",
+      "definition": "data-flow は定義するのではなく導出する",
+      "source": "DD-014"
     },
     {
       "term": "drift",

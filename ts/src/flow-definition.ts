@@ -279,6 +279,16 @@ export class Builder<S extends string> {
         for (const p of t.processor.produces) newAvailable.add(p);
       }
       this.checkRequiresProducesFrom(def, t.to, newAvailable, stateAvailable, errors);
+
+      // Error path analysis: if processor fails, its produces are NOT available
+      if (t.processor) {
+        const errorTarget = def.errorTransitions.get(t.from);
+        if (errorTarget) {
+          const errorAvailable = new Set(stateAvailable.get(state)!);
+          if (t.guard) { for (const p of t.guard.produces) errorAvailable.add(p); }
+          this.checkRequiresProducesFrom(def, errorTarget, errorAvailable, stateAvailable, errors);
+        }
+      }
     }
   }
 
