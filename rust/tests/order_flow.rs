@@ -107,7 +107,6 @@ fn payment_rejected_max_retries() {
 }
 
 #[test]
-#[test]
 fn data_flow_graph() {
     let def = order_def(true);
     let graph = def.data_flow_graph();

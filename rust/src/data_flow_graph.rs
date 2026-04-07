@@ -177,18 +177,19 @@ impl<S: FlowState> DataFlowGraph<S> {
 
     /// Structured JSON representation.
     pub fn to_json(&self) -> String {
+        let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
         let mut types = Vec::new();
         for type_id in self.all_types() {
-            let name = self.short_type_name(&type_id);
-            let prods: Vec<String> = self.producers_of(&type_id).iter().map(|n| n.name.clone()).collect();
-            let cons: Vec<String> = self.consumers_of(&type_id).iter().map(|n| n.name.clone()).collect();
+            let name = esc(&self.short_type_name(&type_id));
+            let prods: Vec<String> = self.producers_of(&type_id).iter().map(|n| format!("\"{}\"", esc(&n.name))).collect();
+            let cons: Vec<String> = self.consumers_of(&type_id).iter().map(|n| format!("\"{}\"", esc(&n.name))).collect();
             let mut entry = format!("{{\"name\": \"{}\"", name);
-            if !prods.is_empty() { entry += &format!(", \"producers\": [{}]", prods.iter().map(|p| format!("\"{}\"", p)).collect::<Vec<_>>().join(", ")); }
-            if !cons.is_empty() { entry += &format!(", \"consumers\": [{}]", cons.iter().map(|c| format!("\"{}\"", c)).collect::<Vec<_>>().join(", ")); }
+            if !prods.is_empty() { entry += &format!(", \"producers\": [{}]", prods.join(", ")); }
+            if !cons.is_empty() { entry += &format!(", \"consumers\": [{}]", cons.join(", ")); }
             entry += "}";
             types.push(entry);
         }
-        let dead: Vec<String> = self.dead_data().iter().map(|t| format!("\"{}\"", self.short_type_name(t))).collect();
+        let dead: Vec<String> = self.dead_data().iter().map(|t| format!("\"{}\"", esc(&self.short_type_name(t)))).collect();
         format!("{{\n  \"types\": [\n    {}\n  ],\n  \"deadData\": [{}]\n}}", types.join(",\n    "), dead.join(", "))
     }
 

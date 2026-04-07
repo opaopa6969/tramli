@@ -139,7 +139,8 @@ impl<S: FlowState> FlowEngine<S> {
                 if let Some(sft) = sub_flow_t {
                     if let Some(ref config) = sft.sub_flow {
                         use crate::sub_flow::SubFlowResult;
-                        let result = config.runner.start(&mut flow.context)?;
+                        let mut instance = config.runner.create_instance();
+                        let result = instance.start(&mut flow.context)?;
                         match result {
                             SubFlowResult::Completed(exit_name) => {
                                 if let Some(&target) = config.exit_mappings.get(&exit_name) {
@@ -164,7 +165,12 @@ impl<S: FlowState> FlowEngine<S> {
 
                 if t.transition_type == TransitionType::Auto {
                     if let Some(proc) = &t.processor {
-                        if proc.process(&mut flow.context).is_err() {
+                        let proc_result = proc.process(&mut flow.context);
+                        // strict_mode: verify produces
+                        let strict_fail = if proc_result.is_ok() && self.strict_mode {
+                            proc.produces().iter().any(|p| !flow.context.has_type_id(p))
+                        } else { false };
+                        if proc_result.is_err() || strict_fail {
                             Self::handle_error(flow, current, &def);
                             Some((format!("{:?}", current), format!("{:?}", flow.current_state()), "error".to_string(), true))
                         } else {

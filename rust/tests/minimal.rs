@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tramli::*;
-use tramli::sub_flow::SubFlowRunner;
+use tramli::sub_flow::{SubFlowRunner, SubFlowInstance};
 
 // ─── Error Path states ─────────────────────────────────
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -121,7 +121,6 @@ fn error_path_requires_unsatisfied_build_fails() {
     assert!(err_msg.contains("may not be available"));
 }
 
-#[test]
 #[test]
 fn basic_sub_flow() {
     // Sub-flow states
@@ -267,13 +266,16 @@ fn sub_flow_with_external_resume() {
     let mut ctx = FlowContext::new("test".into());
     ctx.put(D("hello".into()));
 
+    // Create instance (stateless runner → stateful instance)
+    let mut instance = sub_adapter.create_instance();
+
     // Start
-    let result = sub_adapter.start(&mut ctx).unwrap();
+    let result = instance.start(&mut ctx).unwrap();
     assert!(matches!(result, tramli::sub_flow::SubFlowResult::WaitingAtExternal));
-    assert_eq!(sub_adapter.current_state_name(), Some("Wait".to_string()));
+    assert_eq!(instance.current_state_name(), Some("Wait".to_string()));
 
     // Resume
-    let result = sub_adapter.resume(&mut ctx).unwrap();
+    let result = instance.resume(&mut ctx).unwrap();
     assert!(matches!(result, tramli::sub_flow::SubFlowResult::Completed(ref s) if s == "Done"));
 }
 

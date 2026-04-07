@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use crate::context::FlowContext;
 use crate::error::FlowError;
 use crate::definition::FlowDefinition;
@@ -15,16 +15,21 @@ pub enum SubFlowResult {
     GuardRejected(String),
 }
 
-/// Type-erased sub-flow interface for embedding in parent FlowDefinition.
+/// Factory for creating sub-flow instances. Stateless — safe to share via Arc.
 pub trait SubFlowRunner: Send + Sync {
     fn name(&self) -> &str;
     fn terminal_names(&self) -> Vec<String>;
-    /// Start from initial state, run auto-chain.
-    fn start(&self, ctx: &mut FlowContext) -> Result<SubFlowResult, FlowError>;
-    /// Resume from external, run auto-chain.
-    fn resume(&self, ctx: &mut FlowContext) -> Result<SubFlowResult, FlowError>;
-    /// Current state name (for observability).
+    /// Max nesting depth contributed by this sub-flow (for validation).
+    fn nesting_depth(&self) -> usize { 1 }
+    /// Create a new sub-flow instance (with its own state).
+    fn create_instance(&self) -> Box<dyn SubFlowInstance>;
+}
+
+/// A running sub-flow instance. Owns its state — NOT shared between flows.
+pub trait SubFlowInstance: Send {
     fn current_state_name(&self) -> Option<String>;
+    fn start(&mut self, ctx: &mut FlowContext) -> Result<SubFlowResult, FlowError>;
+    fn resume(&mut self, ctx: &mut FlowContext) -> Result<SubFlowResult, FlowError>;
 }
 
 /// Configuration for a sub-flow transition.
@@ -33,91 +38,15 @@ pub struct SubFlowConfig<S> {
     pub exit_mappings: HashMap<String, S>,
 }
 
-/// Wraps a FlowDefinition<T> as a SubFlowRunner.
+// ─── SubFlowAdapter: wraps FlowDefinition<T> as SubFlowRunner ───
+
 pub struct SubFlowAdapter<T: FlowState> {
     definition: Arc<FlowDefinition<T>>,
-    state: Mutex<Option<T>>,
-    guard_failure_count: Mutex<usize>,
 }
 
 impl<T: FlowState> SubFlowAdapter<T> {
     pub fn new(definition: Arc<FlowDefinition<T>>) -> Self {
-        Self {
-            definition,
-            state: Mutex::new(None),
-            guard_failure_count: Mutex::new(0),
-        }
-    }
-
-    fn current(&self) -> Option<T> {
-        *self.state.lock().unwrap()
-    }
-
-    fn set_state(&self, s: T) {
-        *self.state.lock().unwrap() = Some(s);
-    }
-
-    fn run_auto_chain(&self, ctx: &mut FlowContext) -> Result<SubFlowResult, FlowError> {
-        let mut depth = 0;
-        while depth < 10 {
-            let current = self.current().unwrap();
-            if current.is_terminal() {
-                return Ok(SubFlowResult::Completed(format!("{:?}", current)));
-            }
-
-            // Auto transition
-            let auto_t = self.definition.transitions.iter()
-                .find(|t| t.from == current && t.transition_type == TransitionType::Auto);
-            if let Some(t) = auto_t {
-                if let Some(proc) = &t.processor {
-                    if let Err(e) = proc.process(ctx) {
-                        // Error — check sub-flow's error transitions
-                        if let Some(&err_target) = self.definition.error_transitions.get(&current) {
-                            self.set_state(err_target);
-                            if err_target.is_terminal() {
-                                return Ok(SubFlowResult::Completed(format!("{:?}", err_target)));
-                            }
-                            depth += 1;
-                            continue;
-                        }
-                        // No error transition — bubble up as error terminal
-                        return Ok(SubFlowResult::Completed(format!("ERROR:{}", e)));
-                    }
-                }
-                self.set_state(t.to);
-                depth += 1;
-                continue;
-            }
-
-            // Branch transition
-            let branch_t = self.definition.transitions.iter()
-                .find(|t| t.from == current && t.transition_type == TransitionType::Branch);
-            if let Some(t) = branch_t {
-                if let Some(branch) = &t.branch {
-                    let label = branch.decide(ctx);
-                    if let Some(&target) = t.branch_targets.get(&label) {
-                        self.set_state(target);
-                        depth += 1;
-                        continue;
-                    }
-                    // Unknown label — error
-                    return Ok(SubFlowResult::Completed("ERROR:unknown_branch".to_string()));
-                }
-            }
-
-            // External transition — stop and wait
-            let has_external = self.definition.transitions.iter()
-                .any(|t| t.from == current && t.transition_type == TransitionType::External);
-            if has_external {
-                return Ok(SubFlowResult::WaitingAtExternal);
-            }
-
-            break; // no transition found
-        }
-        if depth >= 10 {
-            return Err(FlowError::max_chain_depth());
-        }
-        Ok(SubFlowResult::WaitingAtExternal)
+        Self { definition }
     }
 }
 
@@ -128,20 +57,38 @@ impl<T: FlowState> SubFlowRunner for SubFlowAdapter<T> {
         self.definition.terminal_states().iter().map(|s| format!("{:?}", s)).collect()
     }
 
+    fn create_instance(&self) -> Box<dyn SubFlowInstance> {
+        Box::new(SubFlowAdapterInstance {
+            definition: self.definition.clone(),
+            state: None,
+            guard_failure_count: 0,
+        })
+    }
+}
+
+// ─── SubFlowAdapterInstance: owns state for one execution ───
+
+struct SubFlowAdapterInstance<T: FlowState> {
+    definition: Arc<FlowDefinition<T>>,
+    state: Option<T>,
+    guard_failure_count: usize,
+}
+
+impl<T: FlowState> SubFlowInstance for SubFlowAdapterInstance<T> {
     fn current_state_name(&self) -> Option<String> {
-        self.current().map(|s| format!("{:?}", s))
+        self.state.map(|s| format!("{:?}", s))
     }
 
-    fn start(&self, ctx: &mut FlowContext) -> Result<SubFlowResult, FlowError> {
+    fn start(&mut self, ctx: &mut FlowContext) -> Result<SubFlowResult, FlowError> {
         let initial = self.definition.initial_state()
             .ok_or_else(|| FlowError::new("INVALID_FLOW_DEFINITION", "Sub-flow has no initial state"))?;
-        self.set_state(initial);
-        *self.guard_failure_count.lock().unwrap() = 0;
+        self.state = Some(initial);
+        self.guard_failure_count = 0;
         self.run_auto_chain(ctx)
     }
 
-    fn resume(&self, ctx: &mut FlowContext) -> Result<SubFlowResult, FlowError> {
-        let current = self.current().ok_or_else(||
+    fn resume(&mut self, ctx: &mut FlowContext) -> Result<SubFlowResult, FlowError> {
+        let current = self.state.ok_or_else(||
             FlowError::new("INVALID_STATE", "Sub-flow not started"))?;
 
         let ext = self.definition.transitions.iter()
@@ -153,31 +100,17 @@ impl<T: FlowState> SubFlowRunner for SubFlowAdapter<T> {
             match guard.validate(ctx) {
                 GuardOutput::Accepted { data } => {
                     for (k, v) in data { ctx.put_raw(k, v); }
-                    // Run processor if present
                     if let Some(proc) = &ext.processor {
                         if let Err(e) = proc.process(ctx) {
-                            if let Some(&err_target) = self.definition.error_transitions.get(&current) {
-                                self.set_state(err_target);
-                                if err_target.is_terminal() {
-                                    return Ok(SubFlowResult::Completed(format!("{:?}", err_target)));
-                                }
-                            }
-                            return Ok(SubFlowResult::Completed(format!("ERROR:{}", e)));
+                            return self.handle_error(current, e);
                         }
                     }
-                    self.set_state(ext.to);
+                    self.state = Some(ext.to);
                 }
                 GuardOutput::Rejected { reason } => {
-                    let mut count = self.guard_failure_count.lock().unwrap();
-                    *count += 1;
-                    if *count >= self.definition.max_guard_retries {
-                        if let Some(&err_target) = self.definition.error_transitions.get(&current) {
-                            self.set_state(err_target);
-                            if err_target.is_terminal() {
-                                return Ok(SubFlowResult::Completed(format!("{:?}", err_target)));
-                            }
-                        }
-                        return Ok(SubFlowResult::Completed("ERROR:max_retries".to_string()));
+                    self.guard_failure_count += 1;
+                    if self.guard_failure_count >= self.definition.max_guard_retries {
+                        return self.handle_error_no_cause(current);
                     }
                     return Ok(SubFlowResult::GuardRejected(reason));
                 }
@@ -186,9 +119,77 @@ impl<T: FlowState> SubFlowRunner for SubFlowAdapter<T> {
                 }
             }
         } else {
-            self.set_state(ext.to);
+            self.state = Some(ext.to);
         }
 
         self.run_auto_chain(ctx)
+    }
+}
+
+impl<T: FlowState> SubFlowAdapterInstance<T> {
+    fn run_auto_chain(&mut self, ctx: &mut FlowContext) -> Result<SubFlowResult, FlowError> {
+        let mut depth = 0;
+        while depth < 10 {
+            let current = self.state.unwrap();
+            if current.is_terminal() {
+                return Ok(SubFlowResult::Completed(format!("{:?}", current)));
+            }
+
+            // Auto transition
+            if let Some(t) = self.definition.transitions.iter()
+                .find(|t| t.from == current && t.transition_type == TransitionType::Auto)
+            {
+                if let Some(proc) = &t.processor {
+                    if let Err(e) = proc.process(ctx) {
+                        return self.handle_error(current, e);
+                    }
+                }
+                self.state = Some(t.to);
+                depth += 1;
+                continue;
+            }
+
+            // Branch transition
+            if let Some(t) = self.definition.transitions.iter()
+                .find(|t| t.from == current && t.transition_type == TransitionType::Branch)
+            {
+                if let Some(branch) = &t.branch {
+                    let label = branch.decide(ctx);
+                    if let Some(&target) = t.branch_targets.get(&label) {
+                        self.state = Some(target);
+                        depth += 1;
+                        continue;
+                    }
+                    return Ok(SubFlowResult::Completed("ERROR:unknown_branch".to_string()));
+                }
+            }
+
+            // External — stop
+            if self.definition.transitions.iter()
+                .any(|t| t.from == current && t.transition_type == TransitionType::External)
+            {
+                return Ok(SubFlowResult::WaitingAtExternal);
+            }
+
+            break;
+        }
+        if depth >= 10 {
+            return Err(FlowError::max_chain_depth());
+        }
+        Ok(SubFlowResult::WaitingAtExternal)
+    }
+
+    fn handle_error(&mut self, current: T, _cause: FlowError) -> Result<SubFlowResult, FlowError> {
+        if let Some(&err_target) = self.definition.error_transitions.get(&current) {
+            self.state = Some(err_target);
+            if err_target.is_terminal() {
+                return Ok(SubFlowResult::Completed(format!("{:?}", err_target)));
+            }
+        }
+        Ok(SubFlowResult::Completed("ERROR".to_string()))
+    }
+
+    fn handle_error_no_cause(&mut self, current: T) -> Result<SubFlowResult, FlowError> {
+        self.handle_error(current, FlowError::new("MAX_RETRIES", "Guard max retries exceeded"))
     }
 }

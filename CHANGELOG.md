@@ -3,6 +3,20 @@
 All notable changes to tramli are documented here. Versions are published to
 crates.io, npm (@unlaxer/tramli), and Maven Central (org.unlaxer:tramli).
 
+## [1.8.0] - 2026-04-07
+
+### Fixed (Code Review)
+- **CRITICAL**: SubFlowAdapter state sharing bug — runner is now stateless factory, `create_instance()` returns per-flow state
+- **CRITICAL**: `FlowInstance.with_version()` (Rust) no longer resets context — changed to `set_version_public(&mut self)`
+- **CRITICAL**: Rust `strict_mode` now actually enforced in `execute_auto_chain`
+- `to_json()` now escapes quotes in processor/type names (Java/Rust)
+- `check_sub_flow_nesting_depth` now queries `SubFlowRunner.nesting_depth()` (Rust)
+- Duplicate `#[test]` attributes removed (minimal.rs, order_flow.rs)
+
+### Changed
+- Rust `SubFlowRunner` trait: `start()`/`resume()` moved to `SubFlowInstance` trait. Runner is a factory via `create_instance()`
+- **Breaking** (Rust only): `SubFlowRunner` trait signature changed
+
 ## [1.7.0] - 2026-04-07
 
 ### Added

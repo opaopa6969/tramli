@@ -371,8 +371,13 @@ fn check_sub_flow_nesting_depth<S: FlowState>(def: &FlowDefinition<S>, errors: &
     }
     for t in &def.transitions {
         if t.transition_type == TransitionType::SubFlow {
-            // Can't recurse into sub-flow definition (type-erased), so just check depth
-            // Sub-flows within sub-flows are validated when the sub-flow itself is built
+            if let Some(ref config) = t.sub_flow {
+                let sub_depth = config.runner.nesting_depth();
+                if depth + sub_depth > 3 {
+                    errors.push(format!("SubFlow '{}' at {:?} would exceed max nesting depth 3 (current: {}, sub: {})",
+                        config.runner.name(), t.from, depth, sub_depth));
+                }
+            }
         }
     }
 }

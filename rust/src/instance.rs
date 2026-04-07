@@ -62,14 +62,9 @@ impl<S: FlowState> FlowInstance<S> {
         self.state_path().join("/")
     }
 
-    /// Return a copy with the given version. For FlowStore optimistic locking.
-    pub fn with_version(&self, new_version: u32) -> Self {
-        Self::restore(
-            self.id.clone(), self.session_id.clone(), self.definition.clone(),
-            FlowContext::new(self.id.clone()), // context is shared via Arc in real impls
-            self.current_state, self.created_at, self.expires_at,
-            self.guard_failure_count, new_version, self.exit_state.clone(),
-        )
+    /// Update the version in-place. For FlowStore optimistic locking after save.
+    pub fn set_version_public(&mut self, new_version: u32) {
+        self.version = new_version;
     }
 
     pub(crate) fn transition_to(&mut self, state: S) { self.current_state = state; }

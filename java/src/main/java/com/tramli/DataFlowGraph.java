@@ -210,6 +210,10 @@ public final class DataFlowGraph<S extends Enum<S> & FlowState> {
         return hints;
     }
 
+    private static String escJson(String s) {
+        return s.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
     /** Structured JSON representation of the data-flow graph. */
     public String toJson() {
         var sb = new StringBuilder();
@@ -218,13 +222,13 @@ public final class DataFlowGraph<S extends Enum<S> & FlowState> {
         boolean first = true;
         for (var t : types) {
             if (!first) sb.append(",");
-            sb.append("\n    {\"name\": \"").append(t.getSimpleName()).append("\"");
+            sb.append("\n    {\"name\": \"").append(escJson(t.getSimpleName())).append("\"");
             var prods = producersOf(t);
             if (!prods.isEmpty()) {
                 sb.append(", \"producers\": [");
                 for (int i = 0; i < prods.size(); i++) {
                     if (i > 0) sb.append(", ");
-                    sb.append("\"").append(prods.get(i).name()).append("\"");
+                    sb.append("\"").append(escJson(prods.get(i).name())).append("\"");
                 }
                 sb.append("]");
             }
@@ -233,7 +237,7 @@ public final class DataFlowGraph<S extends Enum<S> & FlowState> {
                 sb.append(", \"consumers\": [");
                 for (int i = 0; i < cons.size(); i++) {
                     if (i > 0) sb.append(", ");
-                    sb.append("\"").append(cons.get(i).name()).append("\"");
+                    sb.append("\"").append(escJson(cons.get(i).name())).append("\"");
                 }
                 sb.append("]");
             }
