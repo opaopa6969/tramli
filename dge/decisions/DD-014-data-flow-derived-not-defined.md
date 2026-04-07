@@ -1,5 +1,5 @@
 ---
-status: draft
+status: accepted
 ---
 
 # DD-014: data-flow は定義するのではなく導出する

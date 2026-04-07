@@ -105,6 +105,42 @@ class OrderFlowTest {
     }
 
     @Test
+    void dataFlowLifetime() {
+        var def = definition(true);
+        var graph = def.dataFlowGraph();
+        var lt = graph.lifetime(PaymentIntent.class);
+        assertNotNull(lt);
+        assertEquals(OrderState.PAYMENT_PENDING, lt.firstProduced());
+    }
+
+    @Test
+    void dataFlowPruningHints() {
+        var def = definition(true);
+        var hints = def.dataFlowGraph().pruningHints();
+        // At SHIPPED (terminal), nothing is consumed, so everything available is prunable
+        assertTrue(hints.containsKey(OrderState.SHIPPED));
+    }
+
+    @Test
+    void processorCompatibility() {
+        assertTrue(DataFlowGraph.isCompatible(ORDER_INIT, ORDER_INIT));
+        // SHIP has different requires/produces than ORDER_INIT
+        assertFalse(DataFlowGraph.isCompatible(ORDER_INIT, SHIP));
+    }
+
+    @Test
+    void assertDataFlowOnHappyPath() {
+        var def = definition(true);
+        var engine = Tramli.engine(new InMemoryFlowStore());
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        Map<Class<?>, Object> data = Map.of((Class) OrderRequest.class, new OrderRequest("item-1", 3));
+        var flow = engine.startFlow(def, null, data);
+        // At PAYMENT_PENDING, OrderRequest and PaymentIntent should be available
+        var missing = def.dataFlowGraph().assertDataFlow(flow.context(), flow.currentState());
+        assertTrue(missing.isEmpty(), "Missing types: " + missing);
+    }
+
+    @Test
     void definitionValidation() {
         var def = definition(true);
         assertEquals("order", def.name());

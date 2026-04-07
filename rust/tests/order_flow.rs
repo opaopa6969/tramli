@@ -132,6 +132,45 @@ fn data_flow_graph() {
 }
 
 #[test]
+fn data_flow_lifetime() {
+    let def = order_def(true);
+    let lt = def.data_flow_graph().lifetime(&TypeId::of::<PaymentIntent>());
+    assert!(lt.is_some());
+    let (first, _last) = lt.unwrap();
+    assert_eq!(first, OrderState::PaymentPending);
+}
+
+#[test]
+fn data_flow_pruning_hints() {
+    let def = order_def(true);
+    let hints = def.data_flow_graph().pruning_hints();
+    assert!(hints.contains_key(&OrderState::Shipped));
+}
+
+#[test]
+fn processor_compatibility() {
+    assert!(DataFlowGraph::<OrderState>::is_compatible(
+        &OrderInit.requires(), &OrderInit.produces(),
+        &OrderInit.requires(), &OrderInit.produces(),
+    ));
+    assert!(!DataFlowGraph::<OrderState>::is_compatible(
+        &OrderInit.requires(), &OrderInit.produces(),
+        &ShipProcessor.requires(), &ShipProcessor.produces(),
+    ));
+}
+
+#[test]
+fn assert_data_flow_happy_path() {
+    let def = order_def(true);
+    let mut engine = FlowEngine::new(InMemoryFlowStore::new());
+    let flow_id = engine.start_flow(def.clone(), "s1",
+        vec![(TypeId::of::<OrderRequest>(), Box::new(OrderRequest { item_id: "item-1".into() }) as Box<dyn CloneAny>)]).unwrap();
+    let flow = engine.store.get(&flow_id).unwrap();
+    let missing = def.data_flow_graph().assert_data_flow(&flow.context, flow.current_state());
+    assert!(missing.is_empty(), "Missing types at {:?}", flow.current_state());
+}
+
+#[test]
 fn mermaid_state_diagram() {
     let def = order_def(true);
     let mermaid = MermaidGenerator::generate(&def);

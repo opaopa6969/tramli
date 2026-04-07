@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Tramli } from '../src/tramli.js';
 import { InMemoryFlowStore } from '../src/in-memory-flow-store.js';
 import { MermaidGenerator } from '../src/mermaid-generator.js';
+import { DataFlowGraph } from '../src/data-flow-graph.js';
 import { flowKey, type FlowKey } from '../src/flow-key.js';
 import type { StateProcessor, TransitionGuard, StateConfig, GuardOutput } from '../src/types.js';
 import type { FlowContext } from '../src/flow-context.js';
@@ -158,6 +159,34 @@ describe('OrderFlow', () => {
     expect(mermaid).toContain('PaymentIntent');
     expect(mermaid).toContain('produces');
     expect(mermaid).toContain('requires');
+  });
+
+  it('data-flow lifetime', () => {
+    const def = definition(true);
+    const lt = def.dataFlowGraph!.lifetime(PaymentIntent);
+    expect(lt).toBeDefined();
+    expect(lt!.firstProduced).toBe('PAYMENT_PENDING');
+  });
+
+  it('data-flow pruning hints', () => {
+    const def = definition(true);
+    const hints = def.dataFlowGraph!.pruningHints();
+    expect(hints.has('SHIPPED')).toBe(true);
+  });
+
+  it('processor compatibility', () => {
+    expect(DataFlowGraph.isCompatible(orderInit, orderInit)).toBe(true);
+    expect(DataFlowGraph.isCompatible(orderInit, ship)).toBe(false);
+  });
+
+  it('assertDataFlow on happy path', async () => {
+    const def = definition(true);
+    const store = new InMemoryFlowStore();
+    const engine = Tramli.engine(store);
+    const flow = await engine.startFlow(def, 's1',
+      new Map([[OrderRequest as string, { itemId: 'item-1', quantity: 1 }]]));
+    const missing = def.dataFlowGraph!.assertDataFlow(flow.context, flow.currentState);
+    expect(missing).toEqual([]);
   });
 
   it('transition log', async () => {

@@ -444,6 +444,30 @@ Set<Class<?>> dead = graph.deadData();
 // → {ShipmentInfo}  (terminal data — no downstream consumer)
 ```
 
+### Analysis API
+
+```java
+// Data lifetime — when a type is first produced and last consumed
+var lt = graph.lifetime(PaymentIntent.class);
+// → Lifetime(firstProduced=PAYMENT_PENDING, lastConsumed=PAYMENT_CONFIRMED)
+
+// Context pruning hints — types no longer needed at each state
+Map<OrderState, Set<Class<?>>> hints = graph.pruningHints();
+// → {SHIPPED: [OrderRequest, PaymentIntent, PaymentResult, ShipmentInfo]}
+
+// Assert data-flow invariant on a running flow instance
+List<Class<?>> missing = graph.assertDataFlow(flow.context(), flow.currentState());
+// → [] (empty = all expected types present)
+
+// Verify processor's actual behavior matches its declarations
+List<String> violations = DataFlowGraph.verifyProcessor(orderInit, ctx);
+// → [] (empty = requires/produces match actual get/put)
+
+// Check if processor B can replace processor A
+boolean ok = DataFlowGraph.isCompatible(processorA, processorB);
+// → true if B requires ⊆ A requires AND A produces ⊆ B produces
+```
+
 ### Why This Matters
 
 | Without data-flow graph | With data-flow graph |
