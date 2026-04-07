@@ -3,6 +3,12 @@
 All notable changes to tramli are documented here. Versions are published to
 crates.io, npm (@unlaxer/tramli), and Maven Central (org.unlaxer:tramli).
 
+## [1.5.3] - 2026-04-07
+
+### Added
+- **tramli-ts CJS dual export** — `require('@unlaxer/tramli')` now works in CommonJS projects
+- `dist/esm/` (ESM) + `dist/cjs/` (CJS) dual build
+
 ## [1.5.2] - 2026-04-07
 
 ### Fixed

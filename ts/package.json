@@ -1,17 +1,21 @@
 {
   "name": "@unlaxer/tramli",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "description": "Constrained flow engine — state machines that prevent invalid transitions at build time",
   "type": "module",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "types": "./dist/esm/index.d.ts"
     }
   },
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
   "files": ["dist"],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc -p tsconfig.cjs.json && node scripts/fix-cjs.cjs",
     "test": "vitest run",
     "prepublishOnly": "npm run build && npm test"
   },

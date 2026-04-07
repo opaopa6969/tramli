@@ -51,6 +51,33 @@
 | F12 | Domain Vocabulary Map | ✅ complete (type names in graph) |
 | F13 | Parallelism Hint | ✅ complete |
 
+## Open
+
+| # | Feature | Status | Design | Depends on |
+|---|---------|--------|--------|------------|
+| 31 | tramli-ts: CJS dual export | ✅ complete | — | — |
+| 32 | FlowInstance.withVersion() 周知 | ✅ complete (v1.2.2) | — | — |
+| 33 | Cross-Language Portability (提案書) | ✅ complete (DD-018, v1.5.0-1.5.1) | docs/proposal-cross-language-portability.md | — |
+
+### 31: tramli-ts CJS dual export
+
+tramli-ts は現在 ESM のみ。CommonJS プロジェクト（volta-platform 等）から使うには `await import()` が必要。
+
+tsconfig で CJS ビルドも出力し、package.json の exports で dual export にする:
+
+```json
+{
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.cjs"
+    }
+  }
+}
+```
+
+**背景**: volta-platform（Node.js/Express, CommonJS）への tramli 導入で判明。dynamic import で回避可能だが、ライブラリとして dual export が望ましい。
+
 ## NOT-DOING (スコープ外)
 
 - Data-Flow-First Builder (DD-015 #9) — 破壊的変更
