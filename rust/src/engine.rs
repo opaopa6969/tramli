@@ -138,19 +138,23 @@ impl<S: FlowState> FlowEngine<S> {
                     .find(|t| t.from == current && t.transition_type == TransitionType::SubFlow);
                 if let Some(sft) = sub_flow_t {
                     if let Some(ref config) = sft.sub_flow {
+                        use crate::sub_flow::SubFlowResult;
                         let result = config.runner.start(&mut flow.context)?;
-                        if let Some(exit_name) = result {
-                            if let Some(&target) = config.exit_mappings.get(&exit_name) {
-                                let from_dbg = format!("{:?}", current);
-                                flow.transition_to(target);
-                                Some((from_dbg, format!("{:?}", target),
-                                    format!("subFlow:{}/{}", config.runner.name(), exit_name), false))
-                            } else {
-                                // Error bubbling: no exit mapping → parent error
-                                Self::handle_error(flow, current, &def);
-                                Some((format!("{:?}", current), format!("{:?}", flow.current_state()), "error".to_string(), true))
+                        match result {
+                            SubFlowResult::Completed(exit_name) => {
+                                if let Some(&target) = config.exit_mappings.get(&exit_name) {
+                                    let from_dbg = format!("{:?}", current);
+                                    flow.transition_to(target);
+                                    Some((from_dbg, format!("{:?}", target),
+                                        format!("subFlow:{}/{}", config.runner.name(), exit_name), false))
+                                } else {
+                                    Self::handle_error(flow, current, &def);
+                                    Some((format!("{:?}", current), format!("{:?}", flow.current_state()), "error".to_string(), true))
+                                }
                             }
-                        } else { break } // sub-flow stopped at external
+                            SubFlowResult::WaitingAtExternal => { break }
+                            SubFlowResult::GuardRejected(_) => { break }
+                        }
                     } else { break }
                 } else {
 
