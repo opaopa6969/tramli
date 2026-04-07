@@ -17,11 +17,16 @@ pub struct FlowContext {
     pub flow_id: String,
     pub created_at: std::time::Instant,
     attrs: HashMap<TypeId, Box<dyn CloneAny>>,
+    alias_to_type: HashMap<String, TypeId>,
+    type_to_alias: HashMap<TypeId, String>,
 }
 
 impl FlowContext {
     pub fn new(flow_id: String) -> Self {
-        Self { flow_id, created_at: std::time::Instant::now(), attrs: HashMap::new() }
+        Self {
+            flow_id, created_at: std::time::Instant::now(),
+            attrs: HashMap::new(), alias_to_type: HashMap::new(), type_to_alias: HashMap::new(),
+        }
     }
 
     pub fn put<T: CloneAny + 'static>(&mut self, value: T) {
@@ -50,5 +55,23 @@ impl FlowContext {
     /// Insert a type-erased value (used by engine for guard data merge and initial data).
     pub(crate) fn put_raw(&mut self, type_id: TypeId, value: Box<dyn CloneAny>) {
         self.attrs.insert(type_id, value);
+    }
+
+    // ─── Alias support (for serialization) ──────────────────
+
+    /// Register a string alias for a type. Used for cross-language serialization.
+    pub fn register_alias<T: 'static>(&mut self, alias: &str) {
+        self.alias_to_type.insert(alias.to_string(), TypeId::of::<T>());
+        self.type_to_alias.insert(TypeId::of::<T>(), alias.to_string());
+    }
+
+    /// Get the alias for a TypeId (if registered).
+    pub fn alias_of(&self, type_id: &TypeId) -> Option<&str> {
+        self.type_to_alias.get(type_id).map(|s| s.as_str())
+    }
+
+    /// Get the TypeId for an alias (if registered).
+    pub fn type_id_of_alias(&self, alias: &str) -> Option<&TypeId> {
+        self.alias_to_type.get(alias)
     }
 }

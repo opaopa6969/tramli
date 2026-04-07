@@ -1,6 +1,6 @@
 {
   "name": "@unlaxer/tramli",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Constrained flow engine — state machines that prevent invalid transitions at build time",
   "type": "module",
   "exports": {
