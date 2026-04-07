@@ -2,7 +2,7 @@
 
 # tramli
 
-Java 21+ 向け制約付きフローエンジン。
+制約付きフローエンジン — **Java, TypeScript, Rust。**
 
 **不正な遷移が構造的に存在できない**ステートマシン — コンパイラと [8項目検証](#8項目-build-検証) がビルド時に保証。
 
@@ -493,10 +493,27 @@ tramli は**状態、遷移、外部イベント**があるシステムなら何
 
 ---
 
+## 言語別実装
+
+tramli は3つの言語実装を持つ **monorepo**:
+
+| 言語 | ディレクトリ | Async | 状態 |
+|------|------------|-------|------|
+| **Java** | [`java/`](java/) | Sync のみ（I/O は virtual threads） | 安定 |
+| **TypeScript** | [`ts/`](ts/) | Sync + optional async（External のみ） | 安定 |
+| **Rust** | [`rust/`](rust/) | Sync のみ（async は SM の外） | 安定 |
+
+3つとも同じ **8項目 build 検証**、同じ **FlowDefinition DSL**、同じ **Mermaid 生成**。違いは [`docs/language-guide.md`](docs/language-guide.md) を参照。
+
+共通テストシナリオは [`shared-tests/`](shared-tests/) — 同じフロー定義が3言語でテストされる。
+
 ## 要件
 
-- Java 21+
-- ランタイム依存ゼロ（Jackson は JSONB シリアライズ用のオプション）
+| 言語 | バージョン | 依存 |
+|------|-----------|------|
+| Java | 21+ | ゼロ（Jackson はオプション） |
+| TypeScript | Node 18+ / Bun | ゼロ |
+| Rust | 1.75+ (edition 2021) | ゼロ |
 
 ## ライセンス
 

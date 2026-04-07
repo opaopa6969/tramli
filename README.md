@@ -493,10 +493,27 @@ Terms are linked throughout this document. Click any to jump here.
 
 ---
 
+## Language Implementations
+
+tramli is a **monorepo** with three language implementations sharing the same design:
+
+| Language | Directory | Async | Status |
+|----------|-----------|-------|--------|
+| **Java** | [`java/`](java/) | Sync only (virtual threads for I/O) | Stable |
+| **TypeScript** | [`ts/`](ts/) | Sync + optional async (External only) | Stable |
+| **Rust** | [`rust/`](rust/) | Sync only (async outside SM) | Stable |
+
+All three share the same **8-item build validation**, the same **FlowDefinition DSL**, and the same **Mermaid generation**. See [`docs/language-guide.md`](docs/language-guide.md) for differences.
+
+Shared test scenarios live in [`shared-tests/`](shared-tests/) — the same flow definitions are tested across all three languages.
+
 ## Requirements
 
-- Java 21+
-- Zero runtime dependencies (Jackson optional for JSONB serialization)
+| Language | Version | Dependencies |
+|----------|---------|-------------|
+| Java | 21+ | Zero (Jackson optional for JSONB) |
+| TypeScript | Node 18+ / Bun | Zero |
+| Rust | 1.75+ (edition 2021) | Zero |
 
 ## License
 
