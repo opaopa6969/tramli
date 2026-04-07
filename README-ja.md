@@ -31,6 +31,7 @@
 - [8項目 build() 検証](#8項目-build-検証) — `build()` が何をチェックするか
 - [requires / produces 契約](#requires--produces-契約) — Processor 間のデータフロー
 - [Mermaid 図の自動生成](#mermaid-図の自動生成) — コード = 図、常に最新
+- [Pipeline](#pipeline) — build 時検証付き直列パイプライン
 - [エラーハンドリング](#エラーハンドリング) — Guard 拒否、リトライ上限、エラー遷移
 - [なぜ LLM と相性が良いか](#なぜ-llm-と相性が良いか)
 - [パフォーマンス](#パフォーマンス)
@@ -394,6 +395,58 @@ MermaidGenerator.writeToFile(definition, Path.of("docs/diagrams"));
 図は **[FlowDefinition](#flowdefinition) から生成される** — [エンジン](#flowengine)が使うのと同じオブジェクト。古くなることがない。
 
 CI 連携: 生成 → コミット済み `.mmd` ファイルと比較 → 差分があればテスト失敗。開発者にフロー変更時の図の更新を強制する。
+
+---
+
+## Pipeline
+
+すべてのワークフローにステートが必要なわけではない。外部イベントや分岐のない**直列処理チェーン**には、`Tramli.pipeline()` がよりシンプルな API で同じ build 時検証を提供する:
+
+```java
+var pipeline = Tramli.pipeline("etl")
+    .initiallyAvailable(RawInput.class)
+    .step(parse)       // requires: RawInput,   produces: Parsed
+    .step(validate)    // requires: Parsed,     produces: Validated
+    .step(enrich)      // requires: Validated,  produces: Enriched
+    .step(save)        // requires: Enriched,   produces: SaveResult
+    .build();          // ← requires/produces チェーン検証
+
+FlowContext result = pipeline.execute(Map.of(RawInput.class, rawData));
+SaveResult saved = result.get(SaveResult.class);
+```
+
+Pipeline は FlowDefinition と `FlowContext` と `build()` 検証を共有するが、ステート、エンジン、永続化はない。tramli の**軽量モード**。
+
+```java
+// データフロー図
+pipeline.dataFlow().toMermaid();
+
+// Dead data 検出
+pipeline.dataFlow().deadData();  // produces されたが requires されない型
+
+// パイプラインのネスト
+PipelineStep sub = otherPipeline.asStep();
+
+// エラーハンドリング
+try {
+    pipeline.execute(data);
+} catch (PipelineException e) {
+    e.completedSteps();  // ["parse", "validate"]
+    e.failedStep();      // "enrich"
+    e.context();         // 失敗時点までのデータが入った FlowContext
+}
+```
+
+### 使い分け
+
+```
+直列 2-4 ステップ → 関数合成 / pipe
+直列 5+ ステップ、データ蓄積 → Tramli.pipeline()
+分岐 / 外部イベント / 永続化 → Tramli.define()（FlowDefinition）
+分散 / 長時間 / スケジュール → Airflow / Temporal
+```
+
+Pipeline は tramli の**入口**。`pipeline()` で始めて、分岐や外部イベントが必要になったら `define()` にアップグレード。
 
 ---
 

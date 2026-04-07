@@ -32,6 +32,8 @@ State machines where **invalid transitions cannot exist** — enforced at build 
 - [requires / produces Contract](#requires--produces-contract) — how data flows between processors
 - [Mermaid Diagram Generation](#mermaid-diagram-generation) — code = diagram, always
 - [Data-Flow Graph](#data-flow-graph) — automatic data dependency analysis
+- [Pipeline](#pipeline) — sequential step chain with build-time verification
+- [Logging](#logging) — zero-dependency pluggable loggers
 - [Error Handling](#error-handling) — guard rejection, max retries, error transitions
 - [Why LLMs Love This](#why-llms-love-this)
 - [Performance](#performance)
@@ -481,6 +483,58 @@ boolean ok = DataFlowGraph.isCompatible(processorA, processorB);
 | "Explain the data pipeline to a new team member" → meeting | Show the Mermaid diagram |
 
 This is the same advantage that Airflow/Temporal users wish they had: **build-time, static data-flow analysis.** Those tools use dynamic XCom/payloads with no static guarantees. tramli's `requires/produces` declarations enable verification before any code runs.
+
+---
+
+## Pipeline
+
+Not every workflow needs states. For **sequential processing chains** without external events or branching, `Tramli.pipeline()` gives you the same build-time verification with a simpler API:
+
+```java
+var pipeline = Tramli.pipeline("etl")
+    .initiallyAvailable(RawInput.class)
+    .step(parse)       // requires: RawInput,   produces: Parsed
+    .step(validate)    // requires: Parsed,     produces: Validated
+    .step(enrich)      // requires: Validated,  produces: Enriched
+    .step(save)        // requires: Enriched,   produces: SaveResult
+    .build();          // ← requires/produces chain verified
+
+FlowContext result = pipeline.execute(Map.of(RawInput.class, rawData));
+SaveResult saved = result.get(SaveResult.class);
+```
+
+Pipeline shares `FlowContext` and `build()` verification with FlowDefinition, but has no states, no engine, and no persistence. It's tramli's **lightweight mode**.
+
+```java
+// Data-flow diagram
+pipeline.dataFlow().toMermaid();
+
+// Dead data detection
+pipeline.dataFlow().deadData();  // types produced but never consumed
+
+// Nest pipelines
+PipelineStep sub = otherPipeline.asStep();
+
+// Error handling
+try {
+    pipeline.execute(data);
+} catch (PipelineException e) {
+    e.completedSteps();  // ["parse", "validate"]
+    e.failedStep();      // "enrich"
+    e.context();         // FlowContext with data up to failure point
+}
+```
+
+### When to use what
+
+```
+Sequential 2-4 steps, 1 type each  →  function composition / pipe
+Sequential 5+ steps, data accumulates  →  Tramli.pipeline()
+Branching / external events / persistence  →  Tramli.define() (FlowDefinition)
+Distributed / long-running / scheduled  →  Airflow / Temporal
+```
+
+Pipeline is tramli's **on-ramp**: start with `pipeline()`, upgrade to `define()` when you need branching or external events.
 
 ---
 
