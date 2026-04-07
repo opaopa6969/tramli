@@ -71,4 +71,4 @@
 
 | # | Gap | Status |
 |---|-----|--------|
-| G13 | XState v5 typegen との詳細比較 | 🔲 追加調査必要 |
+| G13 | XState v5 typegen との詳細比較 | ✅ v3 反映（§5.4 Deep Dive 追加） |

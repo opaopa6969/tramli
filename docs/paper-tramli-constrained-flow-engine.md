@@ -1,6 +1,6 @@
 # tramli: Definition-Time Validated Constrained Flow Engine with Data-Flow Contracts
 
-> v3 — DGE 査読 Round 1 (G1-G12) + Round 2 (G15-G21) 反映
+> v3 — DGE 査読 Round 1 (G1-G12) + Round 2 (G13, G15-G21) 反映。全 Gap 解消。
 
 **Target audience**: Engineers selecting state machine libraries, library authors, and researchers interested in the intersection of data-flow analysis and state machine design. This is a positioning paper, not a formal academic submission.
 
@@ -302,7 +302,39 @@ We compare against 3 primary competitors. Each represents a different design phi
 
 **Trade-off acknowledgment**: XState's expressiveness allows modeling concurrent protocols that tramli cannot represent. statig's compile-time guarantees are strictly stronger than tramli's definition-time checks for transition validity (an invalid transition in statig is a compile error; in tramli it is a build() runtime exception). Spring SM's ecosystem integration provides persistence, monitoring, and distributed coordination out of the box. tramli trades expressiveness and ecosystem richness for focused structural and data-flow safety in a lightweight, cross-language package.
 
-### 5.4 Threats to Validity
+### 5.4 Deep Dive: XState v5 Type Safety vs tramli requires/produces
+
+XState v5's type safety deserves detailed examination, as it is the closest competitor in the "type-safe state machine" space.
+
+**XState v5's type architecture**: Context is a single type parameter `TContext` threaded through the entire machine hierarchy (`MachineConfig<TContext, ...>`, `StateNodeConfig<TContext, ...>`, `ActionFunction<TContext, ...>`). There is no mechanism to parameterize context per state. Every action, guard, and service in every state sees the same `TContext`.
+
+**What XState v5 verifies at compile time**:
+- Unknown events sent to actors (TS error)
+- Missing required event properties (TS error)
+- Action/guard name typos in state config (TS error)
+- Wrong context property types (standard TS type checking)
+
+**What XState v5 cannot verify**:
+- Transition targets to non-existent states (`target: 'nonExistentState'` compiles without error)
+- Per-state data availability ("is `context.email` defined when we reach state `CONFIRMED`?")
+- Data dependency chains ("does processor A produce the data that processor B requires?")
+
+The fundamental limitation: TypeScript does not have dependent types. There is no way to express "context at state A is `{name: string}` but context at state B is `{name: string, email: string}`" within XState's type architecture. Developers must use optional fields (`email?: string`) and manual null-checks or non-null assertions based on their mental model of the flow graph.
+
+XState v4's **typegen** feature used code generation to produce per-state type narrowing for events, but it was **removed in v5** ("Typegen is not supported in XState version 5") and never supported per-state context narrowing.
+
+**Comparison**:
+
+| Capability | XState v5 | tramli |
+|---|---|---|
+| "Data X missing at state Y" | Not detected (all context fields are always optional) | Detected at definition-time by path scanning |
+| Transition target validation | Not checked at compile time | Enum-based states — caught by compiler |
+| Data availability guarantee | Developer uses `?.` or `!` assertions | `ctx.get(X.class)` guaranteed non-null if build() passes |
+| Verification timing | Compile-time (partial, machine-boundary only) | Definition-time (comprehensive, flow-graph-internal) |
+
+This is the core of tramli's differentiation from XState: **XState provides type safety at the machine boundary (events in/out, action names); tramli provides structural safety inside the flow graph (data dependencies between processors, transition validity, reachability).** They are complementary, not competing, concerns — an ideal system would have both.
+
+### 5.5 Threats to Validity
 
 **External validity**: Production deployment evidence comes from a single project (volta-auth-proxy). The 4 flows are all authentication-related, which may not represent the full diversity of state machine use cases (e.g., game logic, protocol implementations).
 
