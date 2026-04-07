@@ -266,7 +266,14 @@ export class FlowEngine {
   }
 
   private handleError<S extends string>(flow: FlowInstance<S>, fromState: S, cause?: Error): void {
-    if (cause) flow.setLastError(`${cause.constructor.name}: ${cause.message}`);
+    if (cause) {
+      flow.setLastError(`${cause.constructor.name}: ${cause.message}`);
+      if (cause instanceof FlowError) {
+        const available = new Set<string>();
+        for (const [k] of flow.context.snapshot()) available.add(k);
+        cause.withContextSnapshot(available, new Set());
+      }
+    }
     const errorTarget = flow.definition.errorTransitions.get(fromState);
     if (errorTarget) {
       const from = flow.currentState;

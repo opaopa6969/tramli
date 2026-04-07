@@ -133,86 +133,82 @@ impl<S: FlowState> FlowEngine<S> {
 
                 let def = flow.definition.clone();
 
-                // Check for sub-flow transition first
-                let sub_flow_t = def.transitions.iter()
-                    .find(|t| t.from == current && t.transition_type == TransitionType::SubFlow);
-                if let Some(sft) = sub_flow_t {
-                    if let Some(ref config) = sft.sub_flow {
-                        use crate::sub_flow::SubFlowResult;
-                        let mut instance = config.runner.create_instance();
-                        let result = instance.start(&mut flow.context)?;
-                        match result {
-                            SubFlowResult::Completed(exit_name) => {
-                                if let Some(&target) = config.exit_mappings.get(&exit_name) {
-                                    let from_dbg = format!("{:?}", current);
-                                    flow.transition_to(target);
-                                    Some((from_dbg, format!("{:?}", target),
-                                        format!("subFlow:{}/{}", config.runner.name(), exit_name), false))
-                                } else {
-                                    Self::handle_error(flow, current, &def);
-                                    Some((format!("{:?}", current), format!("{:?}", flow.current_state()), "error".to_string(), true))
-                                }
-                            }
-                            SubFlowResult::WaitingAtExternal => { break }
-                            SubFlowResult::GuardRejected(_) => { break }
-                        }
-                    } else { break }
-                } else {
-
-                let auto_t = def.transitions.iter()
-                    .find(|t| t.from == current && (t.transition_type == TransitionType::Auto || t.transition_type == TransitionType::Branch));
-                let Some(t) = auto_t else { break };
-
-                if t.transition_type == TransitionType::Auto {
-                    if let Some(proc) = &t.processor {
-                        let proc_result = proc.process(&mut flow.context);
-                        // strict_mode: verify produces
-                        let strict_fail = if proc_result.is_ok() && self.strict_mode {
-                            proc.produces().iter().any(|p| !flow.context.has_type_id(p))
-                        } else { false };
-                        if proc_result.is_err() || strict_fail {
-                            Self::handle_error(flow, current, &def);
-                            Some((format!("{:?}", current), format!("{:?}", flow.current_state()), "error".to_string(), true))
-                        } else {
-                            let from_dbg = format!("{:?}", current);
-                            let to = t.to;
-                            let trigger = proc.name().to_string();
-                            flow.transition_to(to);
-                            Some((from_dbg, format!("{:?}", to), trigger, false))
-                        }
-                    } else {
-                        let from_dbg = format!("{:?}", current);
-                        let to = t.to;
-                        flow.transition_to(to);
-                        Some((from_dbg, format!("{:?}", to), "auto".to_string(), false))
-                    }
-                } else if let Some(branch) = &t.branch {
-                    let label = branch.decide(&flow.context);
-                    if let Some(&target) = t.branch_targets.get(&label) {
-                        let from_dbg = format!("{:?}", current);
-                        flow.transition_to(target);
-                        Some((from_dbg, format!("{:?}", target), format!("{}:{}", branch.name(), label), false))
-                    } else {
-                        Self::handle_error(flow, current, &def);
-                        Some((format!("{:?}", current), format!("{:?}", flow.current_state()), "error".to_string(), true))
-                    }
-                } else {
-                    break
-                }
-                } // close the else block for sub-flow check
+                // Step dispatch: SubFlow > Auto > Branch > External(stop)
+                Self::dispatch_step(flow, current, &def, self.strict_mode)?
             }; // flow borrow ends
 
             // Phase 2: record + check if we should stop
-            if let Some((from, to, trigger, is_error)) = step_result {
-                self.store.record_transition(flow_id, &from, &to, &trigger);
-                if is_error { return Ok(()); }
-            } else {
-                break;
-            }
+            let Some((from, to, trigger, is_error)) = step_result else { break };
+            self.store.record_transition(flow_id, &from, &to, &trigger);
+            if is_error { return Ok(()); }
             depth += 1;
         }
         if depth >= MAX_CHAIN_DEPTH { return Err(FlowError::max_chain_depth()); }
         Ok(())
+    }
+
+    /// Dispatch one auto-chain step. Returns (from, to, trigger, is_error) or None to stop.
+    fn dispatch_step(
+        flow: &mut FlowInstance<S>, current: S, def: &FlowDefinition<S>, strict_mode: bool,
+    ) -> Result<Option<(String, String, String, bool)>, FlowError> {
+        // 1. SubFlow
+        if let Some(sft) = def.transitions.iter().find(|t| t.from == current && t.transition_type == TransitionType::SubFlow) {
+            if let Some(ref config) = sft.sub_flow {
+                use crate::sub_flow::SubFlowResult;
+                let mut instance = config.runner.create_instance();
+                return match instance.start(&mut flow.context)? {
+                    SubFlowResult::Completed(exit_name) => {
+                        if let Some(&target) = config.exit_mappings.get(&exit_name) {
+                            let from_dbg = format!("{:?}", current);
+                            flow.transition_to(target);
+                            Ok(Some((from_dbg, format!("{:?}", target),
+                                format!("subFlow:{}/{}", config.runner.name(), exit_name), false)))
+                        } else {
+                            Self::handle_error(flow, current, def);
+                            Ok(Some((format!("{:?}", current), format!("{:?}", flow.current_state()), "error".to_string(), true)))
+                        }
+                    }
+                    SubFlowResult::WaitingAtExternal | SubFlowResult::GuardRejected(_) => Ok(None),
+                };
+            }
+            return Ok(None);
+        }
+
+        // 2. Auto
+        if let Some(t) = def.transitions.iter().find(|t| t.from == current && t.transition_type == TransitionType::Auto) {
+            if let Some(proc) = &t.processor {
+                let result = proc.process(&mut flow.context);
+                let strict_fail = result.is_ok() && strict_mode &&
+                    proc.produces().iter().any(|p| !flow.context.has_type_id(p));
+                if result.is_err() || strict_fail {
+                    Self::handle_error(flow, current, def);
+                    return Ok(Some((format!("{:?}", current), format!("{:?}", flow.current_state()), "error".to_string(), true)));
+                }
+                let from_dbg = format!("{:?}", current);
+                flow.transition_to(t.to);
+                return Ok(Some((from_dbg, format!("{:?}", t.to), proc.name().to_string(), false)));
+            }
+            let from_dbg = format!("{:?}", current);
+            flow.transition_to(t.to);
+            return Ok(Some((from_dbg, format!("{:?}", t.to), "auto".to_string(), false)));
+        }
+
+        // 3. Branch
+        if let Some(t) = def.transitions.iter().find(|t| t.from == current && t.transition_type == TransitionType::Branch) {
+            if let Some(branch) = &t.branch {
+                let label = branch.decide(&flow.context);
+                if let Some(&target) = t.branch_targets.get(&label) {
+                    let from_dbg = format!("{:?}", current);
+                    flow.transition_to(target);
+                    return Ok(Some((from_dbg, format!("{:?}", target), format!("{}:{}", branch.name(), label), false)));
+                }
+                Self::handle_error(flow, current, def);
+                return Ok(Some((format!("{:?}", current), format!("{:?}", flow.current_state()), "error".to_string(), true)));
+            }
+        }
+
+        // No auto/branch/subflow — stop
+        Ok(None)
     }
 
     fn handle_error(flow: &mut FlowInstance<S>, from_state: S, def: &FlowDefinition<S>) {

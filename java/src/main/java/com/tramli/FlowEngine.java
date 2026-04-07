@@ -314,6 +314,11 @@ public final class FlowEngine {
     private <S extends Enum<S> & FlowState> void handleError(FlowInstance<S> flow, S fromState, Exception cause) {
         if (cause != null) {
             flow.setLastError(cause.getClass().getSimpleName() + ": " + cause.getMessage());
+            // Attach context snapshot to the exception if it's a FlowException
+            if (cause instanceof FlowException fe) {
+                var available = flow.context().snapshot().keySet();
+                fe.withContextSnapshot(available, java.util.Set.of());
+            }
         }
         S errorTarget = flow.definition().errorTransitions().get(fromState);
         if (errorTarget != null) {
