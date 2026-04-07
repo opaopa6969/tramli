@@ -81,7 +81,10 @@ let auth_result = volta_client.check_auth(&req).await;
 | Flow context | `Class<T>` keyed `HashMap` | string/symbol keyed `Map` | `TypeId` keyed `HashMap` |
 | 定義 | `Tramli.define("name", S.class)` | `tramli("name", S)` | `FlowDefinition::builder("name")` |
 | Build 検証 | `build()` が例外 | `build()` が例外 | `build()` が `Result` |
-| Mermaid | `MermaidGenerator.generate(def)` | `generateMermaid(def)` | `MermaidGenerator::generate(&def)` |
+| Mermaid | `MermaidGenerator.generate(def)` | `MermaidGenerator.generate(def)` | `MermaidGenerator::generate(&def)` |
+| Data-flow Mermaid | `MermaidGenerator.generateDataFlow(def)` | `MermaidGenerator.generateDataFlow(def)` | `MermaidGenerator::generate_data_flow(&def)` |
+| DataFlowGraph | `def.dataFlowGraph()` | `def.dataFlowGraph` | `def.data_flow_graph()` |
+| SubFlow | `.subFlow(sub).onExit("X", S).endSubFlow()` | `.subFlow(sub).onExit("X", S).endSubFlow()` | `.sub_flow(runner).on_exit("X", S).end_sub_flow()` |
 
 ## どの言語を使うべきか
 

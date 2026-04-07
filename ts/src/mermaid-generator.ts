@@ -8,6 +8,23 @@ export class MermaidGenerator {
 
     const seen = new Set<string>();
     for (const t of def.transitions) {
+      if (t.type === 'sub_flow' && t.subFlowDefinition) {
+        const subDef = t.subFlowDefinition;
+        lines.push(`  state ${t.from} {`);
+        if (subDef.initialState) lines.push(`    [*] --> ${subDef.initialState}`);
+        for (const st of subDef.transitions) {
+          const sLabel = this.transitionLabel(st);
+          lines.push(sLabel ? `    ${st.from} --> ${st.to}: ${sLabel}` : `    ${st.from} --> ${st.to}`);
+        }
+        for (const term of subDef.terminalStates) lines.push(`    ${term} --> [*]`);
+        lines.push('  }');
+        if (t.exitMappings) {
+          for (const [exitName, target] of t.exitMappings) {
+            lines.push(`  ${t.from} --> ${target}: ${exitName}`);
+          }
+        }
+        continue;
+      }
       const key = `${t.from}->${t.to}`;
       if (seen.has(key)) continue;
       seen.add(key);

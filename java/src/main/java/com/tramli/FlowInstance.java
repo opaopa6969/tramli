@@ -69,6 +69,33 @@ public final class FlowInstance<S extends Enum<S> & FlowState> {
     /** Active sub-flow instance, or null if not in a sub-flow. */
     public FlowInstance<?> activeSubFlow() { return activeSubFlow; }
 
+    /** State path from root to deepest active sub-flow. E.g. ["PAYMENT", "CONFIRM"]. */
+    public java.util.List<String> statePath() {
+        var path = new java.util.ArrayList<String>();
+        path.add(currentState.name());
+        if (activeSubFlow != null) {
+            path.addAll(activeSubFlow.statePath());
+        }
+        return path;
+    }
+
+    /** State path as a slash-separated string. E.g. "PAYMENT/CONFIRM". */
+    public String statePathString() {
+        return String.join("/", statePath());
+    }
+
+    /**
+     * Types required by the next external transition (including in active sub-flows).
+     * Empty if not waiting at an external transition.
+     */
+    public java.util.Set<Class<?>> waitingFor() {
+        if (activeSubFlow != null) return activeSubFlow.waitingFor();
+        var ext = definition.externalFrom(currentState);
+        if (ext.isEmpty()) return java.util.Set.of();
+        var guard = ext.get().guard();
+        return guard != null ? guard.requires() : java.util.Set.of();
+    }
+
     /**
      * Return a copy with the given version. For FlowStore implementations
      * that need to update the version after save (e.g., optimistic locking).

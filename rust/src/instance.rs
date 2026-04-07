@@ -52,6 +52,16 @@ impl<S: FlowState> FlowInstance<S> {
     pub fn exit_state(&self) -> Option<&str> { self.exit_state.as_deref() }
     pub fn is_completed(&self) -> bool { self.exit_state.is_some() }
 
+    /// State path from root. E.g. ["PAYMENT", "CONFIRM"].
+    pub fn state_path(&self) -> Vec<String> {
+        vec![format!("{:?}", self.current_state)]
+    }
+
+    /// State path as slash-separated string.
+    pub fn state_path_string(&self) -> String {
+        self.state_path().join("/")
+    }
+
     /// Return a copy with the given version. For FlowStore optimistic locking.
     pub fn with_version(&self, new_version: u32) -> Self {
         Self::restore(

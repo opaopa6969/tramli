@@ -6,6 +6,7 @@ export interface TransitionRecord {
   from: string | null;
   to: string;
   trigger: string;
+  subFlow: string | null;
   timestamp: Date;
 }
 
@@ -30,7 +31,8 @@ export class InMemoryFlowStore {
   recordTransition(
     flowId: string, from: string | null, to: string, trigger: string, _ctx: FlowContext,
   ): void {
-    this._transitionLog.push({ flowId, from, to, trigger, timestamp: new Date() });
+    const subFlow = trigger.startsWith('subFlow:') ? trigger.substring(8, trigger.indexOf('/')) : null;
+    this._transitionLog.push({ flowId, from, to, trigger, subFlow, timestamp: new Date() });
   }
 
   get transitionLog(): readonly TransitionRecord[] {

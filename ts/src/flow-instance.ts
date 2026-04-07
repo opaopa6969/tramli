@@ -62,6 +62,24 @@ export class FlowInstance<S extends string> {
 
   get activeSubFlow(): FlowInstance<any> | null { return this._activeSubFlow; }
 
+  /** State path from root to deepest active sub-flow. */
+  statePath(): string[] {
+    const path: string[] = [this._currentState];
+    if (this._activeSubFlow) path.push(...this._activeSubFlow.statePath());
+    return path;
+  }
+
+  /** State path as slash-separated string. */
+  statePathString(): string { return this.statePath().join('/'); }
+
+  /** Types required by the next external transition (including in active sub-flows). */
+  waitingFor(): string[] {
+    if (this._activeSubFlow) return this._activeSubFlow.waitingFor();
+    const ext = this.definition.externalFrom(this._currentState);
+    if (!ext?.guard) return [];
+    return [...ext.guard.requires];
+  }
+
   /** Return a copy with the given version. For FlowStore optimistic locking. */
   withVersion(newVersion: number): FlowInstance<S> {
     const copy = FlowInstance.restore(

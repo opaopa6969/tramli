@@ -10,7 +10,7 @@ public final class InMemoryFlowStore implements FlowStore {
     private final Map<String, FlowInstance<?>> flows = new LinkedHashMap<>();
     private final List<TransitionRecord> transitionLog = new ArrayList<>();
 
-    public record TransitionRecord(String flowId, String from, String to, String trigger, Instant timestamp) {}
+    public record TransitionRecord(String flowId, String from, String to, String trigger, String subFlow, Instant timestamp) {}
 
     @Override
     public void create(FlowInstance<?> flow) {
@@ -34,8 +34,10 @@ public final class InMemoryFlowStore implements FlowStore {
     @Override
     public void recordTransition(String flowId, FlowState from, FlowState to,
                                  String trigger, FlowContext ctx) {
+        // Extract subFlow name from trigger like "subFlow:payment/DONE"
+        String subFlowName = trigger.startsWith("subFlow:") ? trigger.substring(8, trigger.indexOf('/')) : null;
         transitionLog.add(new TransitionRecord(flowId,
-                from != null ? from.name() : null, to.name(), trigger, Instant.now()));
+                from != null ? from.name() : null, to.name(), trigger, subFlowName, Instant.now()));
     }
 
     public List<TransitionRecord> transitionLog() {

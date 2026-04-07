@@ -89,8 +89,13 @@ The solution: SM stays sync. Async I/O happens in the caller (tower::Service, to
 | Flow context | `Class<T>` keyed `HashMap` | string/symbol keyed `Map` | `TypeId` keyed `HashMap` |
 | Definition | `Tramli.define("name", S.class)` | `tramli("name", S)` | `FlowDefinition::builder("name")` |
 | Build validation | `build()` throws | `build()` throws | `build()` returns `Result` |
-| Mermaid | `MermaidGenerator.generate(def)` | `generateMermaid(def)` | `MermaidGenerator::generate(&def)` |
-| Entry point | `Tramli.define()` | `tramli()` | `FlowDefinition::builder()` |
+| Mermaid | `MermaidGenerator.generate(def)` | `MermaidGenerator.generate(def)` | `MermaidGenerator::generate(&def)` |
+| Data-flow Mermaid | `MermaidGenerator.generateDataFlow(def)` | `MermaidGenerator.generateDataFlow(def)` | `MermaidGenerator::generate_data_flow(&def)` |
+| DataFlowGraph | `def.dataFlowGraph()` | `def.dataFlowGraph` | `def.data_flow_graph()` |
+| SubFlow | `.subFlow(sub).onExit("X", S).endSubFlow()` | `.subFlow(sub).onExit("X", S).endSubFlow()` | `.sub_flow(runner).on_exit("X", S).end_sub_flow()` |
+| State path | `flow.statePathString()` | `flow.statePathString()` | `flow.state_path_string()` |
+| Waiting for | `flow.waitingFor()` | `flow.waitingFor()` | N/A (via sub_flow trait) |
+| Entry point | `Tramli.define()` | `Tramli.define()` | `Builder::new()` |
 
 ## Type Safety Comparison
 

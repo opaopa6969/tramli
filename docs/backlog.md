@@ -19,19 +19,19 @@
 | 15 | v1.1.0 publish | ✅ complete | — | #9–#14 |
 | 16 | SubFlow MVP (Flow Composition) | ✅ complete | DD-017 | — |
 | 17 | v1.2.0 publish | ✅ complete | — | #16 |
-| 18 | SubFlow error bubbling | 📋 planned | DD-017 | #16 |
-| 19 | SubFlow data-flow 結合検証 | 📋 planned | DD-017 | #16 |
-| 20 | SubFlow circular reference 検出 | 📋 planned | DD-017 | #16 |
-| 21 | SubFlow max nesting depth = 3 | 📋 planned | DD-017 | #16 |
-| 22 | SubFlow statePath 永続化 | 📋 planned | DD-017 | #16 |
-| 23 | FlowInstance.restore() オーバーロード | 📋 planned | DD-017 | #22 |
-| 24 | TransitionRecord.subFlow フィールド | 📋 planned | DD-017 | #16 |
-| 25 | FlowInstance.waitingFor() | 📋 planned | DD-017 | #16 |
-| 26 | FlowInstance.statePath() / statePathString() | 📋 planned | DD-017 | #22 |
-| 27 | Mermaid subgraph (SubFlow 描画) | 📋 planned | DD-017 | #16 |
-| 28 | DataFlowGraph SubFlow フラット化 | 📋 planned | DD-017 | #16,#3 |
-| 29 | DD-013 sync 互換性テスト (shared test) | 📋 planned | DD-013 | — |
-| 30 | docs/language-guide DataFlowGraph 行追加 | 📋 planned | — | #3 |
+| 18 | SubFlow error bubbling | ✅ complete | DD-017 | #16 |
+| 19 | SubFlow data-flow 結合検証 | ✅ complete | DD-017 | #16 |
+| 20 | SubFlow circular reference 検出 | ✅ complete | DD-017 | #16 |
+| 21 | SubFlow max nesting depth = 3 | ✅ complete | DD-017 | #16 |
+| 22 | SubFlow statePath 永続化 | ✅ complete | DD-017 | #16 |
+| 23 | FlowInstance.restore() オーバーロード | ✅ complete | DD-017 | #22 |
+| 24 | TransitionRecord.subFlow フィールド | ✅ complete | DD-017 | #16 |
+| 25 | FlowInstance.waitingFor() | ✅ complete | DD-017 | #16 |
+| 26 | FlowInstance.statePath() / statePathString() | ✅ complete | DD-017 | #22 |
+| 27 | Mermaid subgraph (SubFlow 描画) | ✅ complete | DD-017 | #16 |
+| 28 | DataFlowGraph SubFlow フラット化 | ✅ complete | DD-017 | #16,#3 |
+| 29 | DD-013 sync 互換性テスト (shared test) | ✅ complete | DD-013 | — |
+| 30 | docs/language-guide DataFlowGraph 行追加 | ✅ complete | — | #3 |
 
 ## Future (需要確認まで作らない)
 

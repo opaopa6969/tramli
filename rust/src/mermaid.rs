@@ -17,6 +17,20 @@ impl MermaidGenerator {
 
         let mut seen = HashSet::new();
         for t in &def.transitions {
+            if t.transition_type == TransitionType::SubFlow {
+                if let Some(ref config) = t.sub_flow {
+                    lines.push(format!("    state {:?} {{", t.from));
+                    // Delegate to runner for terminal names (type-erased)
+                    for term in config.runner.terminal_names() {
+                        lines.push(format!("        {} --> [*]", term));
+                    }
+                    lines.push("    }".to_string());
+                    for (exit_name, target) in &config.exit_mappings {
+                        lines.push(format!("    {:?} --> {:?} : {}", t.from, target, exit_name));
+                    }
+                }
+                continue;
+            }
             let key = format!("{:?}->{:?}", t.from, t.to);
             if !seen.insert(key) { continue; }
             let label = Self::transition_label(t);

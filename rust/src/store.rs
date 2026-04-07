@@ -10,6 +10,7 @@ pub struct TransitionRecord {
     pub from: String,
     pub to: String,
     pub trigger: String,
+    pub sub_flow: Option<String>,
     pub timestamp: Instant,
 }
 
@@ -31,9 +32,12 @@ impl<S: FlowState> InMemoryFlowStore<S> {
     }
 
     pub fn record_transition(&mut self, flow_id: &str, from: &str, to: &str, trigger: &str) {
+        let sub_flow = if trigger.starts_with("subFlow:") {
+            trigger.get(8..trigger.find('/').unwrap_or(trigger.len())).map(|s| s.to_string())
+        } else { None };
         self.transition_log.push(TransitionRecord {
             flow_id: flow_id.to_string(), from: from.to_string(),
-            to: to.to_string(), trigger: trigger.to_string(), timestamp: Instant::now(),
+            to: to.to_string(), trigger: trigger.to_string(), sub_flow, timestamp: Instant::now(),
         });
     }
 

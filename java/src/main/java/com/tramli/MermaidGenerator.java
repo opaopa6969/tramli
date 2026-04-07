@@ -22,6 +22,28 @@ public final class MermaidGenerator {
 
         Set<String> seen = new LinkedHashSet<>();
         for (Transition<S> t : definition.transitions()) {
+            if (t.isSubFlow() && t.subFlowDefinition() != null) {
+                // Render sub-flow as Mermaid subgraph
+                var subDef = t.subFlowDefinition();
+                sb.append("    state ").append(t.from().name()).append(" {\n");
+                if (subDef.initialState() != null)
+                    sb.append("        [*] --> ").append(subDef.initialState().name()).append('\n');
+                for (var st : subDef.transitions()) {
+                    String sKey = st.from().name() + "->" + st.to().name();
+                    sb.append("        ").append(st.from().name()).append(" --> ").append(st.to().name());
+                    String sLabel = transitionLabel(st);
+                    if (!sLabel.isEmpty()) sb.append(" : ").append(sLabel);
+                    sb.append('\n');
+                }
+                for (var term : subDef.terminalStates())
+                    sb.append("        ").append(term.name()).append(" --> [*]\n");
+                sb.append("    }\n");
+                // Add exit transitions
+                for (var exit : t.exitMappings().entrySet())
+                    sb.append("    ").append(t.from().name()).append(" --> ").append(exit.getValue().name())
+                      .append(" : ").append(exit.getKey()).append('\n');
+                continue;
+            }
             String key = t.from().name() + "->" + t.to().name();
             if (!seen.add(key)) continue;
             String label = transitionLabel(t);
