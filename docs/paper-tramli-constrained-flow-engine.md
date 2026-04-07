@@ -378,12 +378,44 @@ tramli's design philosophy can be understood through the lens of **commitment de
 
 This parallels other successful constraint-based designs: Rust's borrow checker (constrains memory access to guarantee safety), SQL's foreign key constraints (constrains data to guarantee referential integrity), and Git's DAG structure (constrains history to guarantee consistency).
 
-### 6.5 Limitations
+### 6.5 Safety vs Liveness
+
+tramli's 8-item validation checks **safety properties** — "nothing bad happens" (unreachable states, missing data, infinite loops). It does not check **liveness properties** — "something good eventually happens."
+
+Specifically: a flow stopped at an External transition will wait indefinitely if the external event never arrives. The TTL mechanism provides **bounded liveness** — the flow will expire after a configured duration. However, perpetual flows (DD-009, `allow_perpetual()`) have no TTL and no terminal states. A perpetual flow with an External transition can deadlock permanently if the event source fails.
+
+v1.10.0 introduces `FlowDefinition.warnings()` which flags this case: "Perpetual flow has External transitions — ensure events are always delivered to avoid deadlock (liveness risk)."
+
+This is a deliberate scope boundary. Full liveness verification requires model checking (SPIN, TLA+), which is outside tramli's design space. tramli provides structural warnings where possible and defers liveness guarantees to the deployment environment.
+
+### 6.6 Mathematical Genealogy
+
+tramli's core mechanism — requires/produces contracts verified at definition time — sits at the intersection of four established theoretical traditions:
+
+```
+1960s  Frances Allen — Data-flow analysis (reaching definitions, def-use chains)
+1986   Strom & Yemini — Typestate (object state × type verification)
+1987   Harel — Statecharts (hierarchical states, visual formalism)
+1999   Milner — π-calculus (process communication, channel types)
+2026   tramli — requires/produces contracts at the intersection
+```
+
+| Theory | tramli's relationship |
+|--------|----------------------|
+| Data-flow analysis | `checkRequiresProduces` = reaching definitions at the type level |
+| Typestate | FlowContext = flow-level typestate; build() = typestate verification |
+| Statecharts | SubFlow = practical subset of composite states |
+| π-calculus | External transition = channel input; concurrency excluded for verifiability |
+
+The requires/produces contract is the **invariant common to all four theories**. Each theory projects this invariant differently: Allen tracks variable definitions, Strom tracks object states, Harel tracks hierarchical state structure, Milner tracks channel types. tramli implements the invariant directly at the data-type level.
+
+### 6.7 Limitations
 
 - **Not formal verification**: build-time checks are structural well-formedness checks, not model checking. tramli cannot verify arbitrary temporal logic properties (cf. SPIN, TLA+, Alloy). It catches 8 specific categories of structural errors.
-- **No runtime enforcement of produces**: if a processor declares `produces(Foo.class)` but doesn't actually produce it, the error occurs downstream at runtime.
+- **No liveness guarantee**: External transitions can block indefinitely. TTL provides bounded liveness; `warnings()` flags perpetual flows with External transitions.
+- **No runtime enforcement of produces**: mitigated by `strictMode` (v1.7.0+) which verifies produces at execution time.
 - **Enum-based states**: states must be known at definition time. Dynamic state creation is not supported.
-- **No concurrent states**: orthogonal regions (Harel Statecharts) are not modeled. Flows are sequential.
+- **No concurrent states**: orthogonal regions (Harel Statecharts) are not modeled. Flows are sequential. This is deliberate — concurrency would require model checking for correctness.
 - **Single-writer assumption**: FlowEngine assumes single-threaded access per flow instance. Concurrent access requires external coordination (e.g., SELECT FOR UPDATE in FlowStore).
 
 ---

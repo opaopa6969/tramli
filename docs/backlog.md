@@ -88,3 +88,9 @@ tsconfig で CJS ビルドも出力し、package.json の exports で dual expor
 - AI Processor Generation (DD-015 #32) — AI ツール側の責務
 - Processor Registry Pattern (DD-015 #38) — ユーザーが自力で実装可能
 - Harel Statechart (DD-017) — 機能過多
+
+## Future
+
+| # | Feature | Design |
+|---|---------|--------|
+| F14 | Per-state timeout on External transitions | DD-002 踏襲。liveness 問題の言語レベル解決策。Harel 教授提案 |

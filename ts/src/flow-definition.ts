@@ -13,6 +13,7 @@ export class FlowDefinition<S extends string> {
   readonly initialState: S | null;
   readonly terminalStates: Set<S>;
   readonly dataFlowGraph!: DataFlowGraph<S> | null;
+  readonly warnings!: string[];
 
   private constructor(
     name: string, stateConfig: Record<S, StateConfig>, ttl: number,
@@ -156,6 +157,15 @@ export class Builder<S extends string> {
     this.validate(result);
 
     (result as any).dataFlowGraph = DataFlowGraph.build(result, this.initiallyAvailableKeys);
+
+    // Build warnings
+    const warnings: string[] = [];
+    const perpetual = terminals.size === 0;
+    const hasExternal = this.transitions.some(t => t.type === 'external');
+    if (perpetual && hasExternal) {
+      warnings.push(`Perpetual flow '${this.name}' has External transitions — ensure events are always delivered to avoid deadlock (liveness risk)`);
+    }
+    (result as any).warnings = warnings;
     return result;
   }
 

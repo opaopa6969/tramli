@@ -29,10 +29,11 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
     private final S initialState;
     private final Set<S> terminalStates;
     private final DataFlowGraph<S> dataFlowGraph;
+    private final List<String> warnings;
 
     private FlowDefinition(String name, Class<S> stateClass, Duration ttl, int maxGuardRetries,
                            List<Transition<S>> transitions, Map<S, S> errorTransitions,
-                           DataFlowGraph<S> dataFlowGraph) {
+                           DataFlowGraph<S> dataFlowGraph, List<String> warnings) {
         this.name = name;
         this.stateClass = stateClass;
         this.ttl = ttl;
@@ -49,6 +50,7 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
         this.initialState = initial;
         this.terminalStates = Collections.unmodifiableSet(terminals);
         this.dataFlowGraph = dataFlowGraph;
+        this.warnings = warnings != null ? List.copyOf(warnings) : List.of();
     }
 
     public String name() { return name; }
@@ -76,6 +78,9 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
 
     /** Data-flow graph derived from requires/produces declarations. */
     public DataFlowGraph<S> dataFlowGraph() { return dataFlowGraph; }
+
+    /** Structural warnings detected at build() time (e.g. liveness risks). */
+    public List<String> warnings() { return warnings; }
 
     /**
      * Create a new FlowDefinition with a sub-flow inserted before a specific transition.
@@ -106,7 +111,7 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
         }
         // Reuse parent's data-flow graph (plugin insertion preserves data contracts)
         return new FlowDefinition<>(name + "+plugin:" + pluginFlow.name(), stateClass, ttl,
-                maxGuardRetries, newTransitions, new LinkedHashMap<>(errorTransitions), this.dataFlowGraph);
+                maxGuardRetries, newTransitions, new LinkedHashMap<>(errorTransitions), this.dataFlowGraph, this.warnings);
     }
 
     // ─── Builder ─────────────────────────────────────────────
@@ -244,10 +249,31 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
         }
 
         public FlowDefinition<S> build() {
-            var def = new FlowDefinition<>(name, stateClass, ttl, maxGuardRetries, transitions, errorTransitions, null);
+            var def = new FlowDefinition<>(name, stateClass, ttl, maxGuardRetries, transitions, errorTransitions, null, null);
             validate(def);
             var graph = DataFlowGraph.build(def, initiallyAvailable);
-            return new FlowDefinition<>(name, stateClass, ttl, maxGuardRetries, transitions, errorTransitions, graph);
+            var warnings = buildWarnings(def);
+            return new FlowDefinition<>(name, stateClass, ttl, maxGuardRetries, transitions, errorTransitions, graph, warnings);
+        }
+
+        private List<String> buildWarnings(FlowDefinition<S> def) {
+            var warnings = new ArrayList<String>();
+            boolean perpetual = def.terminalStates.isEmpty();
+            boolean hasExternal = def.transitions.stream().anyMatch(Transition::isExternal);
+            if (perpetual && hasExternal) {
+                warnings.add("Perpetual flow '" + name + "' has External transitions — " +
+                        "ensure events are always delivered to avoid deadlock (liveness risk)");
+            }
+            // Dead data warning
+            if (def.dataFlowGraph != null) {
+                var dead = def.dataFlowGraph.deadData();
+                if (!dead.isEmpty()) {
+                    warnings.add("Dead data detected: " + dead.stream()
+                            .map(Class::getSimpleName).sorted().toList() +
+                            " — produced but never required by any downstream processor");
+                }
+            }
+            return warnings;
         }
 
         private void validate(FlowDefinition<S> def) {
