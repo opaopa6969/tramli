@@ -8,6 +8,8 @@ State machines where **invalid transitions cannot exist** — enforced at build 
 
 > **tramli** = tramline (路面電車の軌道). Your code runs on rails — it can only go where tracks are laid.
 
+**Read**: [Why tramli Works — The Attention Budget](docs/why-tramli-works.md) | [日本語版](docs/why-tramli-works-attention-budget-ja.md)
+
 ---
 
 ## Table of Contents
