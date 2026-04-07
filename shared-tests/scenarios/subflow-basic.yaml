@@ -1,0 +1,10 @@
+flow: main-with-subflow
+description: "SubFlow: auto-chain through sub-flow and return to parent"
+
+initial_data:
+  Input:
+    value: "x"
+
+steps:
+  - expect_state: DONE
+    expect_completed: true

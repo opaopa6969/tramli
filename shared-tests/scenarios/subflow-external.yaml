@@ -1,0 +1,15 @@
+flow: main-with-subflow-external
+description: "SubFlow with external: stops at sub-flow external, resumes, completes"
+
+initial_data:
+  Input:
+    value: "x"
+
+steps:
+  - expect_state: INIT
+    expect_active_sub_flow: true
+
+  - resume_with: {}
+    expect_state: DONE
+    expect_completed: true
+    expect_active_sub_flow: false

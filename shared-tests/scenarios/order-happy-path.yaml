@@ -1,0 +1,21 @@
+flow: order
+description: "Happy path: CREATED → PAYMENT_PENDING → PAYMENT_CONFIRMED → SHIPPED"
+
+initial_data:
+  OrderRequest:
+    itemId: "item-1"
+    quantity: 3
+
+steps:
+  - expect_state: PAYMENT_PENDING
+    expect_context:
+      PaymentIntent:
+        transactionId: "txn-item-1"
+
+  - resume_with: {}
+    expect_state: SHIPPED
+    expect_completed: true
+    exit_state: "SHIPPED"
+    expect_context:
+      ShipmentInfo:
+        trackingId: "TRACK-001"

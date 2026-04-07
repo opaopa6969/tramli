@@ -218,6 +218,56 @@ export class DataFlowGraph<S extends string> {
     return lines.join('\n') + '\n';
   }
 
+  /** Recommended migration order: processors sorted by dependency (fewest first). */
+  migrationOrder(): string[] {
+    const nodeReqs = new Map<string, Set<string>>();
+    const nodeProds = new Map<string, Set<string>>();
+    for (const [t, ns] of this._consumers) for (const n of ns) { if (!nodeReqs.has(n.name)) nodeReqs.set(n.name, new Set()); nodeReqs.get(n.name)!.add(t); }
+    for (const [t, ns] of this._producers) for (const n of ns) { if (!nodeProds.has(n.name)) nodeProds.set(n.name, new Set()); nodeProds.get(n.name)!.add(t); }
+
+    const order: string[] = [];
+    const available = new Set<string>();
+    for (const [t, ns] of this._producers) { if (ns.some(n => n.name === 'initial')) available.add(t); }
+    const remaining = new Set([...nodeReqs.keys(), ...nodeProds.keys()]);
+    remaining.delete('initial');
+
+    while (remaining.size > 0) {
+      let next: string | null = null;
+      for (const name of remaining) {
+        const reqs = nodeReqs.get(name) ?? new Set();
+        if ([...reqs].every(r => available.has(r))) { next = name; break; }
+      }
+      if (!next) { order.push(...remaining); break; }
+      order.push(next);
+      remaining.delete(next);
+      for (const p of nodeProds.get(next) ?? []) available.add(p);
+    }
+    return order;
+  }
+
+  /** Generate Markdown migration checklist. */
+  toMarkdown(): string {
+    const lines = ['# Migration Checklist\n'];
+    const order = this.migrationOrder();
+    for (let i = 0; i < order.length; i++) {
+      const name = order[i];
+      const reqs: string[] = [];
+      for (const [t, ns] of this._consumers) if (ns.some(n => n.name === name)) reqs.push(t);
+      const prods: string[] = [];
+      for (const [t, ns] of this._producers) if (ns.some(n => n.name === name)) prods.push(t);
+      let line = `- [ ] **${i + 1}. ${name}**`;
+      if (reqs.length) line += `  requires: [${reqs.join(', ')}]`;
+      if (prods.length) line += `  produces: [${prods.join(', ')}]`;
+      lines.push(line);
+    }
+    const dead = this.deadData();
+    if (dead.size > 0) {
+      lines.push('\n## Dead Data\n');
+      for (const d of dead) lines.push(`- ${d}`);
+    }
+    return lines.join('\n') + '\n';
+  }
+
   /** Test scaffold: for each processor, list required type names. */
   testScaffold(): Map<string, string[]> {
     const scaffold = new Map<string, string[]>();

@@ -274,6 +274,78 @@ public final class DataFlowGraph<S extends Enum<S> & FlowState> {
         return sb.toString();
     }
 
+    // ─── Migration support ────────────────────────────────────
+
+    /**
+     * Recommended migration order: processors sorted by dependency count (fewest first).
+     * Processors with no requires come first, then those whose requires are all
+     * produced by earlier processors.
+     */
+    public List<String> migrationOrder() {
+        // Collect all unique processor/guard names with their requires/produces
+        var nodeReqs = new LinkedHashMap<String, Set<Class<?>>>();
+        var nodeProds = new LinkedHashMap<String, Set<Class<?>>>();
+        for (var entry : consumers.entrySet()) {
+            for (var n : entry.getValue()) {
+                nodeReqs.computeIfAbsent(n.name(), k -> new LinkedHashSet<>()).add(entry.getKey());
+            }
+        }
+        for (var entry : producers.entrySet()) {
+            for (var n : entry.getValue()) {
+                nodeProds.computeIfAbsent(n.name(), k -> new LinkedHashSet<>()).add(entry.getKey());
+            }
+        }
+
+        var order = new ArrayList<String>();
+        var available = new HashSet<>(allProduced.stream()
+                .filter(t -> producers.getOrDefault(t, List.of()).stream().anyMatch(n -> "initial".equals(n.name())))
+                .toList());
+        var remaining = new LinkedHashSet<>(nodeReqs.keySet());
+        remaining.addAll(nodeProds.keySet());
+        remaining.remove("initial");
+
+        while (!remaining.isEmpty()) {
+            String next = null;
+            for (String name : remaining) {
+                var reqs = nodeReqs.getOrDefault(name, Set.of());
+                if (available.containsAll(reqs)) { next = name; break; }
+            }
+            if (next == null) { order.addAll(remaining); break; } // circular or unresolvable
+            order.add(next);
+            remaining.remove(next);
+            available.addAll(nodeProds.getOrDefault(next, Set.of()));
+        }
+        return order;
+    }
+
+    /**
+     * Generate a Markdown migration checklist.
+     */
+    public String toMarkdown() {
+        var sb = new StringBuilder();
+        sb.append("# Migration Checklist\n\n");
+        var order = migrationOrder();
+        for (int i = 0; i < order.size(); i++) {
+            String name = order.get(i);
+            var reqs = consumers.entrySet().stream()
+                    .filter(e -> e.getValue().stream().anyMatch(n -> n.name().equals(name)))
+                    .map(e -> e.getKey().getSimpleName()).sorted().toList();
+            var prods = producers.entrySet().stream()
+                    .filter(e -> e.getValue().stream().anyMatch(n -> n.name().equals(name)))
+                    .map(e -> e.getKey().getSimpleName()).sorted().toList();
+            sb.append("- [ ] **").append(i + 1).append(". ").append(name).append("**");
+            if (!reqs.isEmpty()) sb.append("  requires: ").append(reqs);
+            if (!prods.isEmpty()) sb.append("  produces: ").append(prods);
+            sb.append('\n');
+        }
+        var dead = deadData();
+        if (!dead.isEmpty()) {
+            sb.append("\n## Dead Data (produced but never consumed)\n\n");
+            for (var d : dead) sb.append("- ").append(d.getSimpleName()).append('\n');
+        }
+        return sb.toString();
+    }
+
     // ─── Test generation ──────────────────────────────────────
 
     /**

@@ -226,6 +226,55 @@ impl<S: FlowState> DataFlowGraph<S> {
         full.rsplit("::").next().unwrap_or(full).to_string()
     }
 
+    /// Recommended migration order: processors sorted by dependency (fewest first).
+    pub fn migration_order(&self) -> Vec<String> {
+        let mut node_reqs: HashMap<String, HashSet<TypeId>> = HashMap::new();
+        let mut node_prods: HashMap<String, HashSet<TypeId>> = HashMap::new();
+        for (tid, nodes) in &self.consumers { for n in nodes { node_reqs.entry(n.name.clone()).or_default().insert(*tid); } }
+        for (tid, nodes) in &self.producers { for n in nodes { node_prods.entry(n.name.clone()).or_default().insert(*tid); } }
+
+        let mut order = Vec::new();
+        let mut available: HashSet<TypeId> = self.producers.iter()
+            .filter(|(_, ns)| ns.iter().any(|n| n.name == "initial"))
+            .map(|(t, _)| *t).collect();
+        let mut remaining: Vec<String> = node_reqs.keys().chain(node_prods.keys())
+            .filter(|n| n.as_str() != "initial").cloned().collect::<HashSet<_>>().into_iter().collect();
+
+        while !remaining.is_empty() {
+            let next = remaining.iter().position(|name| {
+                node_reqs.get(name).map_or(true, |reqs| reqs.is_subset(&available))
+            });
+            match next {
+                Some(idx) => {
+                    let name = remaining.remove(idx);
+                    if let Some(prods) = node_prods.get(&name) { available.extend(prods); }
+                    order.push(name);
+                }
+                None => { order.extend(remaining.drain(..)); break; }
+            }
+        }
+        order
+    }
+
+    /// Generate Markdown migration checklist.
+    pub fn to_markdown(&self) -> String {
+        let mut lines = vec!["# Migration Checklist\n".to_string()];
+        let order = self.migration_order();
+        for (i, name) in order.iter().enumerate() {
+            let reqs: Vec<String> = self.consumers.iter()
+                .filter(|(_, ns)| ns.iter().any(|n| &n.name == name))
+                .map(|(t, _)| self.short_type_name(t)).collect();
+            let prods: Vec<String> = self.producers.iter()
+                .filter(|(_, ns)| ns.iter().any(|n| &n.name == name))
+                .map(|(t, _)| self.short_type_name(t)).collect();
+            let mut line = format!("- [ ] **{}. {}**", i + 1, name);
+            if !reqs.is_empty() { line += &format!("  requires: {:?}", reqs); }
+            if !prods.is_empty() { line += &format!("  produces: {:?}", prods); }
+            lines.push(line);
+        }
+        lines.join("\n") + "\n"
+    }
+
     /// Test scaffold: for each processor, list required type names.
     pub fn test_scaffold(&self) -> HashMap<String, Vec<String>> {
         let mut scaffold: HashMap<String, Vec<String>> = HashMap::new();

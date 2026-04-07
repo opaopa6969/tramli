@@ -1,0 +1,26 @@
+flow: order
+description: "Payment rejected 3 times → CANCELLED"
+
+guard_behavior:
+  PaymentGuard: reject
+
+initial_data:
+  OrderRequest:
+    itemId: "item-1"
+    quantity: 1
+
+steps:
+  - expect_state: PAYMENT_PENDING
+
+  - resume_with: {}
+    expect_state: PAYMENT_PENDING
+    expect_guard_failure_count: 1
+
+  - resume_with: {}
+    expect_state: PAYMENT_PENDING
+    expect_guard_failure_count: 2
+
+  - resume_with: {}
+    expect_state: CANCELLED
+    expect_completed: true
+    exit_state: "CANCELLED"
