@@ -77,7 +77,7 @@ export class FlowDefinition<S extends string> {
       errorTransitions: new Map(this.errorTransitions),
       initialState: this.initialState,
       terminalStates: this.terminalStates,
-      dataFlowGraph: null, // will be rebuilt if needed
+      dataFlowGraph: this.dataFlowGraph, // reuse parent's graph
     });
     return result;
   }

@@ -252,8 +252,6 @@ class OrderFlowTest {
     @Test
     void withPlugin() {
         var def = definition(true);
-        // Verify withPlugin returns a new definition with modified name
-        // (Full execution test deferred — withPlugin replaces a transition with subFlow)
         var pluginDef = Tramli.define("plugin", FlowEngineErrorTest.SubSimple.class)
                 .from(FlowEngineErrorTest.SubSimple.SS_INIT)
                 .auto(FlowEngineErrorTest.SubSimple.SS_DONE,
@@ -265,10 +263,14 @@ class OrderFlowTest {
                         })
                 .build();
 
-        // withPlugin modifies transitions, verify it doesn't throw
-        assertNotNull(pluginDef);
-        // Actual withPlugin execution needs graph rebuild fix — tested structurally for now
-        assertTrue(def.transitions().stream().anyMatch(t -> t.from() == OrderState.CREATED));
+        var extended = def.withPlugin(OrderState.CREATED, OrderState.PAYMENT_PENDING, pluginDef);
+        assertNotNull(extended);
+        assertTrue(extended.name().contains("plugin"));
+        // Verify sub-flow transition was inserted
+        assertTrue(extended.transitions().stream().anyMatch(Transition::isSubFlow));
+        // Original auto transition was replaced
+        assertFalse(extended.transitions().stream()
+                .anyMatch(t -> t.from() == OrderState.CREATED && t.to() == OrderState.PAYMENT_PENDING && t.isAuto()));
     }
 
     @Test

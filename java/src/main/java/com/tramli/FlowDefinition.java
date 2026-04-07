@@ -104,11 +104,9 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
                 newTransitions.add(t);
             }
         }
-        var def = new FlowDefinition<>(name + "+plugin:" + pluginFlow.name(), stateClass, ttl,
-                maxGuardRetries, newTransitions, new LinkedHashMap<>(errorTransitions), null);
-        var graph = DataFlowGraph.build(def, Set.of()); // rebuild graph
-        return new FlowDefinition<>(def.name, def.stateClass, def.ttl, def.maxGuardRetries,
-                def.transitions, def.errorTransitions, graph);
+        // Reuse parent's data-flow graph (plugin insertion preserves data contracts)
+        return new FlowDefinition<>(name + "+plugin:" + pluginFlow.name(), stateClass, ttl,
+                maxGuardRetries, newTransitions, new LinkedHashMap<>(errorTransitions), this.dataFlowGraph);
     }
 
     // ─── Builder ─────────────────────────────────────────────
