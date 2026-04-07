@@ -147,6 +147,51 @@ impl<S: FlowState> DataFlowGraph<S> {
         missing
     }
 
+    /// Impact analysis: all producers and consumers of a given type.
+    pub fn impact_of(&self, type_id: &TypeId) -> (Vec<&NodeInfo<S>>, Vec<&NodeInfo<S>>) {
+        let prods: Vec<_> = self.producers_of(type_id).iter().collect();
+        let cons: Vec<_> = self.consumers_of(type_id).iter().collect();
+        (prods, cons)
+    }
+
+    /// Parallelism hints: pairs of processor names with no data dependency.
+    pub fn parallelism_hints(&self) -> Vec<(String, String)> {
+        let mut all_nodes: Vec<String> = Vec::new();
+        for nodes in self.producers.values() { for n in nodes { if !all_nodes.contains(&n.name) { all_nodes.push(n.name.clone()); } } }
+        for nodes in self.consumers.values() { for n in nodes { if !all_nodes.contains(&n.name) { all_nodes.push(n.name.clone()); } } }
+        let mut hints = Vec::new();
+        for i in 0..all_nodes.len() {
+            for j in (i+1)..all_nodes.len() {
+                let (a, b) = (&all_nodes[i], &all_nodes[j]);
+                let a_prods: HashSet<_> = self.producers.iter().filter(|(_, ns)| ns.iter().any(|n| &n.name == a)).map(|(t, _)| t).collect();
+                let b_reqs: HashSet<_> = self.consumers.iter().filter(|(_, ns)| ns.iter().any(|n| &n.name == b)).map(|(t, _)| t).collect();
+                let b_prods: HashSet<_> = self.producers.iter().filter(|(_, ns)| ns.iter().any(|n| &n.name == b)).map(|(t, _)| t).collect();
+                let a_reqs: HashSet<_> = self.consumers.iter().filter(|(_, ns)| ns.iter().any(|n| &n.name == a)).map(|(t, _)| t).collect();
+                let a_dep_b = a_reqs.iter().any(|r| b_prods.contains(r));
+                let b_dep_a = b_reqs.iter().any(|r| a_prods.contains(r));
+                if !a_dep_b && !b_dep_a { hints.push((a.clone(), b.clone())); }
+            }
+        }
+        hints
+    }
+
+    /// Structured JSON representation.
+    pub fn to_json(&self) -> String {
+        let mut types = Vec::new();
+        for type_id in self.all_types() {
+            let name = self.short_type_name(&type_id);
+            let prods: Vec<String> = self.producers_of(&type_id).iter().map(|n| n.name.clone()).collect();
+            let cons: Vec<String> = self.consumers_of(&type_id).iter().map(|n| n.name.clone()).collect();
+            let mut entry = format!("{{\"name\": \"{}\"", name);
+            if !prods.is_empty() { entry += &format!(", \"producers\": [{}]", prods.iter().map(|p| format!("\"{}\"", p)).collect::<Vec<_>>().join(", ")); }
+            if !cons.is_empty() { entry += &format!(", \"consumers\": [{}]", cons.iter().map(|c| format!("\"{}\"", c)).collect::<Vec<_>>().join(", ")); }
+            entry += "}";
+            types.push(entry);
+        }
+        let dead: Vec<String> = self.dead_data().iter().map(|t| format!("\"{}\"", self.short_type_name(t))).collect();
+        format!("{{\n  \"types\": [\n    {}\n  ],\n  \"deadData\": [{}]\n}}", types.join(",\n    "), dead.join(", "))
+    }
+
     /// Generate Mermaid data-flow diagram.
     pub fn to_mermaid(&self) -> String {
         let mut lines = vec!["flowchart LR".to_string()];
@@ -179,6 +224,38 @@ impl<S: FlowState> DataFlowGraph<S> {
         let full = self.type_name(type_id);
         // Extract last segment after ::
         full.rsplit("::").next().unwrap_or(full).to_string()
+    }
+
+    /// Test scaffold: for each processor, list required type names.
+    pub fn test_scaffold(&self) -> HashMap<String, Vec<String>> {
+        let mut scaffold: HashMap<String, Vec<String>> = HashMap::new();
+        for (type_id, nodes) in &self.consumers {
+            for node in nodes {
+                scaffold.entry(node.name.clone()).or_default()
+                    .push(self.short_type_name(type_id));
+            }
+        }
+        scaffold
+    }
+
+    /// Generate data-flow invariant assertions as strings.
+    pub fn generate_invariant_assertions(&self) -> Vec<String> {
+        let mut assertions = Vec::new();
+        for (state, types) in &self.available_at_state {
+            let mut names: Vec<String> = types.iter().map(|t| self.short_type_name(t)).collect();
+            names.sort();
+            assertions.push(format!("At state {:?}: context must contain {:?}", state, names));
+        }
+        assertions
+    }
+
+    /// Diff two data-flow graphs. Returns added/removed type names.
+    pub fn diff(before: &DataFlowGraph<S>, after: &DataFlowGraph<S>) -> (Vec<String>, Vec<String>) {
+        let before_types: HashSet<_> = before.all_types().iter().map(|t| before.short_type_name(t)).collect();
+        let after_types: HashSet<_> = after.all_types().iter().map(|t| after.short_type_name(t)).collect();
+        let added: Vec<String> = after_types.difference(&before_types).cloned().collect();
+        let removed: Vec<String> = before_types.difference(&after_types).cloned().collect();
+        (added, removed)
     }
 
     // ─── Builder ─────────────────────────────────────────────

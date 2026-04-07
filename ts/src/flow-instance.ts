@@ -72,6 +72,21 @@ export class FlowInstance<S extends string> {
   /** State path as slash-separated string. */
   statePathString(): string { return this.statePath().join('/'); }
 
+  /** Data types available in context at current state (from data-flow graph). */
+  availableData(): Set<string> {
+    return this.definition.dataFlowGraph?.availableAt(this._currentState) ?? new Set();
+  }
+
+  /** Data types that the next transition requires but are not yet in context. */
+  missingFor(): string[] {
+    const missing: string[] = [];
+    for (const t of this.definition.transitionsFrom(this._currentState)) {
+      if (t.guard) for (const r of t.guard.requires) { if (!this.context.has(r)) missing.push(r as string); }
+      if (t.processor) for (const r of t.processor.requires) { if (!this.context.has(r)) missing.push(r as string); }
+    }
+    return [...new Set(missing)];
+  }
+
   /** Types required by the next external transition (including in active sub-flows). */
   waitingFor(): string[] {
     if (this._activeSubFlow) return this._activeSubFlow.waitingFor();

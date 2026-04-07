@@ -157,6 +157,100 @@ public final class DataFlowGraph<S extends Enum<S> & FlowState> {
         return missing;
     }
 
+    /**
+     * Impact analysis: all producers and consumers of a given type.
+     * "If I change this type, what processors/guards are affected?"
+     */
+    public record Impact<S>(List<NodeInfo<S>> producers, List<NodeInfo<S>> consumers) {}
+
+    public Impact<S> impactOf(Class<?> type) {
+        return new Impact<>(producersOf(type), consumersOf(type));
+    }
+
+    /**
+     * Parallelism hints: pairs of processors at the same state that have
+     * no data dependency (neither requires the other's produces).
+     */
+    public List<String[]> parallelismHints() {
+        var hints = new ArrayList<String[]>();
+        var allNodes = new ArrayList<String>();
+        for (var entry : consumers.values()) {
+            for (var n : entry) {
+                if (!allNodes.contains(n.name())) allNodes.add(n.name());
+            }
+        }
+        for (var entry : producers.values()) {
+            for (var n : entry) {
+                if (!allNodes.contains(n.name())) allNodes.add(n.name());
+            }
+        }
+        // Find pairs with no overlap
+        for (int i = 0; i < allNodes.size(); i++) {
+            for (int j = i + 1; j < allNodes.size(); j++) {
+                String a = allNodes.get(i), b = allNodes.get(j);
+                Set<Class<?>> aProduces = new HashSet<>(), bRequires = new HashSet<>();
+                Set<Class<?>> bProduces = new HashSet<>(), aRequires = new HashSet<>();
+                for (var e : producers.entrySet()) {
+                    for (var n : e.getValue()) {
+                        if (n.name().equals(a)) aProduces.add(e.getKey());
+                        if (n.name().equals(b)) bProduces.add(e.getKey());
+                    }
+                }
+                for (var e : consumers.entrySet()) {
+                    for (var n : e.getValue()) {
+                        if (n.name().equals(a)) aRequires.add(e.getKey());
+                        if (n.name().equals(b)) bRequires.add(e.getKey());
+                    }
+                }
+                boolean aDepB = aRequires.stream().anyMatch(bProduces::contains);
+                boolean bDepA = bRequires.stream().anyMatch(aProduces::contains);
+                if (!aDepB && !bDepA) hints.add(new String[]{a, b});
+            }
+        }
+        return hints;
+    }
+
+    /** Structured JSON representation of the data-flow graph. */
+    public String toJson() {
+        var sb = new StringBuilder();
+        sb.append("{\n  \"types\": [");
+        var types = allTypes();
+        boolean first = true;
+        for (var t : types) {
+            if (!first) sb.append(",");
+            sb.append("\n    {\"name\": \"").append(t.getSimpleName()).append("\"");
+            var prods = producersOf(t);
+            if (!prods.isEmpty()) {
+                sb.append(", \"producers\": [");
+                for (int i = 0; i < prods.size(); i++) {
+                    if (i > 0) sb.append(", ");
+                    sb.append("\"").append(prods.get(i).name()).append("\"");
+                }
+                sb.append("]");
+            }
+            var cons = consumersOf(t);
+            if (!cons.isEmpty()) {
+                sb.append(", \"consumers\": [");
+                for (int i = 0; i < cons.size(); i++) {
+                    if (i > 0) sb.append(", ");
+                    sb.append("\"").append(cons.get(i).name()).append("\"");
+                }
+                sb.append("]");
+            }
+            sb.append("}");
+            first = false;
+        }
+        sb.append("\n  ],\n  \"deadData\": [");
+        first = true;
+        for (var d : deadData()) {
+            if (!first) sb.append(", ");
+            sb.append("\"").append(d.getSimpleName()).append("\"");
+            first = false;
+        }
+        sb.append("]\n}");
+        return sb.toString();
+    }
+
     /** Generate Mermaid data-flow diagram. */
     public String toMermaid() {
         var sb = new StringBuilder();
@@ -178,6 +272,113 @@ public final class DataFlowGraph<S extends Enum<S> & FlowState> {
             }
         }
         return sb.toString();
+    }
+
+    // ─── Test generation ──────────────────────────────────────
+
+    /**
+     * Test scaffold: for each processor/guard, list the types needed in context (requires).
+     * Returns a map of processor name → required type names.
+     */
+    public Map<String, List<String>> testScaffold() {
+        var scaffold = new LinkedHashMap<String, List<String>>();
+        for (var entry : consumers.entrySet()) {
+            for (var node : entry.getValue()) {
+                scaffold.computeIfAbsent(node.name(), k -> new ArrayList<>())
+                        .add(entry.getKey().getSimpleName());
+            }
+        }
+        return scaffold;
+    }
+
+    /**
+     * Generate data-flow invariant assertions as strings.
+     * Each assertion: "At state X: context must contain [A, B, C]"
+     */
+    public List<String> generateInvariantAssertions() {
+        var assertions = new ArrayList<String>();
+        for (var entry : availableAtState.entrySet()) {
+            var types = entry.getValue().stream()
+                    .map(Class::getSimpleName)
+                    .sorted()
+                    .toList();
+            assertions.add("At state " + entry.getKey().name() + ": context must contain " + types);
+        }
+        return assertions;
+    }
+
+    // ─── Cross-flow / Versioning utilities ─────────────────────
+
+    /**
+     * Cross-flow data-flow map: find types that flow A produces and flow B requires (or vice versa).
+     * Returns pairs of (type, producerFlow, consumerFlow).
+     */
+    public static List<String> crossFlowMap(DataFlowGraph<?>... graphs) {
+        var results = new ArrayList<String>();
+        for (int i = 0; i < graphs.length; i++) {
+            for (int j = 0; j < graphs.length; j++) {
+                if (i == j) continue;
+                for (Class<?> produced : graphs[i].allProduced) {
+                    if (graphs[j].allConsumed.contains(produced)) {
+                        results.add(produced.getSimpleName() + ": flow " + i + " produces → flow " + j + " consumes");
+                    }
+                }
+            }
+        }
+        return results;
+    }
+
+    /**
+     * Diff two data-flow graphs. Returns added/removed types and producers/consumers.
+     */
+    public record DiffResult(Set<String> addedTypes, Set<String> removedTypes,
+                             Set<String> addedEdges, Set<String> removedEdges) {}
+
+    public static DiffResult diff(DataFlowGraph<?> before, DataFlowGraph<?> after) {
+        Set<String> beforeTypes = new LinkedHashSet<>(), afterTypes = new LinkedHashSet<>();
+        for (var t : before.allTypes()) beforeTypes.add(t.getSimpleName());
+        for (var t : after.allTypes()) afterTypes.add(t.getSimpleName());
+
+        Set<String> addedTypes = new LinkedHashSet<>(afterTypes); addedTypes.removeAll(beforeTypes);
+        Set<String> removedTypes = new LinkedHashSet<>(beforeTypes); removedTypes.removeAll(afterTypes);
+
+        Set<String> beforeEdges = collectEdges(before), afterEdges = collectEdges(after);
+        Set<String> addedEdges = new LinkedHashSet<>(afterEdges); addedEdges.removeAll(beforeEdges);
+        Set<String> removedEdges = new LinkedHashSet<>(beforeEdges); removedEdges.removeAll(afterEdges);
+
+        return new DiffResult(addedTypes, removedTypes, addedEdges, removedEdges);
+    }
+
+    private static Set<String> collectEdges(DataFlowGraph<?> graph) {
+        var edges = new LinkedHashSet<String>();
+        for (var entry : graph.producers.entrySet()) {
+            for (var n : entry.getValue()) edges.add(n.name() + " --produces--> " + entry.getKey().getSimpleName());
+        }
+        for (var entry : graph.consumers.entrySet()) {
+            for (var n : entry.getValue()) edges.add(entry.getKey().getSimpleName() + " --requires--> " + n.name());
+        }
+        return edges;
+    }
+
+    /**
+     * Version compatibility: check if instances running on defBefore can resume on defAfter.
+     * Returns list of incompatibilities per state.
+     */
+    public static <S extends Enum<S> & FlowState> List<String> versionCompatibility(
+            DataFlowGraph<S> before, DataFlowGraph<S> after) {
+        var issues = new ArrayList<String>();
+        for (var entry : before.availableAtState.entrySet()) {
+            S state = entry.getKey();
+            Set<Class<?>> beforeAvail = entry.getValue();
+            Set<Class<?>> afterAvail = after.availableAtState.getOrDefault(state, Set.of());
+            // Check: does after require more types than before has?
+            for (Class<?> type : afterAvail) {
+                if (!beforeAvail.contains(type)) {
+                    issues.add("State " + state.name() + ": v2 expects " + type.getSimpleName() + " but v1 instances may not have it");
+                }
+            }
+        }
+        return issues;
     }
 
     // ─── Builder ─────────────────────────────────────────────

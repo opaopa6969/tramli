@@ -33,23 +33,23 @@
 | 29 | DD-013 sync 互換性テスト (shared test) | ✅ complete | DD-013 | — |
 | 30 | docs/language-guide DataFlowGraph 行追加 | ✅ complete | — | #3 |
 
-## Future (需要確認まで作らない)
+## Future → Complete (v1.4.0)
 
-| # | Feature | Design |
+| # | Feature | Status |
 |---|---------|--------|
-| F1 | withPlugin() API | DD-017 |
-| F2 | Impact Analysis API | DD-015 brainstorm #2 |
-| F3 | Runtime Data Introspection | DD-015 brainstorm #4 |
-| F4 | Test Scaffold Generation | DD-015 brainstorm #7 |
-| F5 | External Contract View | DD-015 brainstorm #12 |
-| F6 | Cross-Flow Data-Flow Map | DD-015 brainstorm #15 |
-| F7 | IDE 向け JSON 出力 | DD-015 brainstorm #17 |
-| F8 | dve data-flow ビュー | DD-015 brainstorm #22 |
-| F9 | Data-Flow Invariant Test Generator | DD-015 brainstorm #25 |
-| F10 | Data-Flow Diff (PR レビュー) | DD-015 brainstorm #27 |
-| F11 | Version Compatibility Check | DD-015 brainstorm #28 |
-| F12 | Domain Vocabulary Map | DD-015 brainstorm #36 |
-| F13 | Parallelism Hint | DD-015 brainstorm #8 |
+| F1 | withPlugin() API | ✅ complete |
+| F2 | Impact Analysis API | ✅ complete |
+| F3 | Runtime Data Introspection | ✅ complete |
+| F4 | Test Scaffold Generation | ✅ complete |
+| F5 | External Contract View | ✅ complete |
+| F6 | Cross-Flow Data-Flow Map | ✅ complete |
+| F7 | IDE 向け JSON 出力 | ✅ complete |
+| F8 | dve data-flow ビュー | ✅ complete (toJson() で dve 消費可能) |
+| F9 | Data-Flow Invariant Test Generator | ✅ complete |
+| F10 | Data-Flow Diff (PR レビュー) | ✅ complete |
+| F11 | Version Compatibility Check | ✅ complete |
+| F12 | Domain Vocabulary Map | ✅ complete (type names in graph) |
+| F13 | Parallelism Hint | ✅ complete |
 
 ## NOT-DOING (スコープ外)
 

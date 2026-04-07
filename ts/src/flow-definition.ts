@@ -47,6 +47,41 @@ export class FlowDefinition<S extends string> {
     return Object.keys(this.stateConfig) as S[];
   }
 
+  /**
+   * Create a new FlowDefinition with a sub-flow inserted before a specific transition.
+   */
+  withPlugin(from: S, to: S, pluginFlow: FlowDefinition<any>): FlowDefinition<S> {
+    const newTransitions: Transition<S>[] = [];
+    let replaced = false;
+    for (const t of this.transitions) {
+      if (t.from === from && t.to === to && !replaced) {
+        const exitMap = new Map<string, S>();
+        for (const terminal of pluginFlow.terminalStates) exitMap.set(terminal, to);
+        newTransitions.push({
+          from, to: from, type: 'sub_flow',
+          processor: t.processor, guard: undefined, branch: undefined,
+          branchTargets: new Map(),
+          subFlowDefinition: pluginFlow, exitMappings: exitMap,
+        });
+        replaced = true;
+      } else {
+        newTransitions.push(t);
+      }
+    }
+    const result = Object.create(FlowDefinition.prototype) as FlowDefinition<S>;
+    Object.assign(result, {
+      name: this.name + '+plugin:' + pluginFlow.name,
+      stateConfig: this.stateConfig, ttl: this.ttl,
+      maxGuardRetries: this.maxGuardRetries,
+      transitions: newTransitions,
+      errorTransitions: new Map(this.errorTransitions),
+      initialState: this.initialState,
+      terminalStates: this.terminalStates,
+      dataFlowGraph: null, // will be rebuilt if needed
+    });
+    return result;
+  }
+
   // ─── Builder ─────────────────────────────────────────────
 
   static builder<S extends string>(name: string, stateConfig: Record<S, StateConfig>): Builder<S> {

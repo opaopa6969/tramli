@@ -48,6 +48,23 @@ export class MermaidGenerator {
     return lines.join('\n') + '\n';
   }
 
+  /** Generate Mermaid diagram highlighting external transitions and their data contracts. */
+  static generateExternalContract<S extends string>(def: FlowDefinition<S>): string {
+    const lines: string[] = ['flowchart LR'];
+    for (const t of def.transitions) {
+      if (t.type !== 'external' || !t.guard) continue;
+      lines.push(`    subgraph ${t.from}_to_${t.to}`);
+      lines.push('        direction TB');
+      lines.push(`        ${t.guard.name}{"[${t.guard.name}]"}`);
+      for (const req of t.guard.requires)
+        lines.push(`        ${req} -->|client sends| ${t.guard.name}`);
+      for (const prod of t.guard.produces)
+        lines.push(`        ${t.guard.name} -->|returns| ${prod}`);
+      lines.push('    end');
+    }
+    return lines.join('\n') + '\n';
+  }
+
   /** Generate Mermaid data-flow diagram from requires/produces declarations. */
   static generateDataFlow<S extends string>(def: FlowDefinition<S>): string {
     return def.dataFlowGraph?.toMermaid() ?? '';

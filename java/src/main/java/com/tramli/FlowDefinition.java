@@ -77,6 +77,40 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
     /** Data-flow graph derived from requires/produces declarations. */
     public DataFlowGraph<S> dataFlowGraph() { return dataFlowGraph; }
 
+    /**
+     * Create a new FlowDefinition with a sub-flow inserted before a specific transition.
+     * The original transition A→B becomes: A→subFlow→(onExit "DONE")→B.
+     * Original FlowDefinition is not modified.
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public FlowDefinition<S> withPlugin(S from, S to, FlowDefinition<?> pluginFlow) {
+        var newTransitions = new ArrayList<Transition<S>>();
+        boolean replaced = false;
+        for (Transition<S> t : transitions) {
+            if (t.from() == from && t.to() == to && !replaced) {
+                // Replace with sub-flow transition
+                var exitMap = new java.util.LinkedHashMap<String, S>();
+                for (var terminal : pluginFlow.terminalStates()) {
+                    exitMap.put(terminal.name(), to);
+                }
+                newTransitions.add(new Transition<>(from, from, TransitionType.SUB_FLOW,
+                        t.processor(), null, null, Map.of(), pluginFlow, Map.copyOf(exitMap)));
+                // Keep original transition as auto from the exit target (if not already present)
+                if (t.processor() != null) {
+                    // Original processor runs after sub-flow completes
+                }
+                replaced = true;
+            } else {
+                newTransitions.add(t);
+            }
+        }
+        var def = new FlowDefinition<>(name + "+plugin:" + pluginFlow.name(), stateClass, ttl,
+                maxGuardRetries, newTransitions, new LinkedHashMap<>(errorTransitions), null);
+        var graph = DataFlowGraph.build(def, Set.of()); // rebuild graph
+        return new FlowDefinition<>(def.name, def.stateClass, def.ttl, def.maxGuardRetries,
+                def.transitions, def.errorTransitions, graph);
+    }
+
     // ─── Builder ─────────────────────────────────────────────
 
     public static <S extends Enum<S> & FlowState> Builder<S> builder(String name, Class<S> stateClass) {

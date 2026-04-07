@@ -159,6 +159,45 @@ export class DataFlowGraph<S extends string> {
     return missing;
   }
 
+  /** Impact analysis: all producers and consumers of a given type. */
+  impactOf(key: FlowKey<unknown>): { producers: NodeInfo<S>[]; consumers: NodeInfo<S>[] } {
+    return { producers: this.producersOf(key), consumers: this.consumersOf(key) };
+  }
+
+  /** Parallelism hints: pairs of processors with no data dependency. */
+  parallelismHints(): [string, string][] {
+    const allNodes = new Set<string>();
+    for (const nodes of this._producers.values()) for (const n of nodes) allNodes.add(n.name);
+    for (const nodes of this._consumers.values()) for (const n of nodes) allNodes.add(n.name);
+    const list = [...allNodes];
+    const hints: [string, string][] = [];
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const aProds = new Set<string>(), bReqs = new Set<string>();
+        const bProds = new Set<string>(), aReqs = new Set<string>();
+        for (const [t, ns] of this._producers) { for (const n of ns) { if (n.name === list[i]) aProds.add(t); if (n.name === list[j]) bProds.add(t); } }
+        for (const [t, ns] of this._consumers) { for (const n of ns) { if (n.name === list[i]) aReqs.add(t); if (n.name === list[j]) bReqs.add(t); } }
+        const aDepB = [...aReqs].some(r => bProds.has(r));
+        const bDepA = [...bReqs].some(r => aProds.has(r));
+        if (!aDepB && !bDepA) hints.push([list[i], list[j]]);
+      }
+    }
+    return hints;
+  }
+
+  /** Structured JSON representation. */
+  toJson(): string {
+    const types = [...this.allTypes()].map(t => {
+      const entry: any = { name: t };
+      const prods = this.producersOf(t as FlowKey<unknown>);
+      if (prods.length) entry.producers = prods.map(p => p.name);
+      const cons = this.consumersOf(t as FlowKey<unknown>);
+      if (cons.length) entry.consumers = cons.map(c => c.name);
+      return entry;
+    });
+    return JSON.stringify({ types, deadData: [...this.deadData()] }, null, 2);
+  }
+
   /** Generate Mermaid data-flow diagram. */
   toMermaid(): string {
     const lines: string[] = ['flowchart LR'];
@@ -177,6 +216,80 @@ export class DataFlowGraph<S extends string> {
       }
     }
     return lines.join('\n') + '\n';
+  }
+
+  /** Test scaffold: for each processor, list required type names. */
+  testScaffold(): Map<string, string[]> {
+    const scaffold = new Map<string, string[]>();
+    for (const [typeName, nodes] of this._consumers) {
+      for (const node of nodes) {
+        if (!scaffold.has(node.name)) scaffold.set(node.name, []);
+        scaffold.get(node.name)!.push(typeName);
+      }
+    }
+    return scaffold;
+  }
+
+  /** Generate data-flow invariant assertions as strings. */
+  generateInvariantAssertions(): string[] {
+    const assertions: string[] = [];
+    for (const [state, types] of this._availableAtState) {
+      assertions.push(`At state ${state}: context must contain [${[...types].sort().join(', ')}]`);
+    }
+    return assertions;
+  }
+
+  // ─── Cross-flow / Versioning utilities ─────────────────────
+
+  /** Cross-flow map: types that one flow produces and another requires. */
+  static crossFlowMap(...graphs: DataFlowGraph<any>[]): string[] {
+    const results: string[] = [];
+    for (let i = 0; i < graphs.length; i++) {
+      for (let j = 0; j < graphs.length; j++) {
+        if (i === j) continue;
+        for (const produced of graphs[i]._allProduced) {
+          if (graphs[j]._allConsumed.has(produced)) {
+            results.push(`${produced}: flow ${i} produces → flow ${j} consumes`);
+          }
+        }
+      }
+    }
+    return results;
+  }
+
+  /** Diff two data-flow graphs. */
+  static diff(before: DataFlowGraph<any>, after: DataFlowGraph<any>): {
+    addedTypes: Set<string>; removedTypes: Set<string>;
+    addedEdges: Set<string>; removedEdges: Set<string>;
+  } {
+    const beforeTypes = before.allTypes(), afterTypes = after.allTypes();
+    const addedTypes = new Set([...afterTypes].filter(t => !beforeTypes.has(t)));
+    const removedTypes = new Set([...beforeTypes].filter(t => !afterTypes.has(t)));
+    const beforeEdges = DataFlowGraph.collectEdges(before), afterEdges = DataFlowGraph.collectEdges(after);
+    const addedEdges = new Set([...afterEdges].filter(e => !beforeEdges.has(e)));
+    const removedEdges = new Set([...beforeEdges].filter(e => !afterEdges.has(e)));
+    return { addedTypes, removedTypes, addedEdges, removedEdges };
+  }
+
+  private static collectEdges(graph: DataFlowGraph<any>): Set<string> {
+    const edges = new Set<string>();
+    for (const [t, ns] of graph._producers) for (const n of ns) edges.add(`${n.name} --produces--> ${t}`);
+    for (const [t, ns] of graph._consumers) for (const n of ns) edges.add(`${t} --requires--> ${n.name}`);
+    return edges;
+  }
+
+  /** Version compatibility: check if v1 instances can resume on v2 definition. */
+  static versionCompatibility<S extends string>(before: DataFlowGraph<S>, after: DataFlowGraph<S>): string[] {
+    const issues: string[] = [];
+    for (const [state, beforeAvail] of before._availableAtState) {
+      const afterAvail = after._availableAtState.get(state) ?? new Set();
+      for (const type of afterAvail) {
+        if (!beforeAvail.has(type)) {
+          issues.push(`State ${state}: v2 expects ${type} but v1 instances may not have it`);
+        }
+      }
+    }
+    return issues;
   }
 
   // ─── Builder ─────────────────────────────────────────────

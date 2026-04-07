@@ -85,6 +85,29 @@ public final class FlowInstance<S extends Enum<S> & FlowState> {
     }
 
     /**
+     * Data types currently available in context (based on data-flow graph for current state).
+     */
+    public java.util.Set<Class<?>> availableData() {
+        return definition.dataFlowGraph() != null
+                ? definition.dataFlowGraph().availableAt(currentState)
+                : java.util.Set.of();
+    }
+
+    /**
+     * Data types that the next transition requires but are not yet in context.
+     */
+    public java.util.Set<Class<?>> missingFor() {
+        if (definition.dataFlowGraph() == null) return java.util.Set.of();
+        var available = definition.dataFlowGraph().availableAt(currentState);
+        var missing = new java.util.LinkedHashSet<Class<?>>();
+        for (var t : definition.transitionsFrom(currentState)) {
+            if (t.guard() != null) for (var r : t.guard().requires()) { if (!context.has(r)) missing.add(r); }
+            if (t.processor() != null) for (var r : t.processor().requires()) { if (!context.has(r)) missing.add(r); }
+        }
+        return missing;
+    }
+
+    /**
      * Types required by the next external transition (including in active sub-flows).
      * Empty if not waiting at an external transition.
      */

@@ -76,6 +76,29 @@ public final class MermaidGenerator {
         };
     }
 
+    /**
+     * Generate Mermaid diagram highlighting external transitions and their data contracts.
+     * Shows what data clients must send and what they receive.
+     */
+    public static <S extends Enum<S> & FlowState> String generateExternalContract(FlowDefinition<S> definition) {
+        var sb = new StringBuilder();
+        sb.append("flowchart LR\n");
+        for (Transition<S> t : definition.transitions()) {
+            if (!t.isExternal()) continue;
+            sb.append("    subgraph ").append(t.from().name()).append("_to_").append(t.to().name()).append("\n");
+            sb.append("        direction TB\n");
+            if (t.guard() != null) {
+                sb.append("        ").append(t.guard().name()).append("{\"[").append(t.guard().name()).append("]\"}\n");
+                for (var req : t.guard().requires())
+                    sb.append("        ").append(req.getSimpleName()).append(" -->|client sends| ").append(t.guard().name()).append("\n");
+                for (var prod : t.guard().produces())
+                    sb.append("        ").append(t.guard().name()).append(" -->|returns| ").append(prod.getSimpleName()).append("\n");
+            }
+            sb.append("    end\n");
+        }
+        return sb.toString();
+    }
+
     /** Generate Mermaid data-flow diagram from requires/produces declarations. */
     public static <S extends Enum<S> & FlowState> String generateDataFlow(FlowDefinition<S> definition) {
         return definition.dataFlowGraph().toMermaid();
