@@ -30,13 +30,13 @@ impl FlowContext {
 
     pub fn get<T: CloneAny + 'static>(&self) -> Result<&T, FlowError> {
         self.attrs.get(&TypeId::of::<T>())
-            .and_then(|v| v.as_any().downcast_ref::<T>())
+            .and_then(|v| (**v).as_any().downcast_ref::<T>())
             .ok_or_else(|| FlowError::missing_context(std::any::type_name::<T>()))
     }
 
     pub fn find<T: CloneAny + 'static>(&self) -> Option<&T> {
         self.attrs.get(&TypeId::of::<T>())
-            .and_then(|v| v.as_any().downcast_ref::<T>())
+            .and_then(|v| (**v).as_any().downcast_ref::<T>())
     }
 
     pub fn has<T: 'static>(&self) -> bool {

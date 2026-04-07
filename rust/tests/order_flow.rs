@@ -112,7 +112,7 @@ fn processor_throws_routes_to_error() {
     impl StateProcessor<OrderState> for FailProc {
         fn name(&self) -> &str { "FailProc" }
         fn requires(&self) -> Vec<TypeId> { requires![OrderRequest] }
-        fn produces(&self) -> Vec<TypeId> { vec![] }
+        fn produces(&self) -> Vec<TypeId> { requires![PaymentIntent] }
         fn process(&self, _ctx: &mut FlowContext) -> Result<(), FlowError> {
             Err(FlowError::new("PROC_ERROR", "boom"))
         }
