@@ -138,6 +138,8 @@ export class Builder<S extends string> {
     this.checkAutoExternalConflict(def, errors);
     this.checkTerminalNoOutgoing(def, errors);
     this.checkSubFlowExitCompleteness(def, errors);
+    this.checkSubFlowNestingDepth(def, errors, 0);
+    this.checkSubFlowCircularRef(def, errors, new Set());
 
     if (errors.length > 0) {
       throw new FlowError('INVALID_FLOW_DEFINITION',
@@ -320,6 +322,31 @@ export class Builder<S extends string> {
     for (const t of def.transitions) {
       if (def.stateConfig[t.from].terminal && t.type !== 'sub_flow') {
         errors.push(`Terminal state ${t.from} has an outgoing transition to ${t.to}`);
+      }
+    }
+  }
+
+  private checkSubFlowNestingDepth(def: FlowDefinition<any>, errors: string[], depth: number): void {
+    if (depth > 3) {
+      errors.push(`SubFlow nesting depth exceeds maximum of 3 (flow: ${def.name})`);
+      return;
+    }
+    for (const t of def.transitions) {
+      if (t.type === 'sub_flow' && t.subFlowDefinition) {
+        this.checkSubFlowNestingDepth(t.subFlowDefinition, errors, depth + 1);
+      }
+    }
+  }
+
+  private checkSubFlowCircularRef(def: FlowDefinition<any>, errors: string[], visited: Set<string>): void {
+    if (visited.has(def.name)) {
+      errors.push(`Circular sub-flow reference detected: ${[...visited].join(' -> ')} -> ${def.name}`);
+      return;
+    }
+    visited.add(def.name);
+    for (const t of def.transitions) {
+      if (t.type === 'sub_flow' && t.subFlowDefinition) {
+        this.checkSubFlowCircularRef(t.subFlowDefinition, errors, new Set(visited));
       }
     }
   }

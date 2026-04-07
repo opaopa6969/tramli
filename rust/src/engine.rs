@@ -143,7 +143,11 @@ impl<S: FlowState> FlowEngine<S> {
                                 flow.transition_to(target);
                                 Some((from_dbg, format!("{:?}", target),
                                     format!("subFlow:{}/{}", config.runner.name(), exit_name), false))
-                            } else { break }
+                            } else {
+                                // Error bubbling: no exit mapping → parent error
+                                Self::handle_error(flow, current, &def);
+                                Some((format!("{:?}", current), format!("{:?}", flow.current_state()), "error".to_string(), true))
+                            }
                         } else { break } // sub-flow stopped at external
                     } else { break }
                 } else {

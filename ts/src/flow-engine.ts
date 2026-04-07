@@ -182,6 +182,9 @@ export class FlowEngine {
           `subFlow:${subDef.name}/${subFlow.exitState}`, parentFlow.context);
         return 1;
       }
+      // Error bubbling: no exit mapping → fall back to parent's error transitions
+      this.handleError(parentFlow, parentFlow.currentState);
+      return 1;
     }
     return 0; // sub-flow stopped at external
   }

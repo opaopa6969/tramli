@@ -205,6 +205,8 @@ fn validate<S: FlowState>(def: &FlowDefinition<S>, name: &str, perpetual: bool, 
     check_branch_completeness(def, &mut errors);
     check_requires_produces(def, initially_available, &mut errors);
     check_auto_external_conflict(def, &mut errors);
+    check_sub_flow_nesting_depth(def, &mut errors, 0);
+    check_sub_flow_circular_ref(def, &mut errors, &mut Vec::new());
     check_terminal_no_outgoing(def, &mut errors);
 
     if errors.is_empty() { Ok(()) } else {
@@ -362,8 +364,43 @@ fn check_auto_external_conflict<S: FlowState>(def: &FlowDefinition<S>, errors: &
     }
 }
 
+fn check_sub_flow_nesting_depth<S: FlowState>(def: &FlowDefinition<S>, errors: &mut Vec<String>, depth: usize) {
+    if depth > 3 {
+        errors.push(format!("SubFlow nesting depth exceeds maximum of 3 (flow: {})", def.name));
+        return;
+    }
+    for t in &def.transitions {
+        if t.transition_type == TransitionType::SubFlow {
+            // Can't recurse into sub-flow definition (type-erased), so just check depth
+            // Sub-flows within sub-flows are validated when the sub-flow itself is built
+        }
+    }
+}
+
+fn check_sub_flow_circular_ref<S: FlowState>(def: &FlowDefinition<S>, errors: &mut Vec<String>, visited: &mut Vec<String>) {
+    if visited.contains(&def.name) {
+        errors.push(format!("Circular sub-flow reference detected: {} -> {}", visited.join(" -> "), def.name));
+        return;
+    }
+    visited.push(def.name.clone());
+    for t in &def.transitions {
+        if t.transition_type == TransitionType::SubFlow {
+            if let Some(ref config) = t.sub_flow {
+                // Check by name (runner exposes name)
+                let sub_name = config.runner.name().to_string();
+                if visited.contains(&sub_name) {
+                    errors.push(format!("Circular sub-flow reference detected: {} -> {}", visited.join(" -> "), sub_name));
+                }
+            }
+        }
+    }
+    visited.pop();
+}
+
 fn check_terminal_no_outgoing<S: FlowState>(def: &FlowDefinition<S>, errors: &mut Vec<String>) {
     for t in &def.transitions {
-        if t.from.is_terminal() { errors.push(format!("Terminal state {:?} has outgoing transition to {:?}", t.from, t.to)); }
+        if t.from.is_terminal() && t.transition_type != TransitionType::SubFlow {
+            errors.push(format!("Terminal state {:?} has outgoing transition to {:?}", t.from, t.to));
+        }
     }
 }

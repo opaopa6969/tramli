@@ -231,6 +231,8 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
             checkRequiresProduces(def, errors);
             checkAutoExternalConflict(def, errors);
             checkSubFlowExitCompleteness(def, errors);
+            checkSubFlowNestingDepth(def, errors, 0);
+            checkSubFlowCircularRef(def, errors, new java.util.LinkedHashSet<>());
             checkTerminalNoOutgoing(def, errors);
 
             if (!errors.isEmpty()) {
@@ -436,6 +438,30 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
                                 " has terminal state " + terminal.name() +
                                 " with no onExit mapping");
                     }
+                }
+            }
+        }
+
+        private void checkSubFlowNestingDepth(FlowDefinition<?> def, List<String> errors, int currentDepth) {
+            if (currentDepth > 3) {
+                errors.add("SubFlow nesting depth exceeds maximum of 3 (flow: " + def.name() + ")");
+                return;
+            }
+            for (var t : def.transitions()) {
+                if (t.isSubFlow() && t.subFlowDefinition() != null) {
+                    checkSubFlowNestingDepth(t.subFlowDefinition(), errors, currentDepth + 1);
+                }
+            }
+        }
+
+        private void checkSubFlowCircularRef(FlowDefinition<?> def, List<String> errors, java.util.LinkedHashSet<String> visited) {
+            if (!visited.add(def.name())) {
+                errors.add("Circular sub-flow reference detected: " + String.join(" -> ", visited) + " -> " + def.name());
+                return;
+            }
+            for (var t : def.transitions()) {
+                if (t.isSubFlow() && t.subFlowDefinition() != null) {
+                    checkSubFlowCircularRef(t.subFlowDefinition(), errors, new java.util.LinkedHashSet<>(visited));
                 }
             }
         }

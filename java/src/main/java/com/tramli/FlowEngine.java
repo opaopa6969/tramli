@@ -289,6 +289,10 @@ public final class FlowEngine {
                         "subFlow:" + subDef.name() + "/" + subFlow.exitState(), parentFlow.context());
                 return 1;
             }
+            // Error bubbling: if no exit mapping found (e.g. sub-flow error),
+            // fall back to parent's error transitions
+            handleError(parentFlow, parentFlow.currentState());
+            return 1;
         }
         // Sub-flow stopped at external — parent also stops
         return 0;
