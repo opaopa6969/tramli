@@ -15,3 +15,4 @@
 | [DD-011](DD-011-volta-gateway-tramli-scope.md) | volta-gateway での tramli 適用範囲 | [rust-r2](../sessions/2026-04-07-tramli-rust-r2-volta-patterns.md) | 2026-04-07 |
 | [DD-012](DD-012-rust-sync-engine.md) | Rust 版は完全 sync（DD-010 async 部分を撤回） | [async-diagnosis](../sessions/2026-04-07-tramli-rust-async-diagnosis.md) | 2026-04-07 |
 | [DD-013](DD-013-all-languages-sync-core.md) | ⚠️ draft: 全言語 sync コアに統一（DD-006 撤回検討） | — | 2026-04-07 |
+| [DD-014](DD-014-data-flow-derived-not-defined.md) | draft: data-flow は定義ではなく導出 | — | 2026-04-07 |
