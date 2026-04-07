@@ -151,6 +151,32 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
             public BranchBuilder branch(BranchProcessor branch) {
                 return new BranchBuilder(from, branch);
             }
+
+            public SubFlowBuilder subFlow(FlowDefinition<?> subFlowDef) {
+                return new SubFlowBuilder(from, subFlowDef);
+            }
+        }
+
+        public final class SubFlowBuilder {
+            private final S from;
+            private final FlowDefinition<?> subFlowDef;
+            private final java.util.LinkedHashMap<String, S> exitMap = new java.util.LinkedHashMap<>();
+
+            private SubFlowBuilder(S from, FlowDefinition<?> subFlowDef) {
+                this.from = from;
+                this.subFlowDef = subFlowDef;
+            }
+
+            public SubFlowBuilder onExit(String terminalName, S parentState) {
+                exitMap.put(terminalName, parentState);
+                return this;
+            }
+
+            public Builder<S> endSubFlow() {
+                transitions.add(new Transition<>(from, from, TransitionType.SUB_FLOW,
+                        null, null, null, Map.of(), subFlowDef, Map.copyOf(exitMap)));
+                return Builder.this;
+            }
         }
 
         public final class BranchBuilder {
@@ -204,6 +230,7 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
             checkBranchCompleteness(def, errors);
             checkRequiresProduces(def, errors);
             checkAutoExternalConflict(def, errors);
+            checkSubFlowExitCompleteness(def, errors);
             checkTerminalNoOutgoing(def, errors);
 
             if (!errors.isEmpty()) {
@@ -222,6 +249,12 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
             while (!queue.isEmpty()) {
                 S current = queue.poll();
                 for (Transition<S> t : def.transitionsFrom(current)) {
+                    if (t.isSubFlow()) {
+                        for (S target : t.exitMappings().values()) {
+                            if (visited.add(target)) queue.add(target);
+                        }
+                        continue;
+                    }
                     if (visited.add(t.to())) queue.add(t.to());
                 }
                 S errTarget = def.errorTransitions.get(current);
@@ -246,6 +279,13 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
             if (state.isTerminal()) return true;
             if (!visited.add(state)) return false;
             for (Transition<S> t : def.transitionsFrom(state)) {
+                // For sub-flow transitions, check exit mappings as reachable targets
+                if (t.isSubFlow()) {
+                    for (S target : t.exitMappings().values()) {
+                        if (canReachTerminal(def, target, visited)) return true;
+                    }
+                    continue;
+                }
                 if (canReachTerminal(def, t.to(), visited)) return true;
             }
             S errTarget = def.errorTransitions.get(state);
@@ -380,8 +420,23 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
 
         private void checkTerminalNoOutgoing(FlowDefinition<S> def, List<String> errors) {
             for (Transition<S> t : def.transitions) {
-                if (t.from().isTerminal())
+                if (t.from().isTerminal() && !t.isSubFlow())
                     errors.add("Terminal state " + t.from().name() + " has an outgoing transition to " + t.to().name());
+            }
+        }
+
+        private void checkSubFlowExitCompleteness(FlowDefinition<S> def, List<String> errors) {
+            for (Transition<S> t : def.transitions) {
+                if (!t.isSubFlow()) continue;
+                var subDef = t.subFlowDefinition();
+                if (subDef == null) continue;
+                for (var terminal : subDef.terminalStates()) {
+                    if (!t.exitMappings().containsKey(terminal.name())) {
+                        errors.add("SubFlow '" + subDef.name() + "' at " + t.from().name() +
+                                " has terminal state " + terminal.name() +
+                                " with no onExit mapping");
+                    }
+                }
             }
         }
     }

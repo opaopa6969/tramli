@@ -16,6 +16,7 @@ public final class FlowInstance<S extends Enum<S> & FlowState> {
     private final Instant createdAt;
     private final Instant expiresAt;
     private String exitState;
+    private FlowInstance<?> activeSubFlow;
 
     public FlowInstance(String id, String sessionId, FlowDefinition<S> definition,
                         FlowContext context, S currentState, Instant expiresAt) {
@@ -65,8 +66,12 @@ public final class FlowInstance<S extends Enum<S> & FlowState> {
     public String exitState() { return exitState; }
     public boolean isCompleted() { return exitState != null; }
 
+    /** Active sub-flow instance, or null if not in a sub-flow. */
+    public FlowInstance<?> activeSubFlow() { return activeSubFlow; }
+
     void transitionTo(S newState) { this.currentState = newState; }
     void incrementGuardFailure() { this.guardFailureCount++; }
     void complete(String exitState) { this.exitState = exitState; }
     void setVersion(int version) { this.version = version; }
+    void setActiveSubFlow(FlowInstance<?> sub) { this.activeSubFlow = sub; }
 }

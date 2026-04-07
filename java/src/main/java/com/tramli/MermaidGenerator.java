@@ -50,6 +50,7 @@ public final class MermaidGenerator {
             case AUTO -> t.processor() != null ? t.processor().name() : "";
             case EXTERNAL -> t.guard() != null ? "[" + t.guard().name() + "]" : "";
             case BRANCH -> t.branch() != null ? t.branch().name() : "";
+            case SUB_FLOW -> t.subFlowDefinition() != null ? "{" + t.subFlowDefinition().name() + "}" : "";
         };
     }
 

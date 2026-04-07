@@ -15,7 +15,7 @@ pub trait FlowState: Clone + Copy + Eq + Hash + Debug + Send + Sync + 'static {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TransitionType { Auto, External, Branch }
+pub enum TransitionType { Auto, External, Branch, SubFlow }
 
 /// Guard output.
 pub enum GuardOutput {
@@ -56,4 +56,5 @@ pub struct Transition<S: FlowState> {
     pub guard: Option<Box<dyn TransitionGuard<S>>>,
     pub branch: Option<Box<dyn BranchProcessor<S>>>,
     pub branch_targets: HashMap<String, S>,
+    pub sub_flow: Option<crate::sub_flow::SubFlowConfig<S>>,
 }

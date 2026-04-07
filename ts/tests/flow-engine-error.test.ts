@@ -207,6 +207,90 @@ describe('FlowEngineError', () => {
 
   // ─── Error Path Data-Flow Analysis ──────────────────
 
+  // ─── SubFlow Tests ──────────────────────────────────
+
+  it('basic subFlow — auto-chain through sub-flow', async () => {
+    type SubStep = 'S_INIT' | 'S_PROCESS' | 'S_DONE';
+    const subConfig: Record<SubStep, StateConfig> = {
+      S_INIT: { terminal: false, initial: true },
+      S_PROCESS: { terminal: false, initial: false },
+      S_DONE: { terminal: true, initial: false },
+    };
+    const SubOutput = flowKey<{ v: string }>('SubOutput');
+
+    const subDef = Tramli.define<SubStep>('sub', subConfig)
+      .initiallyAvailable(Input)
+      .from('S_INIT').auto('S_PROCESS', ok('SubP1', [Input], [SubOutput]))
+      .from('S_PROCESS').auto('S_DONE', ok('SubP2', [SubOutput], []))
+      .build();
+
+    const mainDef = Tramli.define<TwoStep>('main', twoStepConfig)
+      .initiallyAvailable(Input)
+      .from('INIT').subFlow(subDef).onExit('S_DONE', 'DONE').endSubFlow()
+      .onAnyError('ERROR')
+      .build();
+
+    const engine = Tramli.engine(new InMemoryFlowStore());
+    const flow = await engine.startFlow(mainDef, 's1', new Map([[Input as string, { value: 'x' }]]));
+    expect(flow.currentState).toBe('DONE');
+    expect(flow.isCompleted).toBe(true);
+  });
+
+  it('subFlow with external — stops and resumes', async () => {
+    type SubStep = 'S_INIT' | 'S_WAIT' | 'S_DONE';
+    const subConfig: Record<SubStep, StateConfig> = {
+      S_INIT: { terminal: false, initial: true },
+      S_WAIT: { terminal: false, initial: false },
+      S_DONE: { terminal: true, initial: false },
+    };
+    const SubOutput = flowKey<{ v: string }>('SubOutput');
+
+    const subDef = Tramli.define<SubStep>('sub-ext', subConfig)
+      .initiallyAvailable(Input)
+      .from('S_INIT').auto('S_WAIT', ok('SubP1', [Input], [SubOutput]))
+      .from('S_WAIT').external('S_DONE', {
+        name: 'SubGuard', requires: [SubOutput], produces: [], maxRetries: 3,
+        validate(): GuardOutput { return { type: 'accepted' }; },
+      } as TransitionGuard<SubStep>)
+      .build();
+
+    const mainDef = Tramli.define<TwoStep>('main-ext', twoStepConfig)
+      .initiallyAvailable(Input)
+      .from('INIT').subFlow(subDef).onExit('S_DONE', 'DONE').endSubFlow()
+      .onAnyError('ERROR')
+      .build();
+
+    const engine = Tramli.engine(new InMemoryFlowStore());
+    const flow = await engine.startFlow(mainDef, 's1', new Map([[Input as string, { value: 'x' }]]));
+    expect(flow.currentState).toBe('INIT');
+    expect(flow.activeSubFlow).not.toBeNull();
+
+    const resumed = await engine.resumeAndExecute(flow.id, mainDef);
+    expect(resumed.currentState).toBe('DONE');
+    expect(resumed.isCompleted).toBe(true);
+    expect(resumed.activeSubFlow).toBeNull();
+  });
+
+  it('subFlow exit missing — build fails', () => {
+    type SubSimple = 'SS_INIT' | 'SS_DONE';
+    const ssConfig: Record<SubSimple, StateConfig> = {
+      SS_INIT: { terminal: false, initial: true },
+      SS_DONE: { terminal: true, initial: false },
+    };
+    const subDef = Tramli.define<SubSimple>('sub-inc', ssConfig)
+      .from('SS_INIT').auto('SS_DONE', ok('P', [], []))
+      .build();
+
+    expect(() =>
+      Tramli.define<TwoStep>('bad', twoStepConfig)
+        .from('INIT').subFlow(subDef).endSubFlow()
+        .onAnyError('ERROR')
+        .build()
+    ).toThrow(/onExit mapping/);
+  });
+
+  // ─── Error Path Data-Flow Analysis ──────────────────
+
   it('error path requires unsatisfied — build fails', () => {
     type ErrPath = 'START' | 'MID' | 'ERR' | 'DONE';
     const errConfig: Record<ErrPath, StateConfig> = {

@@ -53,6 +53,7 @@ impl MermaidGenerator {
             TransitionType::Auto => t.processor.as_ref().map(|p| p.name().to_string()).unwrap_or_default(),
             TransitionType::External => t.guard.as_ref().map(|g| format!("[{}]", g.name())).unwrap_or_default(),
             TransitionType::Branch => t.branch.as_ref().map(|b| b.name().to_string()).unwrap_or_default(),
+            TransitionType::SubFlow => t.sub_flow.as_ref().map(|s| format!("{{{}}}", s.runner.name())).unwrap_or_default(),
         }
     }
 }

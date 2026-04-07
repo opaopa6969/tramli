@@ -241,6 +241,103 @@ class FlowEngineErrorTest {
         assertTrue(ex.getMessage().contains("auto/branch and external"));
     }
 
+    // ─── SubFlow Tests ────────────────────────────────────────
+
+    enum SubStep implements FlowState {
+        S_INIT(false, true), S_PROCESS(false, false), S_DONE(true, false);
+        private final boolean terminal, initial;
+        SubStep(boolean t, boolean i) { terminal = t; initial = i; }
+        @Override public boolean isTerminal() { return terminal; }
+        @Override public boolean isInitial() { return initial; }
+    }
+
+    record SubInput(String v) {}
+    record SubOutput(String v) {}
+
+    @Test
+    void basicSubFlow_autoChainThroughSubFlow() {
+        // Sub-flow: S_INIT → auto → S_PROCESS → auto → S_DONE
+        var subDef = Tramli.define("sub", SubStep.class)
+                .initiallyAvailable(Input.class)
+                .from(SubStep.S_INIT).auto(SubStep.S_PROCESS, ok("SubP1", Set.of(Input.class), Set.of(SubOutput.class)))
+                .from(SubStep.S_PROCESS).auto(SubStep.S_DONE, ok("SubP2", Set.of(SubOutput.class), Set.of()))
+                .build();
+
+        // Main: INIT → subFlow(sub) → onExit("S_DONE", DONE)
+        var mainDef = Tramli.define("main", TwoStep.class)
+                .initiallyAvailable(Input.class)
+                .from(TwoStep.INIT).subFlow(subDef).onExit("S_DONE", TwoStep.DONE).endSubFlow()
+                .onAnyError(TwoStep.ERROR)
+                .build();
+
+        var engine = new FlowEngine(new InMemoryFlowStore());
+        var flow = engine.startFlow(mainDef, "s1", Map.of(Input.class, new Input("x")));
+
+        // Should auto-chain through sub-flow and reach DONE
+        assertEquals(TwoStep.DONE, flow.currentState());
+        assertTrue(flow.isCompleted());
+    }
+
+    @Test
+    void subFlowWithExternal_stopsAndResumes() {
+        // Sub-flow: S_INIT → auto → S_PROCESS → external(S_DONE, guard)
+        var subDef = Tramli.define("sub-ext", SubStep.class)
+                .initiallyAvailable(Input.class)
+                .from(SubStep.S_INIT).auto(SubStep.S_PROCESS, ok("SubP1", Set.of(Input.class), Set.of(SubOutput.class)))
+                .from(SubStep.S_PROCESS).external(SubStep.S_DONE, new TransitionGuard() {
+                    @Override public String name() { return "SubGuard"; }
+                    @Override public Set<Class<?>> requires() { return Set.of(SubOutput.class); }
+                    @Override public Set<Class<?>> produces() { return Set.of(); }
+                    @Override public int maxRetries() { return 3; }
+                    @Override public GuardOutput validate(FlowContext ctx) {
+                        return new GuardOutput.Accepted();
+                    }
+                })
+                .build();
+
+        var mainDef = Tramli.define("main-ext", TwoStep.class)
+                .initiallyAvailable(Input.class)
+                .from(TwoStep.INIT).subFlow(subDef).onExit("S_DONE", TwoStep.DONE).endSubFlow()
+                .onAnyError(TwoStep.ERROR)
+                .build();
+
+        var engine = new FlowEngine(new InMemoryFlowStore());
+        var flow = engine.startFlow(mainDef, "s1", Map.of(Input.class, new Input("x")));
+
+        // Should stop at sub-flow's external
+        assertEquals(TwoStep.INIT, flow.currentState()); // parent still at INIT
+        assertNotNull(flow.activeSubFlow()); // sub-flow is active
+        assertFalse(flow.isCompleted());
+
+        // Resume — guard accepts → sub-flow completes → parent transitions to DONE
+        var resumed = engine.resumeAndExecute(flow.id(), mainDef);
+        assertEquals(TwoStep.DONE, resumed.currentState());
+        assertTrue(resumed.isCompleted());
+        assertNull(resumed.activeSubFlow());
+    }
+
+    enum SubSimple implements FlowState {
+        SS_INIT(false, true), SS_DONE(true, false);
+        private final boolean terminal, initial;
+        SubSimple(boolean t, boolean i) { terminal = t; initial = i; }
+        @Override public boolean isTerminal() { return terminal; }
+        @Override public boolean isInitial() { return initial; }
+    }
+
+    @Test
+    void subFlowExitMissing_buildFails() {
+        var subDef = Tramli.define("sub-incomplete", SubSimple.class)
+                .from(SubSimple.SS_INIT).auto(SubSimple.SS_DONE, ok("P", Set.of(), Set.of()))
+                .build();
+
+        // Missing onExit for "SS_DONE"
+        assertThrows(FlowException.class, () ->
+                Tramli.define("bad", TwoStep.class)
+                        .from(TwoStep.INIT).subFlow(subDef).endSubFlow() // no onExit!
+                        .onAnyError(TwoStep.ERROR)
+                        .build());
+    }
+
     // ─── Error Path Data-Flow Analysis ──────────────────────
 
     enum ErrorPath implements FlowState {

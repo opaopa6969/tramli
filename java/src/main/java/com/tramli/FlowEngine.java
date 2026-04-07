@@ -70,6 +70,11 @@ public final class FlowEngine {
             return flow;
         }
 
+        // If actively in a sub-flow, delegate resume to it
+        if (flow.activeSubFlow() != null) {
+            return resumeSubFlow(flow, definition, externalData);
+        }
+
         S currentState = flow.currentState();
         var externalOpt = definition.externalFrom(currentState);
         if (externalOpt.isEmpty()) {
@@ -136,6 +141,17 @@ public final class FlowEngine {
             }
 
             List<Transition<S>> transitions = flow.definition().transitionsFrom(current);
+
+            // Check for sub-flow transition first
+            Transition<S> subFlowT = transitions.stream()
+                    .filter(Transition::isSubFlow).findFirst().orElse(null);
+            if (subFlowT != null) {
+                int advanced = executeSubFlow(flow, subFlowT, depth);
+                depth += advanced;
+                if (advanced == 0) break; // sub-flow stopped at external — parent stops too
+                continue;
+            }
+
             Transition<S> autoOrBranch = transitions.stream()
                     .filter(t -> t.isAuto() || t.isBranch())
                     .findFirst().orElse(null);
@@ -175,6 +191,107 @@ public final class FlowEngine {
             depth++;
         }
         if (depth >= MAX_CHAIN_DEPTH) throw FlowException.maxChainDepth();
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private <S extends Enum<S> & FlowState> FlowInstance<S> resumeSubFlow(
+            FlowInstance<S> parentFlow, FlowDefinition<S> parentDef, Map<Class<?>, Object> externalData) {
+
+        FlowInstance subFlow = parentFlow.activeSubFlow();
+        FlowDefinition subDef = subFlow.definition();
+
+        for (var entry : externalData.entrySet()) {
+            putRaw(parentFlow.context(), entry.getKey(), entry.getValue());
+        }
+
+        Enum subCurrent = (Enum) subFlow.currentState();
+        var externalOpt = subDef.externalFrom((Enum & FlowState) subCurrent);
+        if (externalOpt.isEmpty()) {
+            throw new FlowException("INVALID_TRANSITION",
+                    "No external transition from sub-flow state " + subCurrent.name());
+        }
+
+        Transition transition = (Transition) externalOpt.get();
+        TransitionGuard guard = transition.guard();
+        FlowState subTo = (FlowState) transition.to();
+
+        if (guard != null) {
+            var output = guard.validate(parentFlow.context());
+            if (output instanceof TransitionGuard.GuardOutput.Accepted accepted) {
+                for (var entry : accepted.data().entrySet()) {
+                    putRaw(parentFlow.context(), entry.getKey(), entry.getValue());
+                }
+                subFlow.transitionTo(transition.to());
+                store.recordTransition(parentFlow.id(), (FlowState) subCurrent, subTo,
+                        guard.name(), parentFlow.context());
+            } else if (output instanceof TransitionGuard.GuardOutput.Rejected) {
+                subFlow.incrementGuardFailure();
+                if (subFlow.guardFailureCount() >= subDef.maxGuardRetries()) {
+                    subFlow.complete("ERROR");
+                }
+                store.save(parentFlow);
+                return parentFlow;
+            } else {
+                parentFlow.complete("EXPIRED");
+                store.save(parentFlow);
+                return parentFlow;
+            }
+        } else {
+            subFlow.transitionTo(transition.to());
+        }
+
+        executeAutoChain(subFlow);
+
+        if (subFlow.isCompleted()) {
+            parentFlow.setActiveSubFlow(null);
+            Transition subFlowT = parentDef.transitionsFrom(parentFlow.currentState()).stream()
+                    .filter(Transition::isSubFlow).findFirst().orElse(null);
+            if (subFlowT != null) {
+                S target = (S) subFlowT.exitMappings().get(subFlow.exitState());
+                if (target != null) {
+                    S from = parentFlow.currentState();
+                    parentFlow.transitionTo(target);
+                    store.recordTransition(parentFlow.id(), from, target,
+                            "subFlow:" + subDef.name() + "/" + subFlow.exitState(), parentFlow.context());
+                    executeAutoChain(parentFlow);
+                }
+            }
+        }
+
+        store.save(parentFlow);
+        return parentFlow;
+    }
+
+    @SuppressWarnings("unchecked")
+    private <S extends Enum<S> & FlowState> int executeSubFlow(
+            FlowInstance<S> parentFlow, Transition<S> subFlowTransition, int currentDepth) {
+
+        FlowDefinition<?> subDef = subFlowTransition.subFlowDefinition();
+        Map<String, S> exitMappings = subFlowTransition.exitMappings();
+
+        // Create sub-flow instance sharing the parent's context
+        var subInitial = subDef.initialState();
+        var subFlow = new FlowInstance(parentFlow.id(), parentFlow.sessionId(),
+                subDef, parentFlow.context(), subInitial, parentFlow.expiresAt());
+        parentFlow.setActiveSubFlow(subFlow);
+
+        // Execute sub-flow auto-chain (recursive)
+        executeAutoChain((FlowInstance) subFlow);
+
+        // If sub-flow completed (reached terminal), map exit to parent state
+        if (subFlow.isCompleted()) {
+            parentFlow.setActiveSubFlow(null);
+            S parentTarget = exitMappings.get(subFlow.exitState());
+            if (parentTarget != null) {
+                S from = parentFlow.currentState();
+                parentFlow.transitionTo(parentTarget);
+                store.recordTransition(parentFlow.id(), from, parentTarget,
+                        "subFlow:" + subDef.name() + "/" + subFlow.exitState(), parentFlow.context());
+                return 1;
+            }
+        }
+        // Sub-flow stopped at external — parent also stops
+        return 0;
     }
 
     private <S extends Enum<S> & FlowState> void handleError(FlowInstance<S> flow, S fromState) {

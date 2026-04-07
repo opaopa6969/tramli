@@ -11,7 +11,7 @@ export type GuardOutput =
   | { type: 'expired' };
 
 /** Transition types. */
-export type TransitionType = 'auto' | 'external' | 'branch';
+export type TransitionType = 'auto' | 'external' | 'branch' | 'sub_flow';
 
 /** A single transition in the flow definition. */
 export interface Transition<S extends string> {
@@ -22,6 +22,8 @@ export interface Transition<S extends string> {
   guard?: TransitionGuard<S>;
   branch?: BranchProcessor<S>;
   branchTargets: Map<string, S>;
+  subFlowDefinition?: import('./flow-definition.js').FlowDefinition<any>;
+  exitMappings?: Map<string, S>;
 }
 
 /**

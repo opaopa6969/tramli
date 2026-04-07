@@ -137,6 +137,7 @@ export class Builder<S extends string> {
     this.checkRequiresProduces(def, errors);
     this.checkAutoExternalConflict(def, errors);
     this.checkTerminalNoOutgoing(def, errors);
+    this.checkSubFlowExitCompleteness(def, errors);
 
     if (errors.length > 0) {
       throw new FlowError('INVALID_FLOW_DEFINITION',
@@ -152,6 +153,12 @@ export class Builder<S extends string> {
     while (queue.length > 0) {
       const current = queue.shift()!;
       for (const t of def.transitionsFrom(current)) {
+        if (t.type === 'sub_flow' && t.exitMappings) {
+          for (const target of t.exitMappings.values()) {
+            if (!visited.has(target)) { visited.add(target); queue.push(target); }
+          }
+          continue;
+        }
         if (!visited.has(t.to)) { visited.add(t.to); queue.push(t.to); }
       }
       const errTarget = def.errorTransitions.get(current);
@@ -177,6 +184,12 @@ export class Builder<S extends string> {
     if (visited.has(state)) return false;
     visited.add(state);
     for (const t of def.transitionsFrom(state)) {
+      if (t.type === 'sub_flow' && t.exitMappings) {
+        for (const target of t.exitMappings.values()) {
+          if (this.canReachTerminal(def, target, visited)) return true;
+        }
+        continue;
+      }
       if (this.canReachTerminal(def, t.to, visited)) return true;
     }
     const errTarget = def.errorTransitions.get(state);
@@ -305,8 +318,20 @@ export class Builder<S extends string> {
 
   private checkTerminalNoOutgoing(def: FlowDefinition<S>, errors: string[]): void {
     for (const t of def.transitions) {
-      if (def.stateConfig[t.from].terminal) {
+      if (def.stateConfig[t.from].terminal && t.type !== 'sub_flow') {
         errors.push(`Terminal state ${t.from} has an outgoing transition to ${t.to}`);
+      }
+    }
+  }
+
+  private checkSubFlowExitCompleteness(def: FlowDefinition<S>, errors: string[]): void {
+    for (const t of def.transitions) {
+      if (t.type !== 'sub_flow' || !t.subFlowDefinition) continue;
+      const subDef = t.subFlowDefinition;
+      for (const terminal of subDef.terminalStates) {
+        if (!t.exitMappings?.has(terminal)) {
+          errors.push(`SubFlow '${subDef.name}' at ${t.from} has terminal state ${terminal} with no onExit mapping`);
+        }
       }
     }
   }
@@ -333,6 +358,36 @@ export class FromBuilder<S extends string> {
 
   branch(branch: BranchProcessor<S>): BranchBuilder<S> {
     return new BranchBuilder(this.builder, this.fromState, branch);
+  }
+
+  subFlow(subFlowDef: FlowDefinition<any>): SubFlowBuilder<S> {
+    return new SubFlowBuilder(this.builder, this.fromState, subFlowDef);
+  }
+}
+
+export class SubFlowBuilder<S extends string> {
+  private readonly exitMap = new Map<string, S>();
+
+  constructor(
+    private readonly builder: Builder<S>,
+    private readonly fromState: S,
+    private readonly subFlowDef: FlowDefinition<any>,
+  ) {}
+
+  onExit(terminalName: string, parentState: S): this {
+    this.exitMap.set(terminalName, parentState);
+    return this;
+  }
+
+  endSubFlow(): Builder<S> {
+    this.builder.addTransition({
+      from: this.fromState, to: this.fromState, type: 'sub_flow',
+      processor: undefined, guard: undefined, branch: undefined,
+      branchTargets: new Map(),
+      subFlowDefinition: this.subFlowDef,
+      exitMappings: new Map(this.exitMap),
+    });
+    return this.builder;
   }
 }
 

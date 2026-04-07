@@ -7,17 +7,6 @@ import type { Transition, GuardOutput } from './types.js';
 
 const MAX_CHAIN_DEPTH = 10;
 
-/**
- * Generic engine that drives all flow state machines.
- *
- * Exceptions:
- * - FLOW_NOT_FOUND: resumeAndExecute with unknown or completed flowId
- * - INVALID_TRANSITION: resumeAndExecute when no external transition exists
- * - MAX_CHAIN_DEPTH: auto-chain exceeded 10 steps
- * - EXPIRED: flow TTL exceeded at resumeAndExecute entry
- *
- * Processor and branch exceptions are caught and routed to error transitions.
- */
 export class FlowEngine {
   constructor(private readonly store: InMemoryFlowStore) {}
 
@@ -55,6 +44,11 @@ export class FlowEngine {
       flow.complete('EXPIRED');
       this.store.save(flow);
       return flow;
+    }
+
+    // If actively in a sub-flow, delegate resume
+    if (flow.activeSubFlow) {
+      return this.resumeSubFlow(flow, definition);
     }
 
     const currentState = flow.currentState;
@@ -118,6 +112,16 @@ export class FlowEngine {
       }
 
       const transitions = flow.definition.transitionsFrom(current);
+
+      // Check for sub-flow transition
+      const subFlowT = transitions.find(t => t.type === 'sub_flow');
+      if (subFlowT) {
+        const advanced = await this.executeSubFlow(flow, subFlowT);
+        depth += advanced;
+        if (advanced === 0) break; // sub-flow stopped at external
+        continue;
+      }
+
       const autoOrBranch = transitions.find(t => t.type === 'auto' || t.type === 'branch');
       if (!autoOrBranch) break;
 
@@ -151,6 +155,95 @@ export class FlowEngine {
       depth++;
     }
     if (depth >= MAX_CHAIN_DEPTH) throw FlowError.maxChainDepth();
+  }
+
+  private async executeSubFlow<S extends string>(
+    parentFlow: FlowInstance<S>, subFlowTransition: Transition<S>,
+  ): Promise<number> {
+    const subDef = subFlowTransition.subFlowDefinition!;
+    const exitMappings = subFlowTransition.exitMappings!;
+    const subInitial = subDef.initialState!;
+
+    const subFlow = new FlowInstance(
+      parentFlow.id, parentFlow.sessionId, subDef,
+      parentFlow.context, subInitial, parentFlow.expiresAt,
+    );
+    parentFlow.setActiveSubFlow(subFlow);
+
+    await this.executeAutoChain(subFlow);
+
+    if (subFlow.isCompleted) {
+      parentFlow.setActiveSubFlow(null);
+      const target = exitMappings.get(subFlow.exitState!);
+      if (target) {
+        const from = parentFlow.currentState;
+        parentFlow.transitionTo(target);
+        this.store.recordTransition(parentFlow.id, from, target,
+          `subFlow:${subDef.name}/${subFlow.exitState}`, parentFlow.context);
+        return 1;
+      }
+    }
+    return 0; // sub-flow stopped at external
+  }
+
+  private async resumeSubFlow<S extends string>(
+    parentFlow: FlowInstance<S>, parentDef: FlowDefinition<S>,
+  ): Promise<FlowInstance<S>> {
+    const subFlow = parentFlow.activeSubFlow!;
+    const subDef = subFlow.definition;
+
+    const transition = subDef.externalFrom(subFlow.currentState);
+    if (!transition) {
+      throw new FlowError('INVALID_TRANSITION',
+        `No external transition from sub-flow state ${subFlow.currentState}`);
+    }
+
+    const guard = transition.guard;
+    if (guard) {
+      const output: GuardOutput = await guard.validate(parentFlow.context);
+      if (output.type === 'accepted') {
+        if (output.data) {
+          for (const [key, value] of output.data) parentFlow.context.put(key as any, value);
+        }
+        subFlow.transitionTo(transition.to);
+        this.store.recordTransition(parentFlow.id, subFlow.currentState, transition.to,
+          guard.name, parentFlow.context);
+      } else if (output.type === 'rejected') {
+        subFlow.incrementGuardFailure();
+        if (subFlow.guardFailureCount >= subDef.maxGuardRetries) {
+          subFlow.complete('ERROR');
+        }
+        this.store.save(parentFlow);
+        return parentFlow;
+      } else {
+        parentFlow.complete('EXPIRED');
+        this.store.save(parentFlow);
+        return parentFlow;
+      }
+    } else {
+      subFlow.transitionTo(transition.to);
+    }
+
+    await this.executeAutoChain(subFlow);
+
+    if (subFlow.isCompleted) {
+      parentFlow.setActiveSubFlow(null);
+      const subFlowT = parentDef.transitionsFrom(parentFlow.currentState)
+        .find(t => t.type === 'sub_flow');
+      if (subFlowT?.exitMappings) {
+        const target = subFlowT.exitMappings.get(subFlow.exitState!);
+        if (target) {
+          const from = parentFlow.currentState;
+          parentFlow.transitionTo(target);
+          this.store.recordTransition(parentFlow.id, from, target,
+            `subFlow:${subDef.name}/${subFlow.exitState}`, parentFlow.context);
+          await this.executeAutoChain(parentFlow);
+        }
+      }
+    }
+
+    this.store.save(parentFlow);
+    return parentFlow;
   }
 
   private handleError<S extends string>(flow: FlowInstance<S>, fromState: S): void {

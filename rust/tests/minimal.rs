@@ -121,6 +121,72 @@ fn error_path_requires_unsatisfied_build_fails() {
 }
 
 #[test]
+#[test]
+fn basic_sub_flow() {
+    // Sub-flow states
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    enum Sub { Init, Process, Done }
+    impl FlowState for Sub {
+        fn is_terminal(&self) -> bool { matches!(self, Self::Done) }
+        fn is_initial(&self) -> bool { matches!(self, Self::Init) }
+        fn all_states() -> &'static [Self] { &[Self::Init, Self::Process, Self::Done] }
+    }
+
+    #[derive(Clone)] struct SubOut(String);
+
+    struct SubP1;
+    impl StateProcessor<Sub> for SubP1 {
+        fn name(&self) -> &str { "SubP1" }
+        fn requires(&self) -> Vec<TypeId> { requires![D] }
+        fn produces(&self) -> Vec<TypeId> { requires![SubOut] }
+        fn process(&self, ctx: &mut FlowContext) -> Result<(), FlowError> {
+            ctx.put(SubOut("done".into()));
+            Ok(())
+        }
+    }
+
+    struct SubP2;
+    impl StateProcessor<Sub> for SubP2 {
+        fn name(&self) -> &str { "SubP2" }
+        fn requires(&self) -> Vec<TypeId> { requires![SubOut] }
+        fn produces(&self) -> Vec<TypeId> { vec![] }
+        fn process(&self, _ctx: &mut FlowContext) -> Result<(), FlowError> { Ok(()) }
+    }
+
+    let sub_def = Arc::new(Builder::<Sub>::new("sub")
+        .ttl(Duration::from_secs(60))
+        .initially_available(requires![D])
+        .from(Sub::Init).auto(Sub::Process, SubP1)
+        .from(Sub::Process).auto(Sub::Done, SubP2)
+        .build().unwrap());
+
+    let sub_runner = Box::new(tramli::sub_flow::SubFlowAdapter::new(sub_def));
+
+    // Main flow states
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    enum M { Start, Done }
+    impl FlowState for M {
+        fn is_terminal(&self) -> bool { matches!(self, Self::Done) }
+        fn is_initial(&self) -> bool { matches!(self, Self::Start) }
+        fn all_states() -> &'static [Self] { &[Self::Start, Self::Done] }
+    }
+
+    let main_def = Arc::new(Builder::<M>::new("main")
+        .ttl(Duration::from_secs(60))
+        .initially_available(requires![D])
+        .from(M::Start).sub_flow(sub_runner).on_exit("Done", M::Done).end_sub_flow()
+        .build().unwrap());
+
+    let mut engine = FlowEngine::new(InMemoryFlowStore::new());
+    let fid = engine.start_flow(main_def, "s1",
+        vec![(TypeId::of::<D>(), Box::new(D("hello".into())) as Box<dyn CloneAny>)]).unwrap();
+
+    let f = engine.store.get(&fid).unwrap();
+    assert_eq!(f.current_state(), M::Done);
+    assert!(f.is_completed());
+}
+
+#[test]
 fn error_path_to_terminal_build_succeeds() {
     // Error target is terminal (Done) — no processor requirements to check
     // Using S enum (A, B, C) where C is terminal

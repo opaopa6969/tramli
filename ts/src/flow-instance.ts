@@ -12,6 +12,7 @@ export class FlowInstance<S extends string> {
   readonly createdAt: Date;
   readonly expiresAt: Date;
   private _exitState: string | null;
+  private _activeSubFlow: FlowInstance<any> | null = null;
 
   constructor(
     id: string, sessionId: string, definition: FlowDefinition<S>,
@@ -59,8 +60,11 @@ export class FlowInstance<S extends string> {
   get exitState(): string | null { return this._exitState; }
   get isCompleted(): boolean { return this._exitState !== null; }
 
+  get activeSubFlow(): FlowInstance<any> | null { return this._activeSubFlow; }
+
   /** @internal */ transitionTo(state: S): void { this._currentState = state; }
   /** @internal */ incrementGuardFailure(): void { this._guardFailureCount++; }
   /** @internal */ complete(exitState: string): void { this._exitState = exitState; }
   /** @internal */ setVersion(version: number): void { this._version = version; }
+  /** @internal */ setActiveSubFlow(sub: FlowInstance<any> | null): void { this._activeSubFlow = sub; }
 }

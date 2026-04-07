@@ -104,7 +104,7 @@ impl<S: FlowState> FromBuilder<S> {
         self.builder.add_transition(Transition {
             from: self.from, to, transition_type: TransitionType::Auto,
             processor: Some(Box::new(processor)), guard: None, branch: None,
-            branch_targets: HashMap::new(),
+            branch_targets: HashMap::new(), sub_flow: None,
         });
         self.builder
     }
@@ -113,9 +113,16 @@ impl<S: FlowState> FromBuilder<S> {
         self.builder.add_transition(Transition {
             from: self.from, to, transition_type: TransitionType::External,
             processor: None, guard: Some(Box::new(guard)), branch: None,
-            branch_targets: HashMap::new(),
+            branch_targets: HashMap::new(), sub_flow: None,
         });
         self.builder
+    }
+
+    pub fn sub_flow(self, runner: Box<dyn crate::sub_flow::SubFlowRunner>) -> SubFlowBuilder<S> {
+        SubFlowBuilder {
+            builder: self.builder, from: self.from,
+            runner, exit_mappings: HashMap::new(),
+        }
     }
 
     pub fn branch(self, branch: impl BranchProcessor<S> + 'static) -> BranchBuilder<S> {
@@ -148,10 +155,39 @@ impl<S: FlowState> BranchBuilder<S> {
                 from: self.from, to: *target, transition_type: TransitionType::Branch,
                 processor: None, guard: None,
                 branch: if first { self.branch.take() } else { None },
-                branch_targets: targets_clone.clone(),
+                branch_targets: targets_clone.clone(), sub_flow: None,
             });
             first = false;
         }
+        self.builder
+    }
+}
+
+// ─── SubFlowBuilder ───────────────────────────────────
+
+pub struct SubFlowBuilder<S: FlowState> {
+    builder: Builder<S>,
+    from: S,
+    runner: Box<dyn crate::sub_flow::SubFlowRunner>,
+    exit_mappings: HashMap<String, S>,
+}
+
+impl<S: FlowState> SubFlowBuilder<S> {
+    pub fn on_exit(mut self, terminal_name: &str, parent_state: S) -> Self {
+        self.exit_mappings.insert(terminal_name.to_string(), parent_state);
+        self
+    }
+
+    pub fn end_sub_flow(mut self) -> Builder<S> {
+        self.builder.add_transition(Transition {
+            from: self.from, to: self.from, transition_type: TransitionType::SubFlow,
+            processor: None, guard: None, branch: None,
+            branch_targets: HashMap::new(),
+            sub_flow: Some(crate::sub_flow::SubFlowConfig {
+                runner: self.runner,
+                exit_mappings: self.exit_mappings,
+            }),
+        });
         self.builder
     }
 }
@@ -183,7 +219,17 @@ fn check_reachability<S: FlowState>(def: &FlowDefinition<S>, errors: &mut Vec<St
     let mut queue = vec![initial];
     visited.insert(initial);
     while let Some(current) = queue.pop() {
-        for t in def.transitions_from(current) { if visited.insert(t.to) { queue.push(t.to); } }
+        for t in def.transitions_from(current) {
+            if t.transition_type == TransitionType::SubFlow {
+                if let Some(ref sf) = t.sub_flow {
+                    for target in sf.exit_mappings.values() {
+                        if visited.insert(*target) { queue.push(*target); }
+                    }
+                }
+                continue;
+            }
+            if visited.insert(t.to) { queue.push(t.to); }
+        }
         if let Some(&e) = def.error_transitions.get(&current) { if visited.insert(e) { queue.push(e); } }
     }
     for s in S::all_states() {
@@ -204,7 +250,17 @@ fn check_path_to_terminal<S: FlowState>(def: &FlowDefinition<S>, errors: &mut Ve
 fn can_reach_terminal<S: FlowState>(def: &FlowDefinition<S>, state: S, visited: &mut HashSet<S>) -> bool {
     if state.is_terminal() { return true; }
     if !visited.insert(state) { return false; }
-    for t in def.transitions_from(state) { if can_reach_terminal(def, t.to, visited) { return true; } }
+    for t in def.transitions_from(state) {
+        if t.transition_type == TransitionType::SubFlow {
+            if let Some(ref sf) = t.sub_flow {
+                for target in sf.exit_mappings.values() {
+                    if can_reach_terminal(def, *target, visited) { return true; }
+                }
+            }
+            continue;
+        }
+        if can_reach_terminal(def, t.to, visited) { return true; }
+    }
     if let Some(&e) = def.error_transitions.get(&state) { if can_reach_terminal(def, e, visited) { return true; } }
     false
 }

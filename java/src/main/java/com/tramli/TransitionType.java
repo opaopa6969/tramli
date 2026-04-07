@@ -3,5 +3,6 @@ package com.tramli;
 public enum TransitionType {
     AUTO,
     EXTERNAL,
-    BRANCH
+    BRANCH,
+    SUB_FLOW
 }

@@ -130,6 +130,24 @@ impl<S: FlowState> FlowEngine<S> {
                 if current.is_terminal() { flow.complete(format!("{:?}", current)); break; }
 
                 let def = flow.definition.clone();
+
+                // Check for sub-flow transition first
+                let sub_flow_t = def.transitions.iter()
+                    .find(|t| t.from == current && t.transition_type == TransitionType::SubFlow);
+                if let Some(sft) = sub_flow_t {
+                    if let Some(ref config) = sft.sub_flow {
+                        let result = config.runner.start(&mut flow.context)?;
+                        if let Some(exit_name) = result {
+                            if let Some(&target) = config.exit_mappings.get(&exit_name) {
+                                let from_dbg = format!("{:?}", current);
+                                flow.transition_to(target);
+                                Some((from_dbg, format!("{:?}", target),
+                                    format!("subFlow:{}/{}", config.runner.name(), exit_name), false))
+                            } else { break }
+                        } else { break } // sub-flow stopped at external
+                    } else { break }
+                } else {
+
                 let auto_t = def.transitions.iter()
                     .find(|t| t.from == current && (t.transition_type == TransitionType::Auto || t.transition_type == TransitionType::Branch));
                 let Some(t) = auto_t else { break };
@@ -165,6 +183,7 @@ impl<S: FlowState> FlowEngine<S> {
                 } else {
                     break
                 }
+                } // close the else block for sub-flow check
             }; // flow borrow ends
 
             // Phase 2: record + check if we should stop

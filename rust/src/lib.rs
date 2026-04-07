@@ -12,12 +12,13 @@ mod error;
 mod instance;
 mod mermaid;
 mod store;
+pub mod sub_flow;
 mod types;
 
 pub use clone_any::CloneAny;
 pub use context::FlowContext;
 pub use data_flow_graph::{DataFlowGraph, NodeInfo};
-pub use definition::{FlowDefinition, Builder, FromBuilder, BranchBuilder};
+pub use definition::{FlowDefinition, Builder, FromBuilder, BranchBuilder, SubFlowBuilder};
 pub use engine::FlowEngine;
 pub use error::FlowError;
 pub use instance::FlowInstance;
