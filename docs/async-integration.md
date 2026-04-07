@@ -14,7 +14,42 @@ Async I/O (HTTP calls, DB queries) happens **outside** the SM engine.
 └─────────────┘     └──────────────┘     └─────────────┘
 ```
 
-### Why not async SM?
+### Why TypeScript has optional async — and Java/Rust don't
+
+All three languages share the same principle: **SM is sync, I/O is outside.**
+But TypeScript has an extra option: `AsyncStateProcessor` for External transitions.
+
+Why only TypeScript?
+
+```
+Java:
+  ❌ async not needed. Virtual threads (Java 21) handle blocking I/O
+     without async/await. Thread.startVirtualThread(() -> blockingCall())
+     is simpler and fully debuggable with stack traces.
+
+Rust:
+  ❌ async is dangerous inside the SM. Rust's compiler turns async fn into
+     a Future state machine. If the SM engine is async, the Future includes
+     &mut FlowEngine + FlowContext + all processor state across .await points.
+     With 3+ states → stack overflow. (See rust/ASYNC_STACK_ISSUE.md)
+
+TypeScript:
+  ✅ async is safe and cheap. Promise is heap-allocated (~1μs overhead).
+     No stack size issues. No ownership issues. And TS developers expect
+     async/await — fighting the ecosystem creates friction.
+```
+
+**The rule for TypeScript:** async processors are only allowed on **External transitions** (guard/processor that runs at an async boundary). Auto transitions must remain sync — auto-chain fires multiple transitions in sequence, and making each one async adds unnecessary microtask overhead.
+
+```typescript
+// ✅ Auto transition: sync (fast judgment, no I/O)
+.from(CREATED).auto(PAYMENT_PENDING, syncProcessor)
+
+// ✅ External transition: async OK (waits for external event anyway)
+.from(PAYMENT_PENDING).external(CONFIRMED, asyncGuard, asyncProcessor)
+```
+
+### Why not async SM? (for Java and Rust)
 
 1. **Complexity**: async traits, pinning, lifetime issues — for ~2μs of work
 2. **Testability**: sync processors are trivially testable without async runtime
