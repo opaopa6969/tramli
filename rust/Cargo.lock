@@ -4,4 +4,4 @@ version = 3
 
 [[package]]
 name = "tramli"
-version = "1.19.0"
+version = "2.0.0"

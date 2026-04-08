@@ -4,7 +4,7 @@
 
 volta-auth-proxy を tramli v1.2.0 に移行した際、`SqlFlowStore`（PostgreSQL 実装）で問題が発生した。
 
-`FlowInstance` の `setVersion()` / `incrementGuardFailure()` / `transitionTo()` は package-private であるため、`com.tramli` パッケージ外の FlowStore 実装からアクセスできない。
+`FlowInstance` の `setVersion()` / `incrementGuardFailure()` / `transitionTo()` は package-private であるため、`org.unlaxer.tramli` パッケージ外の FlowStore 実装からアクセスできない。
 
 `FlowInstance.restore()` で loadForUpdate 時の再構築は解決できた。しかし **save 後の version インクリメント**に public API がない。
 
