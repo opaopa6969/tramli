@@ -68,7 +68,7 @@ This helps **humans** (limited working memory) and **LLMs** (limited context win
 
 tramli uses flat enums for states — no hierarchical states, no orthogonal regions. This is **not a limitation**. It's the correct design for data-flow verification.
 
-When David Harel (Statecharts inventor) and Pat Helland (distributed systems pioneer) independently designed alternative state machines in [DGE sessions](dge/sessions/dge-session-harel-carta.md), both arrived at the same conclusion:
+In [DGE sessions](dge/sessions/dge-session-harel-carta.md) — fictional design dialogues where an AI plays the role of David Harel (Statecharts inventor) and Pat Helland (distributed systems pioneer) — both personas independently arrived at the same conclusion:
 
 - **Hierarchical states** degrade data-flow verification (implicit paths through super-states)
 - **Orthogonal regions** break data-flow verification (exponential path combinations)
