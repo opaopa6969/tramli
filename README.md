@@ -484,6 +484,111 @@ boolean ok = DataFlowGraph.isCompatible(processorA, processorB);
 
 This is the same advantage that Airflow/Temporal users wish they had: **build-time, static data-flow analysis.** Those tools use dynamic XCom/payloads with no static guarantees. tramli's `requires/produces` declarations enable verification before any code runs.
 
+### Full API Reference
+
+#### DataFlowGraph
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `availableAt(state)` | `Set<Class<?>>` | Types available in context at a given state |
+| `producersOf(type)` | `List<NodeInfo>` | Processors/guards that produce this type |
+| `consumersOf(type)` | `List<NodeInfo>` | Processors/guards that require this type |
+| `deadData()` | `Set<Class<?>>` | Types produced but never consumed |
+| `lifetime(type)` | `Lifetime(firstProduced, lastConsumed)` | Data lifecycle across states |
+| `pruningHints()` | `Map<S, Set<Class<?>>>` | Types no longer needed at each state |
+| `impactOf(type)` | `Impact(producers, consumers)` | All nodes affected by a type change |
+| `parallelismHints()` | `List<String[]>` | Independent processor pairs (no data dependency) |
+| `assertDataFlow(ctx, state)` | `List<Class<?>>` | Missing types at current state (empty = OK) |
+| `verifyProcessor(proc, ctx)` | `List<String>` | Runtime requires/produces violations |
+| `isCompatible(a, b)` | `boolean` | Can processor B replace A without breaking data-flow? |
+| `migrationOrder()` | `List<String>` | Processors sorted by dependency (fewest first) |
+| `testScaffold()` | `Map<String, List<String>>` | Required types per processor for test setup |
+| `generateInvariantAssertions()` | `List<String>` | Data-flow invariant strings per state |
+| `crossFlowMap(graphs...)` | `List<String>` | Inter-flow data dependencies |
+| `diff(before, after)` | `DiffResult` | Added/removed types and edges between two graphs |
+| `versionCompatibility(v1, v2)` | `List<String>` | Incompatibilities between two definition versions |
+| `toMermaid()` | `String` | Mermaid flowchart LR diagram |
+| `toJson()` | `String` | Structured JSON (types, producers, consumers, deadData) |
+| `toMarkdown()` | `String` | Migration checklist in Markdown |
+| `toRenderable()` | `RenderableGraph.DataFlow` | Read-only view for custom renderers |
+| `renderDataFlow(fn)` | `String` | Render with custom function (dot, PlantUML, etc.) |
+
+#### FlowDefinition
+
+| Method | Description |
+|--------|-------------|
+| `build()` | Validate + construct (8-item + data-flow check) |
+| `dataFlowGraph()` | Access the derived DataFlowGraph |
+| `warnings()` | Structural warnings (e.g., liveness risk) |
+| `withPlugin(from, to, pluginFlow)` | Insert sub-flow before a transition (returns new definition) |
+
+#### FlowInstance
+
+| Method | Description |
+|--------|-------------|
+| `currentState()` | Current state enum value |
+| `isCompleted()` | Whether the flow has reached a terminal state |
+| `exitState()` | Terminal state name (null if active) |
+| `context()` | The FlowContext with all produced data |
+| `lastError()` | Error message from the last failed processor |
+| `activeSubFlow()` | Active sub-flow instance (null if not in sub-flow) |
+| `statePath()` | State path from root: `["PAYMENT", "CONFIRM"]` |
+| `statePathString()` | Slash-separated: `"PAYMENT/CONFIRM"` |
+| `waitingFor()` | Types required by current external transition |
+| `availableData()` | Types available at current state (from DataFlowGraph) |
+| `missingFor()` | Types missing for the next transition |
+| `withVersion(n)` | Copy with updated version (for FlowStore optimistic locking) |
+
+#### FlowContext
+
+| Method | Description |
+|--------|-------------|
+| `get(key)` | Get typed value (throws if missing) |
+| `find(key)` | Get typed value (Optional/undefined if missing) |
+| `put(key, value)` | Store typed value |
+| `has(key)` | Check if key exists |
+| `registerAlias(type, alias)` | Register string alias for cross-language serialization |
+| `toAliasMap()` | Export as alias → value map (for JSON serialization) |
+| `fromAliasMap(map)` | Import from alias → value map |
+
+#### FlowEngine
+
+| Method | Description |
+|--------|-------------|
+| `startFlow(def, session, data)` | Start a new flow instance |
+| `resumeAndExecute(flowId, def)` | Resume at external transition |
+| `setTransitionLogger(fn)` | Log every state transition |
+| `setStateLogger(fn)` | Log every context.put() (opt-in) |
+| `setErrorLogger(fn)` | Log every error transition |
+| `removeAllLoggers()` | Remove all loggers |
+
+#### Builder DSL
+
+| Method | Description |
+|--------|-------------|
+| `.from(state).auto(to, processor)` | Auto transition |
+| `.from(state).external(to, guard)` | External transition (waits for event) |
+| `.from(state).branch(branch).to(s, label).endBranch()` | Conditional routing |
+| `.from(state).subFlow(def).onExit("X", s).endSubFlow()` | Embed sub-flow |
+| `.onError(from, to)` | State-based error routing |
+| `.onStepError(from, ExceptionClass, to)` | Exception-typed error routing |
+| `.onAnyError(state)` | Catch-all error routing |
+| `.initiallyAvailable(types...)` | Declare initial data types |
+| `.ttl(duration)` | Flow time-to-live |
+| `.maxGuardRetries(n)` | Guard rejection limit |
+| `.allow_perpetual()` | Allow terminal-less flows (Rust) |
+
+#### Code Generation
+
+| Class | Method | Description |
+|-------|--------|-------------|
+| `MermaidGenerator` | `generate(def)` | State transition diagram |
+| `MermaidGenerator` | `generateDataFlow(def)` | Data-flow diagram |
+| `MermaidGenerator` | `generateExternalContract(def)` | External transition data contracts |
+| `MermaidGenerator` | `dataFlow(renderable)` | Render RenderableGraph as Mermaid |
+| `MermaidGenerator` | `stateDiagram(renderable)` | Render RenderableStateDiagram as Mermaid |
+| `SkeletonGenerator` | `generate(def, language)` | Processor skeletons in Java/TS/Rust |
+
 ---
 
 ## Pipeline
