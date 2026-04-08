@@ -1,82 +1,98 @@
 # tramli backlog
 
-| # | Feature | Status | Design | Depends on |
-|---|---------|--------|--------|------------|
-| 1 | CloneAny downcast bug fix | ✅ complete | — | — |
-| 2 | crates.io v0.1.0 publish | ✅ complete | — | #1 |
-| 3 | DataFlowGraph (3 languages) | ✅ complete | DD-015 | — |
-| 4 | Mermaid Dual View (state + data-flow) | ✅ complete | DD-015 | #3 |
-| 5 | Dead Data Detection | ✅ complete | DD-015 | #3 |
-| 6 | v0.2.0 publish (3 registries) | ✅ complete | — | #3,#4,#5 |
-| 7 | Error Path Data-Flow Analysis | ✅ complete | DD-015 | #3 |
-| 8 | v1.0.0 release (API stability) | ✅ complete | DD-016 | #7 |
-| 9 | Data Lifetime Analysis | ✅ complete | DD-015 | #3 |
-| 10 | Context Pruning Hints | ✅ complete | DD-015 | #9 |
-| 11 | FlowError context snapshot | ✅ complete | DD-015 | — |
-| 12 | Requires/Produces verify (runtime) | ✅ complete | DD-015 | — |
-| 13 | assertDataFlow() API | ✅ complete | DD-015 | #3 |
-| 14 | Processor Compatibility Check | ✅ complete | DD-015 | — |
-| 15 | v1.1.0 publish | ✅ complete | — | #9–#14 |
-| 16 | SubFlow MVP (Flow Composition) | ✅ complete | DD-017 | — |
-| 17 | v1.2.0 publish | ✅ complete | — | #16 |
-| 18 | SubFlow error bubbling | ✅ complete | DD-017 | #16 |
-| 19 | SubFlow data-flow 結合検証 | ✅ complete | DD-017 | #16 |
-| 20 | SubFlow circular reference 検出 | ✅ complete | DD-017 | #16 |
-| 21 | SubFlow max nesting depth = 3 | ✅ complete | DD-017 | #16 |
-| 22 | SubFlow statePath 永続化 | ✅ complete | DD-017 | #16 |
-| 23 | FlowInstance.restore() オーバーロード | ✅ complete | DD-017 | #22 |
-| 24 | TransitionRecord.subFlow フィールド | ✅ complete | DD-017 | #16 |
-| 25 | FlowInstance.waitingFor() | ✅ complete | DD-017 | #16 |
-| 26 | FlowInstance.statePath() / statePathString() | ✅ complete | DD-017 | #22 |
-| 27 | Mermaid subgraph (SubFlow 描画) | ✅ complete | DD-017 | #16 |
-| 28 | DataFlowGraph SubFlow フラット化 | ✅ complete | DD-017 | #16,#3 |
-| 29 | DD-013 sync 互換性テスト (shared test) | ✅ complete | DD-013 | — |
-| 30 | docs/language-guide DataFlowGraph 行追加 | ✅ complete | — | #3 |
+## Completed (v0.1.0 → v1.12.0)
 
-## Future → Complete (v1.4.0)
+| # | Feature | Version | Design |
+|---|---------|---------|--------|
+| 1 | CloneAny downcast bug fix | v0.1.0 | — |
+| 2 | crates.io initial publish | v0.1.0 | — |
+| 3 | DataFlowGraph (3 languages) | v0.2.0 | DD-015 |
+| 4 | Mermaid Dual View (state + data-flow) | v0.2.0 | DD-015 |
+| 5 | Dead Data Detection | v0.2.0 | DD-015 |
+| 6 | 3 registry publish (crates.io + npm + Maven Central) | v0.2.0 | — |
+| 7 | Error Path Data-Flow Analysis | v1.0.0 | DD-015 |
+| 8 | API stability guarantee | v1.0.0 | DD-016 |
+| 9 | Data Lifetime Analysis | v1.1.0 | DD-015 |
+| 10 | Context Pruning Hints | v1.1.0 | DD-015 |
+| 11 | FlowError context snapshot | v1.1.0 | DD-015 |
+| 12 | Requires/Produces runtime verify | v1.1.0 | DD-015 |
+| 13 | assertDataFlow() API | v1.1.0 | DD-015 |
+| 14 | Processor Compatibility Check | v1.1.0 | DD-015 |
+| 15 | SubFlow MVP (Flow Composition) | v1.2.0 | DD-017 |
+| 16 | SubFlow error bubbling | v1.2.1 | DD-017 |
+| 17 | SubFlow circular reference 検出 | v1.2.1 | DD-017 |
+| 18 | SubFlow max nesting depth = 3 | v1.2.1 | DD-017 |
+| 19 | FlowInstance.withVersion() | v1.2.2 | request-flowinstance-version-api |
+| 20 | SubFlow statePath / statePathString / waitingFor | v1.3.0 | DD-017 |
+| 21 | TransitionRecord.subFlow フィールド | v1.3.0 | DD-017 |
+| 22 | Mermaid subgraph (SubFlow 描画) | v1.3.0 | DD-017 |
+| 23 | impactOf / parallelismHints / toJson | v1.4.0 | DD-015 brainstorm |
+| 24 | crossFlowMap / diff / versionCompatibility | v1.4.0 | DD-015 brainstorm |
+| 25 | availableData / missingFor | v1.4.0 | DD-015 brainstorm |
+| 26 | generateExternalContract | v1.4.0 | DD-015 brainstorm |
+| 27 | withPlugin() | v1.4.0 | DD-017 |
+| 28 | migrationOrder / toMarkdown | v1.5.0 | proposal-cross-language-portability |
+| 29 | SkeletonGenerator (Java/TS/Rust) | v1.5.0 | proposal-cross-language-portability |
+| 30 | Shared Test Scenarios (YAML) | v1.5.0 | proposal-cross-language-portability |
+| 31 | FlowContext alias API (registerAlias/toAliasMap) | v1.5.1 | DD-018 |
+| 32 | I/O separation patterns docs | v1.5.1 | DD-018 |
+| 33 | FlowStore schema docs | v1.5.1 | DD-018 |
+| 34 | tramli-ts CJS dual export | v1.5.3 | volta-console feedback |
+| 35 | FlowInstance.lastError() | v1.6.0 | volta-console feedback |
+| 36 | loadForUpdate(flowId, definition) TS | v1.6.0 | volta-console feedback |
+| 37 | Auto-chain design intent docs | v1.6.0 | volta-console feedback |
+| 38 | strictMode (produces runtime verification) | v1.7.0 | — |
+| 39 | Shared scenario tests (Java/TS) | v1.7.0 | — |
+| 40 | Paper v3 (test counts, Future Work) | v1.7.0 | — |
+| 41 | Rust SubFlow rewrite (stateless factory) | v1.7.1 | code review |
+| 42 | Code review fixes (6 items) | v1.8.0 | code review |
+| 43 | Logger API (entry record pattern) | v1.9.0 | DGE logger-api |
+| 44 | Pipeline API (PipelineStep/Builder/DataFlow/Exception) | v1.10.0 | DD-019 |
+| 45 | GraphRenderer (RenderableGraph + render API) | v1.11.0 | DGE graph-renderer |
+| 46 | onStepError (exception-typed error routing) | v1.12.0 | DGE liveness-response |
+| 47 | FlowDefinition.warnings() (liveness risk) | v1.12.0 | DGE liveness-response |
+| 48 | Paper: mathematical genealogy + liveness | v1.12.0 | DGE mathematical-genealogy |
 
-| # | Feature | Status |
+## Documentation (completed)
+
+| Doc | Description |
+|-----|-------------|
+| Why tramli Works (en/ja) | Attention Budget — human + LLM parallel |
+| OIDC Auth Flow example (en/ja) | 9-state production flow with Mermaid |
+| Positioning article draft | "Your State Machine Crashes at Runtime" |
+| Language compatibility matrix | 16 languages rated for tramli fit |
+| API stability policy | Core vs Analysis API scope |
+| I/O separation patterns | 3 patterns (External, Port/Adapter, DataProcessor) |
+| FlowStore schema | Recommended DB schema + serialization |
+| Paper v3 | Definition-Time Validated Constrained Flow Engine |
+| README full API reference (en/ja) | 49 sections, all methods documented |
+
+## DGE Sessions (10 total)
+
+| Session | Rounds | DD |
+|---------|--------|-----|
+| data-flow brainstorm | 7 | DD-015 |
+| v1.0.0 readiness | 1 | DD-016 |
+| state tree | 8 | DD-017 |
+| flowstore portability | 1 | DD-018 |
+| pipeline vision | 7 | DD-019 |
+| mathematical genealogy | 1 | — |
+| liveness response | 1 | — |
+| logger API | 2 | — |
+| graph renderer | 1 | — |
+| coverage vision | 1 | — |
+| I/O coverage | 1 | — |
+
+## Design Decisions (DD-001 → DD-019)
+
+See [dge/decisions/index.md](../dge/decisions/index.md)
+
+## Future
+
+| # | Feature | Design |
 |---|---------|--------|
-| F1 | withPlugin() API | ✅ complete |
-| F2 | Impact Analysis API | ✅ complete |
-| F3 | Runtime Data Introspection | ✅ complete |
-| F4 | Test Scaffold Generation | ✅ complete |
-| F5 | External Contract View | ✅ complete |
-| F6 | Cross-Flow Data-Flow Map | ✅ complete |
-| F7 | IDE 向け JSON 出力 | ✅ complete |
-| F8 | dve data-flow ビュー | ✅ complete (toJson() で dve 消費可能) |
-| F9 | Data-Flow Invariant Test Generator | ✅ complete |
-| F10 | Data-Flow Diff (PR レビュー) | ✅ complete |
-| F11 | Version Compatibility Check | ✅ complete |
-| F12 | Domain Vocabulary Map | ✅ complete (type names in graph) |
-| F13 | Parallelism Hint | ✅ complete |
-
-## Open
-
-| # | Feature | Status | Design | Depends on |
-|---|---------|--------|--------|------------|
-| 31 | tramli-ts: CJS dual export | ✅ complete | — | — |
-| 32 | FlowInstance.withVersion() 周知 | ✅ complete (v1.2.2) | — | — |
-| 33 | Cross-Language Portability (提案書) | ✅ complete (DD-018, v1.5.0-1.5.1) | docs/proposal-cross-language-portability.md | — |
-
-### 31: tramli-ts CJS dual export
-
-tramli-ts は現在 ESM のみ。CommonJS プロジェクト（volta-platform 等）から使うには `await import()` が必要。
-
-tsconfig で CJS ビルドも出力し、package.json の exports で dual export にする:
-
-```json
-{
-  "exports": {
-    ".": {
-      "import": "./dist/esm/index.js",
-      "require": "./dist/cjs/index.cjs"
-    }
-  }
-}
-```
-
-**背景**: volta-platform（Node.js/Express, CommonJS）への tramli 導入で判明。dynamic import で回避可能だが、ライブラリとして dual export が望ましい。
+| F14 | Per-state timeout on External transitions | DD-002 踏襲。liveness 問題の言語レベル解決策。Harel 教授提案 |
+| F16 | tramli-ports (言語横断 I/O 契約共有) | 需要が出たら |
 
 ## NOT-DOING (スコープ外)
 
@@ -88,11 +104,6 @@ tsconfig で CJS ビルドも出力し、package.json の exports で dual expor
 - AI Processor Generation (DD-015 #32) — AI ツール側の責務
 - Processor Registry Pattern (DD-015 #38) — ユーザーが自力で実装可能
 - Harel Statechart (DD-017) — 機能過多
-
-## Future
-
-| # | Feature | Design |
-|---|---------|--------|
-| F14 | Per-state timeout on External transitions | DD-002 踏襲。liveness 問題の言語レベル解決策。Harel 教授提案 |
-| F15 | Exception-typed error transition mapping (.onStepError) | ✅ complete (v1.12.0) |
-| F16 | tramli-ports (言語横断 I/O 契約共有) | 需要が出たら。OIDC Port 等を Java/TS/Rust で共通化 |
+- FlowStore Service (DD-018) — ROI 不足
+- Sub-Pipeline — asStep() で十分
+- Parallel execution — 検証できないものは入れない原則
