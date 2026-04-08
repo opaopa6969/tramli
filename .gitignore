@@ -1,5 +1,6 @@
 # Java
 java/target/
+java-plugins/target/
 *.class
 *.jar
 .idea/
@@ -8,9 +9,12 @@ java/target/
 # TypeScript
 ts/node_modules/
 ts/dist/
+ts-plugins/node_modules/
+ts-plugins/dist/
 
 # Rust
 rust/target/
+rust-plugins/target/
 
 # OS
 .DS_Store

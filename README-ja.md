@@ -36,6 +36,7 @@
 - [Pipeline](#pipeline) — build 時検証付き直列パイプライン
 - [ロギング](#ロギング) — ゼロ依存プラガブルロガー
 - [エラーハンドリング](#エラーハンドリング) — Guard 拒否、リトライ上限、例外型ルーティング
+- [プラグインシステム](#プラグインシステム) — 6種のSPI、14プラグイン
 - [なぜ LLM と相性が良いか](#なぜ-llm-と相性が良いか)
 - [パフォーマンス](#パフォーマンス)
 - [ユースケース](#ユースケース)
@@ -787,6 +788,66 @@ engine.removeAllLoggers();
 | 「無限ループする遷移を追加した」 | ビルド時の [DAG チェック](#8項目-build-検証) |
 
 **核心原理: LLM は hallucinate するが、コンパイラと `build()` は嘘をつかない。**
+
+---
+
+## プラグインシステム
+
+tramli のコアは凍結済み — 8つの構成要素、機能膨張ゼロ。それ以外は全て**プラグイン**。
+
+```
+java-plugins/   →  org.unlaxer:tramli-plugins  (Maven Central)
+ts-plugins/     →  @unlaxer/tramli-plugins     (npm)
+rust-plugins/   →  tramli-plugins              (crates.io)
+```
+
+### 6種の SPI
+
+| SPI | 用途 | 代表的プラグイン |
+|-----|------|----------------|
+| **AnalysisPlugin** | FlowDefinition の静的解析 | PolicyLintPlugin |
+| **StorePlugin** | FlowStore のデコレーション | AuditStorePlugin, EventLogStorePlugin |
+| **EnginePlugin** | FlowEngine へのフック | ObservabilityEnginePlugin |
+| **RuntimeAdapterPlugin** | エンジンをリッチAPI化 | RichResumeRuntimePlugin, IdempotencyRuntimePlugin |
+| **GenerationPlugin** | 入力からの出力生成 | DiagramGenerationPlugin, HierarchyGenerationPlugin, ScenarioGenerationPlugin |
+| **DocumentationPlugin** | ドキュメント生成 | FlowDocumentationPlugin |
+
+### 14 プラグイン
+
+| プラグイン | SPI種別 | 機能 |
+|-----------|---------|------|
+| **AuditStorePlugin** | Store | 遷移 + 生成データの差分キャプチャ |
+| **EventLogStorePlugin** | Store | 追記のみの遷移ログ（Tenure-lite） |
+| **ReplayService** | — | 任意バージョンでの状態再構築 |
+| **ProjectionReplayService** | — | カスタムReducerによるマテリアライズドビュー |
+| **CompensationService** | — | Sagaパターン向け補償イベント記録 |
+| **ObservabilityEnginePlugin** | Engine | エンジンロガーフック経由のテレメトリ |
+| **RichResumeRuntimePlugin** | RuntimeAdapter | ステータス分類付きResume（TRANSITIONED, ALREADY_COMPLETE, REJECTED, ...） |
+| **IdempotencyRuntimePlugin** | RuntimeAdapter | 重複コマンド抑制 |
+| **PolicyLintPlugin** | Analysis | 設計時Lintポリシー（dead data, overwide processors等） |
+| **DiagramGenerationPlugin** | Generation | Mermaid + データフローJSON + マークダウンサマリ |
+| **HierarchyGenerationPlugin** | Generation | 階層仕様からフラットenum + ビルダースケルトン生成 |
+| **ScenarioGenerationPlugin** | Generation | フロー定義からBDDスタイルのテスト計画 |
+| **FlowDocumentationPlugin** | Documentation | マークダウン形式フローカタログ |
+| **GuaranteedSubflowValidator** | — | サブフローのエントリ要件検証 |
+
+### PluginRegistry
+
+```typescript
+const registry = new PluginRegistry<MyState>();
+registry
+  .register(PolicyLintPlugin.defaults())
+  .register(new AuditStorePlugin())
+  .register(new EventLogStorePlugin())
+  .register(new ObservabilityEnginePlugin(sink));
+
+const report = registry.analyzeAll(definition);    // lint 実行
+const store  = registry.applyStorePlugins(rawStore); // store をラップ
+registry.installEnginePlugins(engine);               // フック設置
+const adapters = registry.bindRuntimeAdapters(engine); // リッチAPIの取得
+```
+
+**設計原則: コアは変えない、プラグインが上に重なる。** 完全なウォークスルーは [プラグインチュートリアル](docs/tutorial-plugins-ja.md) を参照。
 
 ---
 

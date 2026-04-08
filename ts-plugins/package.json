@@ -1,7 +1,7 @@
 {
-  "name": "@unlaxer/tramli",
+  "name": "@unlaxer/tramli-plugins",
   "version": "3.0.0",
-  "description": "Constrained flow engine — state machines that prevent invalid transitions at build time",
+  "description": "Plugin pack for tramli — audit, eventstore, observability, resume, idempotency, hierarchy, diagram, docs, lint, testing, subflow",
   "type": "module",
   "exports": {
     ".": {
@@ -15,7 +15,7 @@
   "types": "./dist/esm/index.d.ts",
   "files": ["dist"],
   "scripts": {
-    "build": "tsc && tsc -p tsconfig.cjs.json && node scripts/fix-cjs.cjs",
+    "build": "tsc && tsc -p tsconfig.cjs.json",
     "test": "vitest run",
     "prepublishOnly": "npm run build && npm test"
   },
@@ -28,7 +28,11 @@
     "url": "https://github.com/opaopa6969/tramli-ts"
   },
   "author": "Hisayuki Ookubo <opaopa6969@gmail.com>",
+  "peerDependencies": {
+    "@unlaxer/tramli": ">=3.0.0"
+  },
   "devDependencies": {
+    "@unlaxer/tramli": "^3.0.0",
     "typescript": "^5.5.0",
     "vitest": "^2.0.0"
   }

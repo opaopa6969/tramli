@@ -36,6 +36,7 @@ State machines where **invalid transitions cannot exist** — enforced at build 
 - [Pipeline](#pipeline) — sequential step chain with build-time verification
 - [Logging](#logging) — zero-dependency pluggable loggers
 - [Error Handling](#error-handling) — guard rejection, max retries, error transitions
+- [Plugin System](#plugin-system) — 14 plugins across 6 SPI types
 - [Why LLMs Love This](#why-llms-love-this)
 - [Performance](#performance)
 - [Use Cases](#use-cases)
@@ -820,6 +821,66 @@ Every flow has a TTL (set via `.ttl()`). If `resumeAndExecute()` is called after
 | "I added a transition that creates an infinite loop" | [DAG check](#8-item-build-validation) at build time |
 
 **The key principle: LLMs hallucinate, but compilers and `build()` don't.**
+
+---
+
+## Plugin System
+
+tramli's core is frozen — 8 building blocks, zero feature creep. Everything else is a **plugin**.
+
+```
+java-plugins/   →  org.unlaxer:tramli-plugins  (Maven Central)
+ts-plugins/     →  @unlaxer/tramli-plugins     (npm)
+rust-plugins/   →  tramli-plugins              (crates.io)
+```
+
+### 6 SPI Types
+
+| SPI | Purpose | Example Plugin |
+|-----|---------|----------------|
+| **AnalysisPlugin** | Static analysis of FlowDefinition | PolicyLintPlugin |
+| **StorePlugin** | Decorates FlowStore | AuditStorePlugin, EventLogStorePlugin |
+| **EnginePlugin** | Installs hooks on FlowEngine | ObservabilityEnginePlugin |
+| **RuntimeAdapterPlugin** | Binds engine to richer API | RichResumeRuntimePlugin, IdempotencyRuntimePlugin |
+| **GenerationPlugin** | Generates output from input | DiagramGenerationPlugin, HierarchyGenerationPlugin, ScenarioGenerationPlugin |
+| **DocumentationPlugin** | Generates string docs | FlowDocumentationPlugin |
+
+### 14 Plugins
+
+| Plugin | SPI Type | What it does |
+|--------|----------|-------------|
+| **AuditStorePlugin** | Store | Captures transition + produced-data diffs |
+| **EventLogStorePlugin** | Store | Append-only transition log (Tenure-lite) |
+| **ReplayService** | — | Reconstruct state at any version |
+| **ProjectionReplayService** | — | Custom reducers for materialized views |
+| **CompensationService** | — | Records compensation events for saga patterns |
+| **ObservabilityEnginePlugin** | Engine | Telemetry via engine logger hooks |
+| **RichResumeRuntimePlugin** | RuntimeAdapter | Resume with status classification (TRANSITIONED, ALREADY_COMPLETE, REJECTED, ...) |
+| **IdempotencyRuntimePlugin** | RuntimeAdapter | Duplicate command suppression |
+| **PolicyLintPlugin** | Analysis | Design-time lint policies (dead data, overwide processors, etc.) |
+| **DiagramGenerationPlugin** | Generation | Mermaid + data-flow JSON + markdown summary |
+| **HierarchyGenerationPlugin** | Generation | Flat enum + builder skeleton from hierarchical specs |
+| **ScenarioGenerationPlugin** | Generation | BDD-style test plans from flow definitions |
+| **FlowDocumentationPlugin** | Documentation | Markdown flow catalog |
+| **GuaranteedSubflowValidator** | — | Validates subflow entry requirements |
+
+### PluginRegistry
+
+```typescript
+const registry = new PluginRegistry<MyState>();
+registry
+  .register(PolicyLintPlugin.defaults())
+  .register(new AuditStorePlugin())
+  .register(new EventLogStorePlugin())
+  .register(new ObservabilityEnginePlugin(sink));
+
+const report = registry.analyzeAll(definition);    // run lint
+const store  = registry.applyStorePlugins(rawStore); // wrap store
+registry.installEnginePlugins(engine);               // install hooks
+const adapters = registry.bindRuntimeAdapters(engine); // get rich APIs
+```
+
+**Design principle: core never changes, plugins layer on top.** See the [Plugin Tutorial](docs/tutorial-plugins.md) for a complete walkthrough.
 
 ---
 
