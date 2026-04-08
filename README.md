@@ -488,53 +488,123 @@ This is the same advantage that Airflow/Temporal users wish they had: **build-ti
 
 ## Pipeline
 
-Not every workflow needs states. For **sequential processing chains** without external events or branching, `Tramli.pipeline()` gives you the same build-time verification with a simpler API:
+Not every workflow needs states. For **sequential processing chains** without external events or branching, `Tramli.pipeline()` gives you the same build-time data-flow verification with a simpler API. No states, no engine, no persistence — just steps and data.
+
+### 1. Define data types
 
 ```java
-var pipeline = Tramli.pipeline("etl")
+record RawInput(String csv) {}
+record Parsed(List<String[]> rows) {}
+record Validated(List<String[]> rows, int errorCount) {}
+record Enriched(List<Map<String, String>> records) {}
+record SaveResult(int savedCount) {}
+```
+
+### 2. Write steps (1 step = 1 [PipelineStep](#pipelinestep))
+
+```java
+PipelineStep parse = new PipelineStep() {
+    @Override public String name() { return "Parse"; }
+    @Override public Set<Class<?>> requires() { return Set.of(RawInput.class); }
+    @Override public Set<Class<?>> produces() { return Set.of(Parsed.class); }
+    @Override public void process(FlowContext ctx) {
+        RawInput raw = ctx.get(RawInput.class);
+        List<String[]> rows = CsvParser.parse(raw.csv());
+        ctx.put(Parsed.class, new Parsed(rows));
+    }
+};
+// validate, enrich, save follow the same pattern
+```
+
+Each step declares what it needs (`requires`) and what it provides (`produces`). **Same contract as [StateProcessor](#stateprocessor)**, but without the state generic.
+
+### 3. Define the pipeline
+
+```java
+var pipeline = Tramli.pipeline("csv-import")
     .initiallyAvailable(RawInput.class)
     .step(parse)       // requires: RawInput,   produces: Parsed
     .step(validate)    // requires: Parsed,     produces: Validated
     .step(enrich)      // requires: Validated,  produces: Enriched
     .step(save)        // requires: Enriched,   produces: SaveResult
-    .build();          // ← requires/produces chain verified
-
-FlowContext result = pipeline.execute(Map.of(RawInput.class, rawData));
-SaveResult saved = result.get(SaveResult.class);
+    .build();          // ← requires/produces chain verified at build time
 ```
 
-Pipeline shares `FlowContext` and `build()` verification with FlowDefinition, but has no states, no engine, and no persistence. It's tramli's **lightweight mode**.
+If `enrich` requires `Validated` but nothing produces it, `build()` fails:
+
+```
+Pipeline 'csv-import' has 1 error(s):
+  - Step 'Enrich' requires Validated but it may not be available
+```
+
+### 4. Run it
 
 ```java
-// Data-flow diagram
-pipeline.dataFlow().toMermaid();
+FlowContext result = pipeline.execute(Map.of(RawInput.class, new RawInput(csvString)));
+SaveResult saved = result.get(SaveResult.class);
+System.out.println("Saved " + saved.savedCount() + " records");
+```
 
+All steps execute sequentially. If a step throws, a `PipelineException` gives you the full picture:
+
+```java
+try {
+    pipeline.execute(data);
+} catch (PipelineException e) {
+    e.completedSteps();  // ["Parse", "Validate"]     ← succeeded
+    e.failedStep();      // "Enrich"                   ← failed here
+    e.context();         // FlowContext with Parsed + Validated
+    e.cause();           // original exception
+}
+```
+
+### 5. Generate diagram
+
+```java
+String mermaid = pipeline.dataFlow().toMermaid();
+```
+
+```mermaid
+flowchart LR
+    RawInput -->|requires| Parse
+    Parse -->|produces| Parsed
+    Parsed -->|requires| Validate
+    Validate -->|produces| Validated
+    Validated -->|requires| Enrich
+    Enrich -->|produces| Enriched
+    Enriched -->|requires| Save
+    Save -->|produces| SaveResult
+```
+
+### More features
+
+```java
 // Dead data detection
 pipeline.dataFlow().deadData();  // types produced but never consumed
 
 // Nest pipelines
 PipelineStep sub = otherPipeline.asStep();
 
-// Error handling
-try {
-    pipeline.execute(data);
-} catch (PipelineException e) {
-    e.completedSteps();  // ["parse", "validate"]
-    e.failedStep();      // "enrich"
-    e.context();         // FlowContext with data up to failure point
-}
+// strictMode: verify produces at runtime
+pipeline.setStrictMode(true);
+
+// Pluggable rendering (Graphviz, PlantUML, custom)
+pipeline.dataFlow().renderDataFlow(myDotRenderer);
+
+// Logger hooks (same as FlowEngine)
+pipeline.setTransitionLogger(entry -> log.info("{} → {}", entry.from(), entry.to()));
 ```
 
 ### When to use what
 
-```
-Sequential 2-4 steps, 1 type each  →  function composition / pipe
-Sequential 5+ steps, data accumulates  →  Tramli.pipeline()
-Branching / external events / persistence  →  Tramli.define() (FlowDefinition)
-Distributed / long-running / scheduled  →  Airflow / Temporal
-```
+| Scenario | Tool |
+|----------|------|
+| Sequential 2-4 steps, 1 type each | Function composition / pipe |
+| Sequential 5+ steps, data accumulates | **`Tramli.pipeline()`** |
+| Branching / external events / persistence | **`Tramli.define()`** ([FlowDefinition](#flowdefinition)) |
+| Distributed / long-running / scheduled | Airflow / Temporal |
 
-Pipeline is tramli's **on-ramp**: start with `pipeline()`, upgrade to `define()` when you need branching or external events.
+Pipeline is tramli's **on-ramp**: start with `pipeline()`, upgrade to `define()` when you need branching or external events. The step interface is the same — your processors don't need to change.
 
 ---
 

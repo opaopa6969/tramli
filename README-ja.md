@@ -400,53 +400,123 @@ CI 連携: 生成 → コミット済み `.mmd` ファイルと比較 → 差分
 
 ## Pipeline
 
-すべてのワークフローにステートが必要なわけではない。外部イベントや分岐のない**直列処理チェーン**には、`Tramli.pipeline()` がよりシンプルな API で同じ build 時検証を提供する:
+すべてのワークフローにステートが必要なわけではない。外部イベントや分岐のない**直列処理チェーン**には、`Tramli.pipeline()` が同じ build 時データフロー検証をよりシンプルな API で提供する。ステートなし、エンジンなし、永続化なし——ステップとデータだけ。
+
+### 1. データ型を定義
 
 ```java
-var pipeline = Tramli.pipeline("etl")
+record RawInput(String csv) {}
+record Parsed(List<String[]> rows) {}
+record Validated(List<String[]> rows, int errorCount) {}
+record Enriched(List<Map<String, String>> records) {}
+record SaveResult(int savedCount) {}
+```
+
+### 2. ステップを書く（1 ステップ = 1 [PipelineStep](#pipelinestep)）
+
+```java
+PipelineStep parse = new PipelineStep() {
+    @Override public String name() { return "Parse"; }
+    @Override public Set<Class<?>> requires() { return Set.of(RawInput.class); }
+    @Override public Set<Class<?>> produces() { return Set.of(Parsed.class); }
+    @Override public void process(FlowContext ctx) {
+        RawInput raw = ctx.get(RawInput.class);
+        List<String[]> rows = CsvParser.parse(raw.csv());
+        ctx.put(Parsed.class, new Parsed(rows));
+    }
+};
+// validate, enrich, save も同じパターン
+```
+
+各ステップが「何を必要とし何を提供するか」を宣言。**[StateProcessor](#stateprocessor) と同じ契約**だが、ステートのジェネリクスがない。
+
+### 3. パイプラインを定義
+
+```java
+var pipeline = Tramli.pipeline("csv-import")
     .initiallyAvailable(RawInput.class)
     .step(parse)       // requires: RawInput,   produces: Parsed
     .step(validate)    // requires: Parsed,     produces: Validated
     .step(enrich)      // requires: Validated,  produces: Enriched
     .step(save)        // requires: Enriched,   produces: SaveResult
-    .build();          // ← requires/produces チェーン検証
-
-FlowContext result = pipeline.execute(Map.of(RawInput.class, rawData));
-SaveResult saved = result.get(SaveResult.class);
+    .build();          // ← requires/produces チェーンを build 時に検証
 ```
 
-Pipeline は FlowDefinition と `FlowContext` と `build()` 検証を共有するが、ステート、エンジン、永続化はない。tramli の**軽量モード**。
+`enrich` が `Validated` を requires しているのに誰も produces していなければ、`build()` が失敗:
+
+```
+Pipeline 'csv-import' has 1 error(s):
+  - Step 'Enrich' requires Validated but it may not be available
+```
+
+### 4. 実行
 
 ```java
-// データフロー図
-pipeline.dataFlow().toMermaid();
+FlowContext result = pipeline.execute(Map.of(RawInput.class, new RawInput(csvString)));
+SaveResult saved = result.get(SaveResult.class);
+System.out.println("Saved " + saved.savedCount() + " records");
+```
 
+全ステップが順に実行。ステップが例外を投げると `PipelineException` で全体像が分かる:
+
+```java
+try {
+    pipeline.execute(data);
+} catch (PipelineException e) {
+    e.completedSteps();  // ["Parse", "Validate"]     ← 成功
+    e.failedStep();      // "Enrich"                   ← ここで失敗
+    e.context();         // Parsed + Validated が入った FlowContext
+    e.cause();           // 元の例外
+}
+```
+
+### 5. 図を生成
+
+```java
+String mermaid = pipeline.dataFlow().toMermaid();
+```
+
+```mermaid
+flowchart LR
+    RawInput -->|requires| Parse
+    Parse -->|produces| Parsed
+    Parsed -->|requires| Validate
+    Validate -->|produces| Validated
+    Validated -->|requires| Enrich
+    Enrich -->|produces| Enriched
+    Enriched -->|requires| Save
+    Save -->|produces| SaveResult
+```
+
+### その他の機能
+
+```java
 // Dead data 検出
 pipeline.dataFlow().deadData();  // produces されたが requires されない型
 
 // パイプラインのネスト
 PipelineStep sub = otherPipeline.asStep();
 
-// エラーハンドリング
-try {
-    pipeline.execute(data);
-} catch (PipelineException e) {
-    e.completedSteps();  // ["parse", "validate"]
-    e.failedStep();      // "enrich"
-    e.context();         // 失敗時点までのデータが入った FlowContext
-}
+// strictMode: produces を実行時に検証
+pipeline.setStrictMode(true);
+
+// カスタムレンダリング（Graphviz, PlantUML 等）
+pipeline.dataFlow().renderDataFlow(myDotRenderer);
+
+// ログフック（FlowEngine と同じ）
+pipeline.setTransitionLogger(entry -> log.info("{} → {}", entry.from(), entry.to()));
 ```
 
 ### 使い分け
 
-```
-直列 2-4 ステップ → 関数合成 / pipe
-直列 5+ ステップ、データ蓄積 → Tramli.pipeline()
-分岐 / 外部イベント / 永続化 → Tramli.define()（FlowDefinition）
-分散 / 長時間 / スケジュール → Airflow / Temporal
-```
+| シナリオ | ツール |
+|---------|--------|
+| 直列 2-4 ステップ、型 1 つずつ | 関数合成 / pipe |
+| 直列 5+ ステップ、データ蓄積 | **`Tramli.pipeline()`** |
+| 分岐 / 外部イベント / 永続化 | **`Tramli.define()`**（[FlowDefinition](#flowdefinition)） |
+| 分散 / 長時間 / スケジュール | Airflow / Temporal |
 
-Pipeline は tramli の**入口**。`pipeline()` で始めて、分岐や外部イベントが必要になったら `define()` にアップグレード。
+Pipeline は tramli の**入口**。`pipeline()` で始めて、分岐や外部イベントが必要になったら `define()` にアップグレード。ステップのインターフェースは同じ——プロセッサを書き直す必要はない。
 
 ---
 
