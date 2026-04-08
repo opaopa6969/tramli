@@ -91,7 +91,7 @@ See [dge/decisions/index.md](../dge/decisions/index.md)
 
 | # | Feature | Design |
 |---|---------|--------|
-| F14 | Per-state timeout on External transitions | DD-002 踏襲。liveness 問題の言語レベル解決策。Harel 教授提案 |
+| F14 | Per-state timeout on External transitions | ✅ complete (v1.15.0) |
 | F16 | tramli-ports (言語横断 I/O 契約共有) | 需要が出たら |
 
 ## NOT-DOING (スコープ外)
