@@ -1,0 +1,47 @@
+{
+  "name": "@unlaxer/dde-toolkit",
+  "version": "0.1.8",
+  "description": "Document Deficit Extraction — find what's not understood in your docs",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "dde-install": "bin/dde-install.js",
+    "dde-link": "bin/dde-link.js",
+    "dde-tool": "bin/dde-tool.js"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "flows/",
+    "skills/",
+    "templates/",
+    "method.md",
+    "agents-dde-section.md",
+    "version.txt",
+    "LICENSE"
+  ],
+  "keywords": [
+    "documentation",
+    "glossary",
+    "auto-link",
+    "mermaid",
+    "llm",
+    "claude-code",
+    "dde",
+    "dge"
+  ],
+  "dependencies": {
+    "unified": "^11.0.0",
+    "remark-parse": "^11.0.0",
+    "remark-stringify": "^11.0.0",
+    "unist-util-visit": "^5.0.0",
+    "yaml": "^2.0.0"
+  },
+  "devDependencies": {
+    "vitest": "^2.0.0"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  }
+}

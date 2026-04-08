@@ -101,7 +101,14 @@ public final class FlowEngine {
 
         var flowOpt = store.loadForUpdate(flowId, definition);
         if (flowOpt.isEmpty()) {
-            throw new FlowException("FLOW_NOT_FOUND", "Flow " + flowId + " not found or already completed");
+            // Distinguish: not found vs already completed
+            if (store instanceof InMemoryFlowStore mem) {
+                var any = mem.load(flowId);
+                if (any.isPresent() && any.get().isCompleted()) {
+                    throw FlowException.flowAlreadyCompleted(flowId, any.get().exitState());
+                }
+            }
+            throw FlowException.flowNotFound(flowId);
         }
         var flow = flowOpt.get();
 
@@ -111,6 +118,7 @@ public final class FlowEngine {
 
         if (Instant.now().isAfter(flow.expiresAt())) {
             flow.complete("EXPIRED");
+            flow.setLastError("TTL expired");
             store.save(flow);
             return flow;
         }
@@ -149,7 +157,7 @@ public final class FlowEngine {
                     case TransitionGuard.GuardOutput.Expired e -> "expired";
                 };
                 String reason = output instanceof TransitionGuard.GuardOutput.Rejected r ? r.reason() : null;
-                guardLogger.accept(new LogEntry.GuardResult(flow.id(), currentState.name(), guard.name(), result, reason));
+                guardLogger.accept(new LogEntry.GuardResult(flow.id(), definition.name(), currentState.name(), guard.name(), result, reason));
             }
             switch (output) {
                 case TransitionGuard.GuardOutput.Accepted accepted -> {
@@ -248,7 +256,7 @@ public final class FlowEngine {
         flow.transitionTo(t.to());
         store.recordTransition(flow.id(), from, t.to(),
                 t.processor() != null ? t.processor().name() : "auto", flow.context());
-        logTransition(flow.id(), from, t.to(), t.processor() != null ? t.processor().name() : "auto");
+        logTransition(flow.id(), flow.definition().name(), from, t.to(), t.processor() != null ? t.processor().name() : "auto");
         return 1;
     }
 
@@ -267,7 +275,7 @@ public final class FlowEngine {
         S from = flow.currentState();
         flow.transitionTo(target);
         store.recordTransition(flow.id(), from, target, branch.name() + ":" + label, flow.context());
-        logTransition(flow.id(), from, target, branch.name() + ":" + label);
+        logTransition(flow.id(), flow.definition().name(), from, target, branch.name() + ":" + label);
         return 1;
     }
 
@@ -399,8 +407,8 @@ public final class FlowEngine {
                         flow.transitionTo(route.target());
                         store.recordTransition(flow.id(), from, route.target(),
                                 "error:" + cause.getClass().getSimpleName(), flow.context());
-                        logTransition(flow.id(), from, route.target(), "error:" + cause.getClass().getSimpleName());
-                        logError(flow.id(), fromState, route.target(), "error:" + cause.getClass().getSimpleName(), cause);
+                        logTransition(flow.id(), flow.definition().name(), from, route.target(), "error:" + cause.getClass().getSimpleName());
+                        logError(flow.id(), flow.definition().name(), fromState, route.target(), "error:" + cause.getClass().getSimpleName(), cause);
                         if (route.target().isTerminal()) flow.complete(route.target().name());
                         return;
                     }
@@ -414,8 +422,8 @@ public final class FlowEngine {
             S from = flow.currentState();
             flow.transitionTo(errorTarget);
             store.recordTransition(flow.id(), from, errorTarget, "error", flow.context());
-            logTransition(flow.id(), from, errorTarget, "error");
-            logError(flow.id(), fromState, errorTarget, "error", cause);
+            logTransition(flow.id(), flow.definition().name(), from, errorTarget, "error");
+            logError(flow.id(), flow.definition().name(), fromState, errorTarget, "error", cause);
             if (errorTarget.isTerminal()) flow.complete(errorTarget.name());
         } else {
             flow.complete("TERMINAL_ERROR");
@@ -433,16 +441,16 @@ public final class FlowEngine {
         }
     }
 
-    private void logTransition(String flowId, FlowState from, FlowState to, String trigger) {
+    private void logTransition(String flowId, String flowName, FlowState from, FlowState to, String trigger) {
         if (transitionLogger != null) {
-            transitionLogger.accept(new LogEntry.Transition(flowId,
+            transitionLogger.accept(new LogEntry.Transition(flowId, flowName,
                     from != null ? from.name() : null, to.name(), trigger));
         }
     }
 
-    private void logError(String flowId, FlowState from, FlowState to, String trigger, Throwable cause) {
+    private void logError(String flowId, String flowName, FlowState from, FlowState to, String trigger, Throwable cause) {
         if (errorLogger != null) {
-            errorLogger.accept(new LogEntry.Error(flowId,
+            errorLogger.accept(new LogEntry.Error(flowId, flowName,
                     from != null ? from.name() : null, to != null ? to.name() : null, trigger, cause));
         }
     }

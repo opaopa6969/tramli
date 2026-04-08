@@ -57,4 +57,17 @@ public class FlowException extends RuntimeException {
     public static FlowException maxChainDepth() {
         return new FlowException("MAX_CHAIN_DEPTH", "Auto chain exceeded max depth (10)");
     }
+
+    public static FlowException flowNotFound(String flowId) {
+        return new FlowException("FLOW_NOT_FOUND", "Flow " + flowId + " not found");
+    }
+
+    public static FlowException flowAlreadyCompleted(String flowId, String exitState) {
+        return new FlowException("FLOW_ALREADY_COMPLETED",
+                "Flow " + flowId + " already completed with exit state: " + exitState);
+    }
+
+    public static FlowException flowExpired(String flowId) {
+        return new FlowException("FLOW_EXPIRED", "Flow " + flowId + " has expired (TTL exceeded)");
+    }
 }

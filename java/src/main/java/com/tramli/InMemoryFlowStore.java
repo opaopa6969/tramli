@@ -40,6 +40,14 @@ public final class InMemoryFlowStore implements FlowStore {
                 from != null ? from.name() : null, to.name(), trigger, subFlowName, Instant.now()));
     }
 
+    /** Load a flow by ID regardless of completion status (read-only access). */
+    @SuppressWarnings("unchecked")
+    public <S extends Enum<S> & FlowState> Optional<FlowInstance<S>> load(String flowId) {
+        FlowInstance<?> flow = flows.get(flowId);
+        if (flow == null) return Optional.empty();
+        return Optional.of((FlowInstance<S>) flow);
+    }
+
     public List<TransitionRecord> transitionLog() {
         return Collections.unmodifiableList(transitionLog);
     }

@@ -63,7 +63,7 @@ public final class Pipeline {
         for (var step : steps) {
             // Transition log
             if (transitionLogger != null) {
-                transitionLogger.accept(new LogEntry.Transition(flowId, prev, step.name(), step.name()));
+                transitionLogger.accept(new LogEntry.Transition(flowId, name, prev, step.name(), step.name()));
             }
 
             // State logger: capture keys before
@@ -73,7 +73,7 @@ public final class Pipeline {
                 step.process(ctx);
             } catch (Exception e) {
                 if (errorLogger != null) {
-                    errorLogger.accept(new LogEntry.Error(flowId, prev, step.name(), step.name(), e));
+                    errorLogger.accept(new LogEntry.Error(flowId, name, prev, step.name(), step.name(), e));
                 }
                 throw new PipelineException(step.name(), completed, ctx, e);
             }
@@ -93,7 +93,7 @@ public final class Pipeline {
             if (stateLogger != null && keysBefore != null) {
                 for (var key : ctx.snapshot().keySet()) {
                     if (!keysBefore.contains(key)) {
-                        stateLogger.accept(new LogEntry.State(flowId, step.name(), key, ctx.snapshot().get(key)));
+                        stateLogger.accept(new LogEntry.State(flowId, name, step.name(), key, ctx.snapshot().get(key)));
                     }
                 }
             }

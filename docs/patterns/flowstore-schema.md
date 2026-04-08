@@ -101,6 +101,29 @@ WHERE id = ? AND version = ?;
 
 Use `FlowInstance.withVersion(newVersion)` after save to keep local state in sync.
 
+## PostgreSQL Tips
+
+### SET LOCAL must be a separate statement
+
+Do NOT combine `SET LOCAL lock_timeout` with `SELECT` in one PreparedStatement:
+
+```java
+// ❌ WRONG: JDBC returns SET LOCAL's empty result, never reaches SELECT
+ps = conn.prepareStatement("SET LOCAL lock_timeout = '5s'; SELECT * FROM flow_instances ...");
+
+// ✅ CORRECT: separate statements
+conn.createStatement().execute("SET LOCAL lock_timeout = '5s'");
+ps = conn.prepareStatement("SELECT * FROM flow_instances WHERE id = ? FOR UPDATE");
+```
+
+### Flow definition mismatch
+
+Never mix FlowDefinition versions within a single flow lifecycle. If `/callback` uses
+FlowDefinition v2 but `/verify` still uses v1, `resumeAndExecute()` will fail with
+`FLOW_NOT_FOUND` because the flow ID was created by v2.
+
+**Rule: all endpoints in one authentication flow must use the same FlowDefinition instance.**
+
 ## FlowInstance.restore() Parameters
 
 The `restore()` factory method takes 10 parameters. Reference:
