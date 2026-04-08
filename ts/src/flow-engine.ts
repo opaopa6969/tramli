@@ -299,6 +299,25 @@ export class FlowEngine {
       }
     }
     this.errorLogger?.({ flowId: flow.id, from: fromState, to: null, trigger: 'error', cause: cause ?? null });
+
+    // 1. Try exception-typed routes first (onStepError)
+    if (cause && flow.definition.exceptionRoutes) {
+      const routes = flow.definition.exceptionRoutes.get(fromState);
+      if (routes) {
+        for (const route of routes) {
+          if (cause instanceof route.errorClass) {
+            const from = flow.currentState;
+            flow.transitionTo(route.target);
+            this.store.recordTransition(flow.id, from, route.target,
+              `error:${cause.constructor.name}`, flow.context);
+            if (flow.definition.stateConfig[route.target].terminal) flow.complete(route.target);
+            return;
+          }
+        }
+      }
+    }
+
+    // 2. Fall back to state-based error transition (onError)
     const errorTarget = flow.definition.errorTransitions.get(fromState);
     if (errorTarget) {
       const from = flow.currentState;

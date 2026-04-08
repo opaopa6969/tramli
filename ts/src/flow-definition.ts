@@ -14,6 +14,7 @@ export class FlowDefinition<S extends string> {
   readonly terminalStates: Set<S>;
   readonly dataFlowGraph!: DataFlowGraph<S> | null;
   readonly warnings!: string[];
+  readonly exceptionRoutes!: Map<S, Array<{ errorClass: new (...args: any[]) => Error; target: S }>>;
 
   private constructor(
     name: string, stateConfig: Record<S, StateConfig>, ttl: number,
@@ -97,6 +98,7 @@ export class Builder<S extends string> {
   private maxGuardRetries = 3;
   private readonly transitions: Transition<S>[] = [];
   private readonly errorTransitions = new Map<S, S>();
+  private readonly _exceptionRoutes = new Map<S, Array<{ errorClass: new (...args: any[]) => Error; target: S }>>();
   private readonly initiallyAvailableKeys: string[] = [];
 
   constructor(name: string, stateConfig: Record<S, StateConfig>) {
@@ -118,6 +120,13 @@ export class Builder<S extends string> {
 
   onError(from: S, to: S): this {
     this.errorTransitions.set(from, to);
+    return this;
+  }
+
+  /** Route specific error types to specific states. Checked before onError. */
+  onStepError(from: S, errorClass: new (...args: any[]) => Error, to: S): this {
+    if (!this._exceptionRoutes.has(from)) this._exceptionRoutes.set(from, []);
+    this._exceptionRoutes.get(from)!.push({ errorClass, target: to });
     return this;
   }
 
@@ -166,6 +175,7 @@ export class Builder<S extends string> {
       warnings.push(`Perpetual flow '${this.name}' has External transitions — ensure events are always delivered to avoid deadlock (liveness risk)`);
     }
     (result as any).warnings = warnings;
+    (result as any).exceptionRoutes = new Map(this._exceptionRoutes);
     return result;
   }
 

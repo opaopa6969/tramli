@@ -661,6 +661,25 @@ When a [guard](#transitionguard) returns `Rejected`, the [engine](#flowengine) i
 
 `onAnyError(S)` maps every non-[terminal](#terminal-state) state to an error target. `onError(from, to)` overrides specific states. Error targets are included in [reachability checks](#8-item-build-validation).
 
+### Exception-Typed Error Routing
+
+Different exceptions can route to different error states. Use `onStepError` for fine-grained control:
+
+```java
+.from(TOKEN_EXCHANGE).auto(USER_RESOLVED, tokenExchange)
+.onStepError(TOKEN_EXCHANGE, HttpTimeoutException.class, RETRIABLE_ERROR)  // timeout → retry
+.onStepError(TOKEN_EXCHANGE, InvalidTokenException.class, TERMINAL_ERROR)  // bad token → fatal
+.onAnyError(GENERAL_ERROR)  // fallback for unmatched exceptions
+```
+
+Matching order:
+1. `onStepError` — first matching `instanceof` check wins
+2. `onError` — state-based fallback
+3. `onAnyError` — catch-all
+4. No match — `TERMINAL_ERROR` exit
+
+This is useful for I/O-heavy processors where **400 errors (client fault) and 500 errors (server fault) need different handling**.
+
 ### TTL Expiry
 
 Every flow has a TTL (set via `.ttl()`). If `resumeAndExecute()` is called after expiry, the flow completes with exit state `"EXPIRED"`. No transition fires — the flow is simply done.

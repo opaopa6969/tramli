@@ -385,4 +385,72 @@ class FlowEngineErrorTest {
 
         assertNotNull(def);
     }
+
+    // ─── Exception-typed error routing ──────────────────
+
+    static class RetriableException extends RuntimeException {
+        RetriableException(String msg) { super(msg); }
+    }
+    static class FatalException extends RuntimeException {
+        FatalException(String msg) { super(msg); }
+    }
+
+    enum ThreeWayError implements FlowState {
+        INIT(false, true), DONE(true, false),
+        RETRY(true, false), FATAL(true, false), FALLBACK(true, false);
+        private final boolean terminal, initial;
+        ThreeWayError(boolean t, boolean i) { terminal = t; initial = i; }
+        @Override public boolean isTerminal() { return terminal; }
+        @Override public boolean isInitial() { return initial; }
+    }
+
+    @Test
+    void onStepError_routesByExceptionType() {
+        var def = Tramli.define("typed-error", ThreeWayError.class)
+                .initiallyAvailable(Input.class)
+                .from(ThreeWayError.INIT).auto(ThreeWayError.DONE,
+                        new StateProcessor() {
+                            @Override public String name() { return "Failing"; }
+                            @Override public Set<Class<?>> requires() { return Set.of(Input.class); }
+                            @Override public Set<Class<?>> produces() { return Set.of(); }
+                            @Override public void process(FlowContext ctx) {
+                                throw new RetriableException("timeout");
+                            }
+                        })
+                .onStepError(ThreeWayError.INIT, RetriableException.class, ThreeWayError.RETRY)
+                .onStepError(ThreeWayError.INIT, FatalException.class, ThreeWayError.FATAL)
+                .onAnyError(ThreeWayError.FALLBACK)
+                .build();
+
+        var engine = new FlowEngine(new InMemoryFlowStore());
+        var flow = engine.startFlow(def, "s1", Map.of(Input.class, new Input("x")));
+
+        // RetriableException → RETRY (not FALLBACK)
+        assertEquals(ThreeWayError.RETRY, flow.currentState());
+        assertTrue(flow.isCompleted());
+    }
+
+    @Test
+    void onStepError_fallsBackToOnError() {
+        var def = Tramli.define("fallback-error", ThreeWayError.class)
+                .initiallyAvailable(Input.class)
+                .from(ThreeWayError.INIT).auto(ThreeWayError.DONE,
+                        new StateProcessor() {
+                            @Override public String name() { return "Failing"; }
+                            @Override public Set<Class<?>> requires() { return Set.of(Input.class); }
+                            @Override public Set<Class<?>> produces() { return Set.of(); }
+                            @Override public void process(FlowContext ctx) {
+                                throw new IllegalStateException("unknown error");
+                            }
+                        })
+                .onStepError(ThreeWayError.INIT, RetriableException.class, ThreeWayError.RETRY)
+                .onAnyError(ThreeWayError.FALLBACK)
+                .build();
+
+        var engine = new FlowEngine(new InMemoryFlowStore());
+        var flow = engine.startFlow(def, "s1", Map.of(Input.class, new Input("x")));
+
+        // IllegalStateException doesn't match RetriableException → falls back to FALLBACK
+        assertEquals(ThreeWayError.FALLBACK, flow.currentState());
+    }
 }

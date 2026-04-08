@@ -344,6 +344,27 @@ public final class FlowEngine {
                 fe.withContextSnapshot(available, java.util.Set.of());
             }
         }
+
+        // 1. Try exception-typed routes first (onStepError)
+        if (cause != null) {
+            var routes = flow.definition().exceptionRoutes().get(fromState);
+            if (routes != null) {
+                for (var route : routes) {
+                    if (route.exceptionType().isInstance(cause)) {
+                        S from = flow.currentState();
+                        flow.transitionTo(route.target());
+                        store.recordTransition(flow.id(), from, route.target(),
+                                "error:" + cause.getClass().getSimpleName(), flow.context());
+                        logTransition(flow.id(), from, route.target(), "error:" + cause.getClass().getSimpleName());
+                        logError(flow.id(), fromState, route.target(), "error:" + cause.getClass().getSimpleName(), cause);
+                        if (route.target().isTerminal()) flow.complete(route.target().name());
+                        return;
+                    }
+                }
+            }
+        }
+
+        // 2. Fall back to state-based error transition (onError)
         S errorTarget = flow.definition().errorTransitions().get(fromState);
         if (errorTarget != null) {
             S from = flow.currentState();

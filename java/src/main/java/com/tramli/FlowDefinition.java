@@ -26,13 +26,18 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
     private final int maxGuardRetries;
     private final List<Transition<S>> transitions;
     private final Map<S, S> errorTransitions;
+    private final Map<S, List<ExceptionRoute<S>>> exceptionRoutes;
     private final S initialState;
+
+    /** Route to a specific state based on exception type. */
+    public record ExceptionRoute<S>(Class<? extends Exception> exceptionType, S target) {}
     private final Set<S> terminalStates;
     private final DataFlowGraph<S> dataFlowGraph;
     private final List<String> warnings;
 
     private FlowDefinition(String name, Class<S> stateClass, Duration ttl, int maxGuardRetries,
                            List<Transition<S>> transitions, Map<S, S> errorTransitions,
+                           Map<S, List<ExceptionRoute<S>>> exceptionRoutes,
                            DataFlowGraph<S> dataFlowGraph, List<String> warnings) {
         this.name = name;
         this.stateClass = stateClass;
@@ -40,6 +45,7 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
         this.maxGuardRetries = maxGuardRetries;
         this.transitions = List.copyOf(transitions);
         this.errorTransitions = Map.copyOf(errorTransitions);
+        this.exceptionRoutes = exceptionRoutes != null ? Map.copyOf(exceptionRoutes) : Map.of();
 
         S initial = null;
         Set<S> terminals = EnumSet.noneOf(stateClass);
@@ -59,6 +65,7 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
     public int maxGuardRetries() { return maxGuardRetries; }
     public List<Transition<S>> transitions() { return transitions; }
     public Map<S, S> errorTransitions() { return errorTransitions; }
+    public Map<S, List<ExceptionRoute<S>>> exceptionRoutes() { return exceptionRoutes; }
     public S initialState() { return initialState; }
     public Set<S> terminalStates() { return terminalStates; }
 
@@ -111,7 +118,8 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
         }
         // Reuse parent's data-flow graph (plugin insertion preserves data contracts)
         return new FlowDefinition<>(name + "+plugin:" + pluginFlow.name(), stateClass, ttl,
-                maxGuardRetries, newTransitions, new LinkedHashMap<>(errorTransitions), this.dataFlowGraph, this.warnings);
+                maxGuardRetries, newTransitions, new LinkedHashMap<>(errorTransitions), this.exceptionRoutes,
+                this.dataFlowGraph, this.warnings);
     }
 
     // ─── Builder ─────────────────────────────────────────────
@@ -127,6 +135,7 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
         private int maxGuardRetries = 3;
         private final List<Transition<S>> transitions = new ArrayList<>();
         private final Map<S, S> errorTransitions = new LinkedHashMap<>();
+        private final Map<S, List<ExceptionRoute<S>>> exceptionRoutes = new LinkedHashMap<>();
         private final Set<Class<?>> initiallyAvailable = new HashSet<>();
 
         private Builder(String name, Class<S> stateClass) {
@@ -156,6 +165,13 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
 
         public Builder<S> onError(S from, S to) {
             errorTransitions.put(from, to);
+            return this;
+        }
+
+        /** Route specific exception types to specific states. Checked before onError. */
+        public Builder<S> onStepError(S from, Class<? extends Exception> exceptionType, S to) {
+            exceptionRoutes.computeIfAbsent(from, k -> new ArrayList<>())
+                    .add(new ExceptionRoute<>(exceptionType, to));
             return this;
         }
 
@@ -249,11 +265,11 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
         }
 
         public FlowDefinition<S> build() {
-            var def = new FlowDefinition<>(name, stateClass, ttl, maxGuardRetries, transitions, errorTransitions, null, null);
+            var def = new FlowDefinition<>(name, stateClass, ttl, maxGuardRetries, transitions, errorTransitions, exceptionRoutes, null, null);
             validate(def);
             var graph = DataFlowGraph.build(def, initiallyAvailable);
             var warnings = buildWarnings(def);
-            return new FlowDefinition<>(name, stateClass, ttl, maxGuardRetries, transitions, errorTransitions, graph, warnings);
+            return new FlowDefinition<>(name, stateClass, ttl, maxGuardRetries, transitions, errorTransitions, exceptionRoutes, graph, warnings);
         }
 
         private List<String> buildWarnings(FlowDefinition<S> def) {
