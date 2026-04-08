@@ -396,6 +396,110 @@ MermaidGenerator.writeToFile(definition, Path.of("docs/diagrams"));
 
 CI 連携: 生成 → コミット済み `.mmd` ファイルと比較 → 差分があればテスト失敗。開発者にフロー変更時の図の更新を強制する。
 
+### 全 API リファレンス
+
+#### DataFlowGraph
+
+| メソッド | 戻り値 | 説明 |
+|---------|--------|------|
+| `availableAt(state)` | `Set<Class<?>>` | 指定状態で context に利用可能な型 |
+| `producersOf(type)` | `List<NodeInfo>` | この型を produces する processor/guard |
+| `consumersOf(type)` | `List<NodeInfo>` | この型を requires する processor/guard |
+| `deadData()` | `Set<Class<?>>` | produces されたが requires されない型 |
+| `lifetime(type)` | `Lifetime(firstProduced, lastConsumed)` | データのライフサイクル |
+| `pruningHints()` | `Map<S, Set<Class<?>>>` | 各状態で不要になった型 |
+| `impactOf(type)` | `Impact(producers, consumers)` | 型変更の影響を受けるノード |
+| `parallelismHints()` | `List<String[]>` | データ依存のない独立 processor ペア |
+| `assertDataFlow(ctx, state)` | `List<Class<?>>` | 不変条件の欠落型（空 = OK） |
+| `verifyProcessor(proc, ctx)` | `List<String>` | 実行時の requires/produces 違反 |
+| `isCompatible(a, b)` | `boolean` | processor B が A を置換可能か |
+| `migrationOrder()` | `List<String>` | 依存順ソートの移植推奨順序 |
+| `testScaffold()` | `Map<String, List<String>>` | processor ごとのテスト用最小データ |
+| `generateInvariantAssertions()` | `List<String>` | 各状態のデータフロー不変条件文字列 |
+| `crossFlowMap(graphs...)` | `List<String>` | フロー間のデータ依存 |
+| `diff(before, after)` | `DiffResult` | 2 つのグラフの差分 |
+| `versionCompatibility(v1, v2)` | `List<String>` | 定義バージョン間の非互換 |
+| `toMermaid()` | `String` | Mermaid flowchart LR 図 |
+| `toJson()` | `String` | 構造化 JSON |
+| `toMarkdown()` | `String` | 移植チェックリスト（Markdown） |
+| `toRenderable()` | `RenderableGraph.DataFlow` | カスタムレンダラー用 read-only ビュー |
+| `renderDataFlow(fn)` | `String` | カスタム関数でレンダリング（dot, PlantUML 等） |
+
+#### FlowDefinition
+
+| メソッド | 説明 |
+|---------|------|
+| `build()` | 検証 + 構築（8 項目 + データフロー検証） |
+| `dataFlowGraph()` | 導出された DataFlowGraph を取得 |
+| `warnings()` | 構造的警告（liveness リスク等） |
+| `withPlugin(from, to, pluginFlow)` | 遷移の前にサブフローを挿入（新定義を返す） |
+
+#### FlowInstance
+
+| メソッド | 説明 |
+|---------|------|
+| `currentState()` | 現在の状態 |
+| `isCompleted()` | terminal に到達したか |
+| `exitState()` | terminal 状態名（active なら null） |
+| `context()` | 全データが入った FlowContext |
+| `lastError()` | 最後の processor 失敗のエラーメッセージ |
+| `activeSubFlow()` | アクティブなサブフロー（なければ null） |
+| `statePath()` | ルートからの状態パス: `["PAYMENT", "CONFIRM"]` |
+| `statePathString()` | スラッシュ区切り: `"PAYMENT/CONFIRM"` |
+| `waitingFor()` | 現在の External 遷移が必要とする型 |
+| `availableData()` | 現在の状態で利用可能な型（DataFlowGraph より） |
+| `missingFor()` | 次の遷移に不足している型 |
+| `withVersion(n)` | バージョン更新コピー（FlowStore の楽観ロック用） |
+
+#### FlowContext
+
+| メソッド | 説明 |
+|---------|------|
+| `get(key)` | 型付き値取得（なければ例外） |
+| `find(key)` | 型付き値取得（Optional / undefined） |
+| `put(key, value)` | 型付き値を保存 |
+| `has(key)` | キーの存在確認 |
+| `registerAlias(type, alias)` | 言語横断シリアライズ用のエイリアス登録 |
+| `toAliasMap()` | エイリアス → 値のマップにエクスポート |
+| `fromAliasMap(map)` | エイリアスマップからインポート |
+
+#### FlowEngine
+
+| メソッド | 説明 |
+|---------|------|
+| `startFlow(def, session, data)` | 新しいフローインスタンスを開始 |
+| `resumeAndExecute(flowId, def)` | External 遷移で再開 |
+| `setTransitionLogger(fn)` | 遷移ごとのログ |
+| `setStateLogger(fn)` | context.put() ごとのログ（オプト・イン） |
+| `setErrorLogger(fn)` | エラー遷移のログ |
+| `removeAllLoggers()` | 全ロガー解除 |
+
+#### Builder DSL
+
+| メソッド | 説明 |
+|---------|------|
+| `.from(state).auto(to, processor)` | Auto 遷移 |
+| `.from(state).external(to, guard)` | External 遷移（イベント待ち） |
+| `.from(state).branch(branch).to(s, label).endBranch()` | 条件分岐 |
+| `.from(state).subFlow(def).onExit("X", s).endSubFlow()` | サブフロー埋め込み |
+| `.onError(from, to)` | 状態ベースのエラー遷移 |
+| `.onStepError(from, ExceptionClass, to)` | 例外型ベースのエラー遷移 |
+| `.onAnyError(state)` | 全状態のエラーフォールバック |
+| `.initiallyAvailable(types...)` | 初期データ型の宣言 |
+| `.ttl(duration)` | フローの有効期限 |
+| `.maxGuardRetries(n)` | Guard 拒否の上限回数 |
+
+#### コード生成
+
+| クラス | メソッド | 説明 |
+|-------|---------|------|
+| `MermaidGenerator` | `generate(def)` | 状態遷移図 |
+| `MermaidGenerator` | `generateDataFlow(def)` | データフロー図 |
+| `MermaidGenerator` | `generateExternalContract(def)` | External 遷移のデータ契約図 |
+| `MermaidGenerator` | `dataFlow(renderable)` | RenderableGraph を Mermaid でレンダリング |
+| `MermaidGenerator` | `stateDiagram(renderable)` | RenderableStateDiagram を Mermaid でレンダリング |
+| `SkeletonGenerator` | `generate(def, language)` | Java/TS/Rust の Processor スケルトン生成 |
+
 ---
 
 ## Pipeline
