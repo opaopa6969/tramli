@@ -340,9 +340,13 @@ This diagram is generated **from code** — it can never be out of date.
 
 tramli has 8 building blocks. Each is small, focused, and testable in isolation.
 
+> **Analogy for beginners:** Think of a board game. **FlowState** is the squares on the board. **StateProcessor** is "what happens when you land on a square." **TransitionGuard** is the gate that checks "do you have the right card to pass?" **FlowContext** is your backpack — it holds all the items you've collected. **FlowDefinition** is the game board itself. **FlowEngine** is the referee who moves your piece. **FlowStore** is the save file.
+
 ### FlowState
 
 An `enum` that defines all possible states. Each state knows if it's [terminal](#terminal-state) (flow ends here) or [initial](#initial-state) (flow starts here).
+
+> Think of it as the list of "squares" on your board game. `CREATED` is the start square, `SHIPPED` is the goal.
 
 <details open><summary><b>Java</b></summary>
 
@@ -385,6 +389,8 @@ pub trait FlowState: Clone + Copy + Eq + Hash + Debug {
 ### StateProcessor
 
 The **business logic** for one transition. The most important rule: **1 transition = 1 processor.**
+
+> When you land on the "CREATED" square, the processor runs: "take the order request, create a payment intent, put it in the backpack." That's it — one step, one job.
 
 <details open><summary><b>Java</b></summary>
 
@@ -431,6 +437,8 @@ This means:
 ### TransitionGuard
 
 Validates an [External transition](#external-transition). A **pure function** — it must not modify [FlowContext](#flowcontext).
+
+> The guard is a **gatekeeper**. Your game piece is waiting at "PAYMENT_PENDING." Someone from outside (the payment service) knocks on the door. The guard checks: "Is the payment valid?" If yes → the gate opens and you move forward. If no → "Rejected, try again." If you fail too many times → you get sent to the error square.
 
 <details open><summary><b>Java</b></summary>
 
@@ -498,6 +506,8 @@ The `sealed interface` means the [FlowEngine](#flowengine) handles exactly 3 cas
 ### BranchProcessor
 
 Chooses which path to take at a decision point. Returns a **label** (string) that maps to a target state in the [FlowDefinition](#flowdefinition).
+
+> The fork in the road. "If the user needs MFA, go left. If not, go right." The branch processor looks in the backpack, makes a decision, and tells the engine which way to go.
 
 <details open><summary><b>Java</b></summary>
 
@@ -592,6 +602,8 @@ impl BranchProcessor<AuthState> for MfaCheck {
 
 Type-safe data bucket. Keyed by `Class<?>` — each type appears at most once.
 
+> Your **backpack**. Every time a processor runs, it takes something out (requires) and puts something new in (produces). The backpack carries everything from the start to the end of the game. Any processor can reach in and grab what it needs — no relay needed.
+
 <details open><summary><b>Java</b></summary>
 
 ```java
@@ -632,6 +644,8 @@ let o: Option<&PaymentResult> = ctx.find::<PaymentResult>(); // optional read
 ### FlowDefinition
 
 The **single source of truth** for a flow's structure. A declarative [transition table](#transition-table) built with a DSL and validated at `build()`.
+
+> The **game board** itself. You read it top-to-bottom and you see the entire game: "Start at CREATED, automatically move to PAYMENT_PENDING, wait for payment, then ship." When you call `build()`, tramli checks the board for mistakes — dead-end squares, missing items, infinite loops — before anyone starts playing.
 
 <details open><summary><b>Java</b></summary>
 
@@ -695,6 +709,8 @@ Reading this is like reading a map — you see the entire journey in 15 lines. T
 
 ~120 lines. **Zero business logic.** Does exactly three things:
 
+> The **referee**. It doesn't play the game — it just moves your piece according to the rules on the board, and calls the right processor at each square.
+
 1. `startFlow()` — seeds context, runs [auto-chain](#auto-chain)
 2. `resumeAndExecute()` — merges external data, validates [guard](#transitionguard), runs [auto-chain](#auto-chain)
 3. `executeAutoChain()` — fires [Auto](#auto-transition)/[Branch](#branch-transition) transitions until [External](#external-transition) or [terminal](#terminal-state)
@@ -704,6 +720,8 @@ The engine never changes when you add flows. It's the rails — your [processors
 ### FlowStore
 
 Pluggable persistence interface. Implement 4 methods:
+
+> The **save file**. When the game is paused (waiting for external input), FlowStore saves where you are. When you come back, it loads your position.
 
 <details open><summary><b>Java</b></summary>
 
@@ -754,6 +772,8 @@ pub trait FlowStore<S: FlowState> {
 
 Every arrow in the [flow diagram](#mermaid-diagram-generation) is one of three types:
 
+> **Auto** = the referee moves your piece automatically. **External** = the game pauses and waits for someone outside to do something (like a payment webhook). **Branch** = a fork in the road where the referee checks a condition and picks a path.
+
 | Type | Trigger | When engine fires it | Example |
 |------|---------|---------------------|---------|
 | [**Auto**](#auto-transition) | Previous transition completes | Immediately, no waiting | `CONFIRMED → SHIPPED` |
@@ -765,6 +785,8 @@ Every arrow in the [flow diagram](#mermaid-diagram-generation) is one of three t
 ## Auto-Chain
 
 When an [External](#external-transition) transition's [guard](#transitionguard) passes, the engine doesn't stop — it keeps firing [Auto](#auto-transition) and [Branch](#branch-transition) transitions until it hits another External or a [terminal state](#terminal-state).
+
+> Imagine dominoes. You push the first one (External), and the rest fall automatically (Auto, Auto, Branch...) until there's a gap (another External) or the last domino falls (terminal state).
 
 ```
 HTTP request arrives (callback)
@@ -782,6 +804,10 @@ Safety: auto-chain has a max depth of 10 to prevent infinite loops. [DAG validat
 ---
 
 ## 8-Item Build Validation
+
+> **Why this matters — a real story:** A developer adds a new state to a payment flow. They wire up the processor, write tests, deploy to production. Three days later, a customer hits that state — and the flow crashes because the processor needs `CustomerProfile` data, but no previous step produces it. The error only surfaces in production, at 2am, with real money involved.
+>
+> With tramli, this can't happen. `build()` catches it **before the code even runs** — in your IDE, in CI, before any deployment. It's like a spell-checker for your state machine.
 
 `build()` runs 8 structural checks. If any fail, you get a clear error message — **before any flow runs.**
 
@@ -803,6 +829,8 @@ Safety: auto-chain has a max depth of 10 to prevent infinite loops. [DAG validat
 ## requires / produces Contract
 
 Every [StateProcessor](#stateprocessor) and [TransitionGuard](#transitionguard) declares what data it needs and what it provides:
+
+> Think of it as a **recipe**. Each processor says: "I need eggs and flour (requires), and I'll make a cake (produces)." tramli checks every recipe before the kitchen opens — if someone needs butter but nobody buys butter, `build()` tells you immediately.
 
 ```java
 @Override public Set<Class<?>> requires() { return Set.of(OrderRequest.class); }
