@@ -5,7 +5,8 @@ import { FlowError } from './flow-error.js';
 import type { InMemoryFlowStore } from './in-memory-flow-store.js';
 import type { Transition, GuardOutput } from './types.js';
 
-const MAX_CHAIN_DEPTH = 10;
+/** Default max auto-chain depth. Override via constructor options. */
+export const DEFAULT_MAX_CHAIN_DEPTH = 10;
 
 /** Log entry types for tramli's pluggable logger API. */
 export interface TransitionLogEntry { flowId: string; from: string | null; to: string; trigger: string }
@@ -14,12 +15,14 @@ export interface ErrorLogEntry { flowId: string; from: string | null; to: string
 
 export class FlowEngine {
   private readonly strictMode: boolean;
+  private readonly maxChainDepth: number;
   private transitionLogger?: (entry: TransitionLogEntry) => void;
   private stateLogger?: (entry: StateLogEntry) => void;
   private errorLogger?: (entry: ErrorLogEntry) => void;
 
-  constructor(private readonly store: InMemoryFlowStore, options?: { strictMode?: boolean }) {
+  constructor(private readonly store: InMemoryFlowStore, options?: { strictMode?: boolean; maxChainDepth?: number }) {
     this.strictMode = options?.strictMode ?? false;
+    this.maxChainDepth = options?.maxChainDepth ?? DEFAULT_MAX_CHAIN_DEPTH;
   }
 
   setTransitionLogger(logger: ((entry: TransitionLogEntry) => void) | null): void {
@@ -131,7 +134,7 @@ export class FlowEngine {
 
   private async executeAutoChain<S extends string>(flow: FlowInstance<S>): Promise<void> {
     let depth = 0;
-    while (depth < MAX_CHAIN_DEPTH) {
+    while (depth < this.maxChainDepth) {
       const current = flow.currentState;
       if (flow.definition.stateConfig[current].terminal) {
         flow.complete(current);
@@ -184,7 +187,7 @@ export class FlowEngine {
       }
       depth++;
     }
-    if (depth >= MAX_CHAIN_DEPTH) throw FlowError.maxChainDepth();
+    if (depth >= this.maxChainDepth) throw FlowError.maxChainDepth();
   }
 
   private async executeSubFlow<S extends string>(

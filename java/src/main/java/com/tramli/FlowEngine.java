@@ -19,22 +19,29 @@ import java.util.UUID;
  * Context is restored to its pre-execution state before error routing.
  */
 public final class FlowEngine {
-    private static final int MAX_CHAIN_DEPTH = 10;
+    /** Default max auto-chain depth. Override via constructor. */
+    public static final int DEFAULT_MAX_CHAIN_DEPTH = 10;
 
     private final FlowStore store;
     private final boolean strictMode;
+    private final int maxChainDepth;
     private java.util.function.Consumer<LogEntry.Transition> transitionLogger;
     private java.util.function.Consumer<LogEntry.State> stateLogger;
     private java.util.function.Consumer<LogEntry.Error> errorLogger;
     private java.util.function.Consumer<LogEntry.GuardResult> guardLogger;
 
     public FlowEngine(FlowStore store) {
-        this(store, false);
+        this(store, false, DEFAULT_MAX_CHAIN_DEPTH);
     }
 
     public FlowEngine(FlowStore store, boolean strictMode) {
+        this(store, strictMode, DEFAULT_MAX_CHAIN_DEPTH);
+    }
+
+    public FlowEngine(FlowStore store, boolean strictMode, int maxChainDepth) {
         this.store = store;
         this.strictMode = strictMode;
+        this.maxChainDepth = maxChainDepth;
     }
 
     /** Set transition logger. Called on each state transition. */
@@ -180,67 +187,77 @@ public final class FlowEngine {
 
     private <S extends Enum<S> & FlowState> void executeAutoChain(FlowInstance<S> flow) {
         int depth = 0;
-        while (depth < MAX_CHAIN_DEPTH) {
+        while (depth < maxChainDepth) {
             S current = flow.currentState();
-            if (current.isTerminal()) {
-                flow.complete(current.name());
-                break;
-            }
+            if (current.isTerminal()) { flow.complete(current.name()); break; }
 
-            List<Transition<S>> transitions = flow.definition().transitionsFrom(current);
-
-            // Check for sub-flow transition first
-            Transition<S> subFlowT = transitions.stream()
-                    .filter(Transition::isSubFlow).findFirst().orElse(null);
-            if (subFlowT != null) {
-                int advanced = executeSubFlow(flow, subFlowT, depth);
-                depth += advanced;
-                if (advanced == 0) break; // sub-flow stopped at external — parent stops too
-                continue;
-            }
-
-            Transition<S> autoOrBranch = transitions.stream()
-                    .filter(t -> t.isAuto() || t.isBranch())
-                    .findFirst().orElse(null);
-
-            if (autoOrBranch == null) break;
-
-            Map<Class<?>, Object> backup = flow.context().snapshot();
-            try {
-                if (autoOrBranch.isAuto()) {
-                    if (autoOrBranch.processor() != null) {
-                        autoOrBranch.processor().process(flow.context());
-                        verifyProduces(autoOrBranch.processor(), flow.context());
-                    }
-                    S from = flow.currentState();
-                    flow.transitionTo(autoOrBranch.to());
-                    store.recordTransition(flow.id(), from, autoOrBranch.to(),
-                            autoOrBranch.processor() != null ? autoOrBranch.processor().name() : "auto",
-                            flow.context());
-                } else {
-                    BranchProcessor branch = autoOrBranch.branch();
-                    String label = branch.decide(flow.context());
-                    S target = autoOrBranch.branchTargets().get(label);
-                    if (target == null) {
-                        throw new FlowException("UNKNOWN_BRANCH",
-                                "Branch '" + branch.name() + "' returned unknown label: " + label);
-                    }
-                    Transition<S> specific = transitions.stream()
-                            .filter(t -> t.isBranch() && t.to() == target)
-                            .findFirst().orElse(autoOrBranch);
-                    if (specific.processor() != null) specific.processor().process(flow.context());
-                    S from = flow.currentState();
-                    flow.transitionTo(target);
-                    store.recordTransition(flow.id(), from, target, branch.name() + ":" + label, flow.context());
-                }
-            } catch (Exception e) {
-                flow.context().restoreFrom(backup);
-                handleError(flow, flow.currentState(), e);
-                return;
-            }
-            depth++;
+            int advanced = dispatchStep(flow, current);
+            if (advanced < 0) return; // error handled
+            if (advanced == 0) break; // no transition (external or end)
+            depth += advanced;
         }
-        if (depth >= MAX_CHAIN_DEPTH) throw FlowException.maxChainDepth();
+        if (depth >= maxChainDepth) throw FlowException.maxChainDepth();
+    }
+
+    /** Dispatch one auto-chain step. Returns steps advanced (1), 0 to stop, -1 on error. */
+    private <S extends Enum<S> & FlowState> int dispatchStep(FlowInstance<S> flow, S current) {
+        List<Transition<S>> transitions = flow.definition().transitionsFrom(current);
+
+        // 1. SubFlow
+        Transition<S> subFlowT = transitions.stream().filter(Transition::isSubFlow).findFirst().orElse(null);
+        if (subFlowT != null) {
+            int advanced = executeSubFlow(flow, subFlowT, 0);
+            return advanced == 0 ? 0 : advanced;
+        }
+
+        // 2. Auto / Branch
+        Transition<S> t = transitions.stream().filter(tr -> tr.isAuto() || tr.isBranch()).findFirst().orElse(null);
+        if (t == null) return 0;
+
+        Map<Class<?>, Object> backup = flow.context().snapshot();
+        try {
+            if (t.isAuto()) {
+                return dispatchAuto(flow, t);
+            } else {
+                return dispatchBranch(flow, t, transitions);
+            }
+        } catch (Exception e) {
+            flow.context().restoreFrom(backup);
+            handleError(flow, flow.currentState(), e);
+            return -1;
+        }
+    }
+
+    private <S extends Enum<S> & FlowState> int dispatchAuto(FlowInstance<S> flow, Transition<S> t) {
+        if (t.processor() != null) {
+            t.processor().process(flow.context());
+            verifyProduces(t.processor(), flow.context());
+        }
+        S from = flow.currentState();
+        flow.transitionTo(t.to());
+        store.recordTransition(flow.id(), from, t.to(),
+                t.processor() != null ? t.processor().name() : "auto", flow.context());
+        logTransition(flow.id(), from, t.to(), t.processor() != null ? t.processor().name() : "auto");
+        return 1;
+    }
+
+    private <S extends Enum<S> & FlowState> int dispatchBranch(
+            FlowInstance<S> flow, Transition<S> t, List<Transition<S>> transitions) {
+        BranchProcessor branch = t.branch();
+        String label = branch.decide(flow.context());
+        S target = t.branchTargets().get(label);
+        if (target == null) {
+            throw new FlowException("UNKNOWN_BRANCH",
+                    "Branch '" + branch.name() + "' returned unknown label: " + label);
+        }
+        Transition<S> specific = transitions.stream()
+                .filter(tr -> tr.isBranch() && tr.to() == target).findFirst().orElse(t);
+        if (specific.processor() != null) specific.processor().process(flow.context());
+        S from = flow.currentState();
+        flow.transitionTo(target);
+        store.recordTransition(flow.id(), from, target, branch.name() + ":" + label, flow.context());
+        logTransition(flow.id(), from, target, branch.name() + ":" + label);
+        return 1;
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

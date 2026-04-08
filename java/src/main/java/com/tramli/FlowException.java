@@ -2,6 +2,7 @@ package com.tramli;
 
 public class FlowException extends RuntimeException {
     private final String code;
+    private FlowErrorType errorType;
     private java.util.Set<Class<?>> availableTypes;
     private java.util.Set<Class<?>> missingTypes;
 
@@ -16,6 +17,15 @@ public class FlowException extends RuntimeException {
     }
 
     public String code() { return code; }
+
+    /** Error type classification for retry/recovery strategy. */
+    public FlowErrorType errorType() { return errorType; }
+
+    /** Attach error type classification. */
+    public FlowException withErrorType(FlowErrorType type) {
+        this.errorType = type;
+        return this;
+    }
 
     /** Types that were available in context when the error occurred. */
     public java.util.Set<Class<?>> availableTypes() { return availableTypes; }

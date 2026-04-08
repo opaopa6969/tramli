@@ -1,4 +1,8 @@
+export type FlowErrorType = 'BUSINESS' | 'SYSTEM' | 'RETRYABLE' | 'FATAL';
+
 export class FlowError extends Error {
+  /** Error type classification for retry/recovery strategy. */
+  errorType?: FlowErrorType;
   /** Types that were available in context when the error occurred. */
   availableTypes?: Set<string>;
   /** Types that were expected but missing (if applicable). */
@@ -10,6 +14,12 @@ export class FlowError extends Error {
   ) {
     super(message);
     this.name = 'FlowError';
+  }
+
+  /** Attach error type classification. */
+  withErrorType(type: FlowErrorType): this {
+    this.errorType = type;
+    return this;
   }
 
   /** Attach context snapshot to this error. */
