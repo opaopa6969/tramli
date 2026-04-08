@@ -10,4 +10,4 @@ keywords = ["state-machine", "workflow", "plugins", "flow-engine"]
 categories = ["data-structures", "rust-patterns"]
 
 [dependencies]
-tramli = { path = "../rust" }
+tramli = { version = "3.0.0", path = "../rust" }
