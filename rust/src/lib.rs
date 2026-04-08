@@ -27,6 +27,16 @@ pub use mermaid::MermaidGenerator;
 pub use store::{InMemoryFlowStore, TransitionRecord};
 pub use types::*;
 
+/// Shorthand for creating a Vec<TypeId> from type names.
+/// Use in `requires()` and `produces()` implementations.
+#[macro_export]
+macro_rules! data_types {
+    ($($t:ty),* $(,)?) => {
+        vec![$(std::any::TypeId::of::<$t>()),*]
+    }
+}
+
+/// Alias for `data_types!`. Kept for backward compatibility.
 #[macro_export]
 macro_rules! requires {
     ($($t:ty),* $(,)?) => {

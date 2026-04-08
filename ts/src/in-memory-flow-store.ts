@@ -14,6 +14,12 @@ export class InMemoryFlowStore {
   private flows = new Map<string, FlowInstance<any>>();
   private _transitionLog: TransitionRecord[] = [];
 
+  /** Clear all flows and transition log. For pool/reuse patterns. */
+  clear(): void {
+    this.flows.clear();
+    this._transitionLog = [];
+  }
+
   create(flow: FlowInstance<any>): void {
     this.flows.set(flow.id, flow);
   }

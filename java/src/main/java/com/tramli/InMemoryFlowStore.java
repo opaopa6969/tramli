@@ -40,6 +40,12 @@ public final class InMemoryFlowStore implements FlowStore {
                 from != null ? from.name() : null, to.name(), trigger, subFlowName, Instant.now()));
     }
 
+    /** Clear all flows and transition log. For pool/reuse patterns. */
+    public void clear() {
+        flows.clear();
+        transitionLog.clear();
+    }
+
     /** Load a flow by ID regardless of completion status (read-only access). */
     @SuppressWarnings("unchecked")
     public <S extends Enum<S> & FlowState> Optional<FlowInstance<S>> load(String flowId) {

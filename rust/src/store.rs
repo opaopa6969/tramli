@@ -23,6 +23,12 @@ pub struct InMemoryFlowStore<S: FlowState> {
 impl<S: FlowState> InMemoryFlowStore<S> {
     pub fn new() -> Self { Self { flows: HashMap::new(), transition_log: Vec::new() } }
 
+    /// Clear all flows and transition log. For pool/reuse patterns.
+    pub fn clear(&mut self) {
+        self.flows.clear();
+        self.transition_log.clear();
+    }
+
     pub fn create(&mut self, flow: FlowInstance<S>) { self.flows.insert(flow.id.clone(), flow); }
 
     pub fn get(&self, flow_id: &str) -> Option<&FlowInstance<S>> { self.flows.get(flow_id) }
