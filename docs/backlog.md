@@ -94,3 +94,5 @@ tsconfig で CJS ビルドも出力し、package.json の exports で dual expor
 | # | Feature | Design |
 |---|---------|--------|
 | F14 | Per-state timeout on External transitions | DD-002 踏襲。liveness 問題の言語レベル解決策。Harel 教授提案 |
+| F15 | Exception-typed error transition mapping (.onStepError) | 例外クラスで error 遷移先を分岐。I/O エラーの宣言的ハンドリング |
+| F16 | tramli-ports (言語横断 I/O 契約共有) | 需要が出たら。OIDC Port 等を Java/TS/Rust で共通化 |
