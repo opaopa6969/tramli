@@ -1,28 +1,27 @@
-[日本語版](long-lived-flows-ja.md)
+[English version](long-lived-flows.md)
 
-# Long-Lived Flow Patterns
+# 長寿命フローのパターン
 
-Design patterns for flows that live months or years (user accounts, subscriptions)
-rather than seconds or minutes (authentication, payment).
+認証や決済のように秒〜分で終わるフローではなく、ユーザーアカウントやサブスクリプションのように月〜年単位で生きるフローの設計パターン。
 
-## Pattern 1: Perpetual + Multi-External
+## パターン 1: Perpetual + Multi-External
 
-A single state with multiple external transitions handles different lifecycle events:
+1つの状態に複数の External 遷移を持たせて、異なるライフサイクルイベントを処理する:
 
 <details open><summary><b>Java</b></summary>
 
 ```java
 var userLifecycle = Tramli.define("user-lifecycle", UserState.class)
-    .ttl(Duration.ofDays(365 * 100))  // effectively perpetual
+    .ttl(Duration.ofDays(365 * 100))  // 事実上永続
     .initiallyAvailable(SignupRequest.class)
     .from(PENDING).auto(ACTIVE, activateProcessor)
     .from(ACTIVE)
-        .external(ACTIVE, profileUpdateGuard)       // self-transition: update profile
-        .external(SUSPENDED, suspendGuard)           // suspend account
-        .external(DEACTIVATED, deactivateGuard)      // close account
+        .external(ACTIVE, profileUpdateGuard)       // 自己遷移: プロフィール更新
+        .external(SUSPENDED, suspendGuard)           // アカウント停止
+        .external(DEACTIVATED, deactivateGuard)      // アカウント閉鎖
     .from(SUSPENDED)
-        .external(ACTIVE, reactivateGuard)           // reactivate
-        .external(DEACTIVATED, deactivateGuard)      // close while suspended
+        .external(ACTIVE, reactivateGuard)           // 再有効化
+        .external(DEACTIVATED, deactivateGuard)      // 停止中に閉鎖
     .onStateEnter(ACTIVE, ctx -> ctx.put(ActivatedAt.class, Instant.now()))
     .onStateEnter(SUSPENDED, ctx -> ctx.put(SuspendedAt.class, Instant.now()))
     .build();
@@ -33,7 +32,7 @@ var userLifecycle = Tramli.define("user-lifecycle", UserState.class)
 
 ```typescript
 const userLifecycle = Tramli.define<UserState>('user-lifecycle', userStateConfig)
-    .setTtl(365 * 100 * 24 * 60 * 60 * 1000)
+    .setTtl(365 * 100 * 24 * 60 * 60 * 1000)  // 事実上永続
     .initiallyAvailable(SignupRequest)
     .from('PENDING').auto('ACTIVE', activateProcessor)
     .from('ACTIVE')
@@ -51,7 +50,7 @@ const userLifecycle = Tramli.define<UserState>('user-lifecycle', userStateConfig
 
 ```rust
 let user_lifecycle = Builder::new("user-lifecycle")
-    .ttl(Duration::from_secs(365 * 100 * 86400))
+    .ttl(Duration::from_secs(365 * 100 * 86400))  // 事実上永続
     .initially_available(requires![SignupRequest])
     .from(UserState::Pending).auto(UserState::Active, ActivateProcessor)
     .from(UserState::Active)
@@ -78,31 +77,31 @@ stateDiagram-v2
     SUSPENDED --> DEACTIVATED : [DeactivateGuard]
 ```
 
-### Guard selection
+### Guard の選択
 
-The engine selects the guard by matching `requires()` types against external data:
+エンジンは、外部データの型と Guard の `requires()` 型をマッチングして Guard を選択する:
 
 <details open><summary><b>Java</b></summary>
 
 ```java
-// Profile update — sends ProfileUpdate type
+// プロフィール更新 — ProfileUpdate 型を送る
 engine.resumeAndExecute(flowId, def, Map.of(ProfileUpdate.class, new ProfileUpdate(...)));
-// → ProfileUpdateGuard selected (requires ProfileUpdate)
+// → ProfileUpdateGuard が選択される（requires: ProfileUpdate）
 
-// Suspend — sends SuspendRequest type
+// 停止 — SuspendRequest 型を送る
 engine.resumeAndExecute(flowId, def, Map.of(SuspendRequest.class, new SuspendRequest(...)));
-// → SuspendGuard selected (requires SuspendRequest)
+// → SuspendGuard が選択される（requires: SuspendRequest）
 ```
 
 </details>
 <details><summary><b>TypeScript</b></summary>
 
 ```typescript
-// Profile update
+// プロフィール更新
 await engine.resumeAndExecute(flowId, def,
     new Map([[ProfileUpdate as string, { ... }]]));
 
-// Suspend
+// 停止
 await engine.resumeAndExecute(flowId, def,
     new Map([[SuspendRequest as string, { ... }]]));
 ```
@@ -111,20 +110,20 @@ await engine.resumeAndExecute(flowId, def,
 <details><summary><b>Rust</b></summary>
 
 ```rust
-// Profile update
+// プロフィール更新
 engine.resume_and_execute(&flow_id,
     vec![(TypeId::of::<ProfileUpdate>(), Box::new(ProfileUpdate { .. }) as Box<dyn CloneAny>)])?;
 
-// Suspend
+// 停止
 engine.resume_and_execute(&flow_id,
     vec![(TypeId::of::<SuspendRequest>(), Box::new(SuspendRequest { .. }) as Box<dyn CloneAny>)])?;
 ```
 
 </details>
 
-## Pattern 2: Definition Upgrade
+## パターン 2: 定義のアップグレード
 
-When you change the flow definition, check compatibility before deploying:
+フロー定義を変更するとき、デプロイ前に互換性を確認する:
 
 <details open><summary><b>Java</b></summary>
 
@@ -135,13 +134,13 @@ var v1 = Tramli.define("user", UserState.class)
 
 var v2 = Tramli.define("user", UserState.class)
     .from(ACTIVE).external(SUSPENDED, suspendGuard)
-    .from(ACTIVE).external(DEACTIVATED, deactivateGuard)  // new in v2
+    .from(ACTIVE).external(DEACTIVATED, deactivateGuard)  // v2 で追加
     .build();
 
-// Check: can v1 instances resume on v2?
+// チェック: v1 のインスタンスは v2 で resume できるか？
 var issues = DataFlowGraph.versionCompatibility(
     v1.dataFlowGraph(), v2.dataFlowGraph());
-// → [] (v2 is superset, all v1 instances are safe)
+// → [] (v2 は上位集合、v1 インスタンスは全て安全)
 ```
 
 </details>
@@ -162,16 +161,16 @@ let (added, removed) = DataFlowGraph::diff(
 
 </details>
 
-### Restore with latest definition
+### 最新の定義で復元する
 
-Always restore FlowInstance with the **latest** FlowDefinition:
+FlowInstance は常に**最新の** FlowDefinition で復元する:
 
 <details open><summary><b>Java</b></summary>
 
 ```java
-// Load from DB
+// DB からロード
 var flow = FlowInstance.restore(id, session, v2, ctx, state, ...);
-// NOT v1 — always use the current definition
+// v1 ではなく — 常に現在の定義を使う
 ```
 
 </details>
@@ -190,38 +189,38 @@ let flow = FlowInstance::restore(id, session, Arc::new(v2), ctx, state, ...);
 
 </details>
 
-## Pattern 3: Per-State Timeout
+## パターン 3: ステートごとのタイムアウト
 
-Different states can have different deadlines:
+状態ごとに異なるデッドラインを設定できる:
 
 <details open><summary><b>Java</b></summary>
 
 ```java
-.from(PENDING).external(ACTIVE, verifyGuard, Duration.ofHours(24))  // 24h to verify email
-.from(SUSPENDED).external(ACTIVE, reactivateGuard, Duration.ofDays(90))  // 90 days to reactivate
+.from(PENDING).external(ACTIVE, verifyGuard, Duration.ofHours(24))  // メール確認に24時間
+.from(SUSPENDED).external(ACTIVE, reactivateGuard, Duration.ofDays(90))  // 再有効化に90日
 ```
 
 </details>
 <details><summary><b>TypeScript</b></summary>
 
 ```typescript
-.from('PENDING').external('ACTIVE', verifyGuard, 24 * 60 * 60 * 1000)  // 24h
-.from('SUSPENDED').external('ACTIVE', reactivateGuard, 90 * 24 * 60 * 60 * 1000)  // 90 days
+.from('PENDING').external('ACTIVE', verifyGuard, 24 * 60 * 60 * 1000)  // 24時間
+.from('SUSPENDED').external('ACTIVE', reactivateGuard, 90 * 24 * 60 * 60 * 1000)  // 90日
 ```
 
 </details>
 <details><summary><b>Rust</b></summary>
 
 ```rust
-.from(UserState::Pending).external(UserState::Active, VerifyGuard)
+.from(UserState::Pending).external(UserState::Active, VerifyGuard)  // timeout は Builder API 経由
 .from(UserState::Suspended).external(UserState::Active, ReactivateGuard)
 ```
 
 </details>
 
-## Pattern 4: Cross-Flow Dependencies
+## パターン 4: フロー間のデータ依存
 
-If billing and authentication are separate flows:
+課金と認証が別フローの場合:
 
 <details open><summary><b>Java</b></summary>
 
@@ -229,7 +228,7 @@ If billing and authentication are separate flows:
 var authFlow = Tramli.define("auth", AuthState.class).build();
 var billingFlow = Tramli.define("billing", BillingState.class).build();
 
-// Check data dependencies between flows
+// フロー間のデータ依存を確認
 var deps = DataFlowGraph.crossFlowMap(
     authFlow.dataFlowGraph(), billingFlow.dataFlowGraph());
 // → ["UserId: flow 0 produces → flow 1 consumes"]
@@ -253,28 +252,28 @@ let (added, removed) = DataFlowGraph::diff(
 
 </details>
 
-## Anti-Patterns
+## アンチパターン
 
-### Don't: Use short TTL for long-lived flows
+### NG: 長寿命フローに短い TTL を使う
 
 ```
-// Bad: Flow expires in 5 minutes — user account is gone
+// NG: 5分でフロー期限切れ — ユーザーアカウントが消える
 .ttl(Duration.ofMinutes(5))
 
-// Good: Effectively perpetual
+// OK: 事実上永続
 .ttl(Duration.ofDays(365 * 100))
 ```
 
-### Don't: Mix flow definitions within one lifecycle
+### NG: 1つのライフサイクル内でフロー定義を混在させる
 
 ```
-// Bad: /api/profile uses v2, /api/suspend uses v1 — flow ID mismatch
-// Good: All endpoints use the same FlowDefinition instance
+// NG: /api/profile は v2、/api/suspend は v1 — フロー ID の不整合
+// OK: 全エンドポイントが同じ FlowDefinition インスタンスを使う
 ```
 
-### Don't: Use SubFlow for orthogonal concerns
+### NG: 直交する関心事に SubFlow を使う
 
 ```
-// Bad: Billing as SubFlow inside auth — they have independent lifecycles
-// Good: Separate flows, linked by shared data types (crossFlowMap)
+// NG: 課金を認証の SubFlow にする — ライフサイクルが独立している
+// OK: 別フローにして共有データ型でリンク（crossFlowMap）
 ```
