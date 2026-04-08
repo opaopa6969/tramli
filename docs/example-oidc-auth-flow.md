@@ -11,18 +11,19 @@ This example shows a production OIDC login flow with 9 states, 5 processors, 1 g
 ```java
 enum OidcState implements FlowState {
     INIT(false, true),              // initial — user clicks "Login with Google"
-    REDIRECTED(false, false),       // redirect URL generated, waiting for callback
-    CALLBACK_RECEIVED(false, false),// OAuth callback arrived
-    TOKEN_EXCHANGED(false, false),  // tokens obtained from IdP
-    USER_RESOLVED(false, false),    // user found/created in DB
-    RISK_CHECKED(false, false),     // fraud/risk assessment done
-    COMPLETE(true, false),          // session issued, done
-    COMPLETE_MFA(true, false),      // session issued but MFA pending
-    BLOCKED(true, false),           // risk too high, blocked
-    RETRIABLE_ERROR(false, false),  // transient error, can retry
-    TERMINAL_ERROR(true, false);    // unrecoverable error
+    REDIRECTED(false),              // redirect URL generated, waiting for callback
+    CALLBACK_RECEIVED(false),       // OAuth callback arrived
+    TOKEN_EXCHANGED(false),         // tokens obtained from IdP
+    USER_RESOLVED(false),           // user found/created in DB
+    RISK_CHECKED(false),            // fraud/risk assessment done
+    COMPLETE(true),                 // session issued, done
+    COMPLETE_MFA(true),             // session issued but MFA pending
+    BLOCKED(true),                  // risk too high, blocked
+    RETRIABLE_ERROR(false),         // transient error, can retry
+    TERMINAL_ERROR(true);           // unrecoverable error
 
     private final boolean terminal, initial;
+    OidcState(boolean t) { this(t, false); }
     OidcState(boolean t, boolean i) { terminal = t; initial = i; }
     @Override public boolean isTerminal() { return terminal; }
     @Override public boolean isInitial() { return initial; }

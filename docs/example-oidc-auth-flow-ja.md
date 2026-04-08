@@ -11,16 +11,16 @@
 ```java
 enum OidcState implements FlowState {
     INIT(false, true),              // 初期 — ユーザーが「Google でログイン」をクリック
-    REDIRECTED(false, false),       // リダイレクト URL 生成済み、コールバック待ち
-    CALLBACK_RECEIVED(false, false),// OAuth コールバック到着
-    TOKEN_EXCHANGED(false, false),  // IdP からトークン取得済み
-    USER_RESOLVED(false, false),    // DB でユーザー検索/作成済み
-    RISK_CHECKED(false, false),     // リスク評価完了
-    COMPLETE(true, false),          // セッション発行、完了
-    COMPLETE_MFA(true, false),      // セッション発行、MFA 待ち
-    BLOCKED(true, false),           // リスク高、ブロック
-    RETRIABLE_ERROR(false, false),  // 一時エラー、リトライ可能
-    TERMINAL_ERROR(true, false);    // 回復不能エラー
+    REDIRECTED(false),              // リダイレクト URL 生成済み、コールバック待ち
+    CALLBACK_RECEIVED(false),       // OAuth コールバック到着
+    TOKEN_EXCHANGED(false),         // IdP からトークン取得済み
+    USER_RESOLVED(false),           // DB でユーザー検索/作成済み
+    RISK_CHECKED(false),            // リスク評価完了
+    COMPLETE(true),                 // セッション発行、完了
+    COMPLETE_MFA(true),             // セッション発行、MFA 待ち
+    BLOCKED(true),                  // リスク高、ブロック
+    RETRIABLE_ERROR(false),         // 一時エラー、リトライ可能
+    TERMINAL_ERROR(true);           // 回復不能エラー
     // ...
 }
 ```

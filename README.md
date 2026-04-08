@@ -89,12 +89,13 @@ If you need hierarchy, use [SubFlow](docs/example-oidc-auth-flow.md) (compositio
 ```java
 enum OrderState implements FlowState {
     CREATED(false, true),           // initial state
-    PAYMENT_PENDING(false, false),
-    PAYMENT_CONFIRMED(false, false),
-    SHIPPED(true, false),           // terminal — flow ends here
-    CANCELLED(true, false);         // terminal — error end
+    PAYMENT_PENDING(false),
+    PAYMENT_CONFIRMED(false),
+    SHIPPED(true),                  // terminal — flow ends here
+    CANCELLED(true);                // terminal — error end
 
     private final boolean terminal, initial;
+    OrderState(boolean t) { this(t, false); }
     OrderState(boolean t, boolean i) { terminal = t; initial = i; }
     @Override public boolean isTerminal() { return terminal; }
     @Override public boolean isInitial() { return initial; }
@@ -109,10 +110,10 @@ type OrderState = 'CREATED' | 'PAYMENT_PENDING' | 'PAYMENT_CONFIRMED' | 'SHIPPED
 
 const stateConfig: Record<OrderState, StateConfig> = {
     CREATED:           { terminal: false, initial: true },
-    PAYMENT_PENDING:   { terminal: false, initial: false },
-    PAYMENT_CONFIRMED: { terminal: false, initial: false },
-    SHIPPED:           { terminal: true,  initial: false },
-    CANCELLED:         { terminal: true,  initial: false },
+    PAYMENT_PENDING:   { terminal: false },
+    PAYMENT_CONFIRMED: { terminal: false },
+    SHIPPED:           { terminal: true },
+    CANCELLED:         { terminal: true },
 };
 ```
 

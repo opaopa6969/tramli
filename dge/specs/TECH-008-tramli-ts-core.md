@@ -67,11 +67,11 @@ type OrderState = 'CREATED' | 'PAYMENT_PENDING' | 'PAYMENT_CONFIRMED' | 'SHIPPED
 
 const stateConfig = {
   CREATED:           { terminal: false, initial: true },
-  PAYMENT_PENDING:   { terminal: false, initial: false },
-  PAYMENT_CONFIRMED: { terminal: false, initial: false },
-  SHIPPED:           { terminal: true,  initial: false },
-  CANCELLED:         { terminal: true,  initial: false },
-} as const satisfies Record<OrderState, { terminal: boolean; initial: boolean }>;
+  PAYMENT_PENDING:   { terminal: false },
+  PAYMENT_CONFIRMED: { terminal: false },
+  SHIPPED:           { terminal: true },
+  CANCELLED:         { terminal: true },
+} as const satisfies Record<OrderState, StateConfig>;
 ```
 
 ### 2. FlowKey: branded string
