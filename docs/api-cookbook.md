@@ -513,8 +513,8 @@ When: Logging every state transition.
 
 ```java
 engine.setTransitionLogger(entry ->
-    log.info("[{}] {} → {} ({})", entry.flowId(), entry.from(), entry.to(), entry.trigger()));
-// [abc123] CREATED → PAYMENT_PENDING (OrderInit)
+    log.info("[{}:{}] {} → {} ({})", entry.flowName(), entry.flowId(), entry.from(), entry.to(), entry.trigger()));
+// [oidc:abc123] CREATED → PAYMENT_PENDING (OrderInit)
 ```
 
 ### `setGuardLogger(entry -> ...)`

@@ -220,7 +220,7 @@ graph.renderDataFlow(myDotRenderer);              // カスタムレンダリン
 ## ロギング
 
 ```java
-engine.setTransitionLogger(e -> log.info("{} → {}", e.from(), e.to()));
+engine.setTransitionLogger(e -> log.info("{} → {}", e.flowName(), e.from(), e.to()));
 engine.setGuardLogger(e -> log.info("guard {}: {}", e.guardName(), e.result()));
 engine.setStateLogger(e -> log.debug("put {}", e.typeName()));
 engine.setErrorLogger(e -> alertService.send(e.trigger() + " at " + e.from()));

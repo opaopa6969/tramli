@@ -557,8 +557,9 @@ This is the same advantage that Airflow/Temporal users wish they had: **build-ti
 | Method | Description |
 |--------|-------------|
 | `startFlow(def, session, data)` | Start a new flow instance |
-| `resumeAndExecute(flowId, def)` | Resume at external transition |
-| `setTransitionLogger(fn)` | Log every state transition |
+| `resumeAndExecute(flowId, def)` | Resume at external transition. Throws `flowNotFound`, `flowAlreadyCompleted`, or `flowExpired` |
+| `setTransitionLogger(fn)` | Log every state transition (entry includes `flowName`) |
+| `setGuardLogger(fn)` | Log guard Accepted/Rejected/Expired |
 | `setStateLogger(fn)` | Log every context.put() (opt-in) |
 | `setErrorLogger(fn)` | Log every error transition |
 | `removeAllLoggers()` | Remove all loggers |
