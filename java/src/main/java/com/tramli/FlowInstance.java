@@ -18,6 +18,7 @@ public final class FlowInstance<S extends Enum<S> & FlowState> {
     private String exitState;
     private FlowInstance<?> activeSubFlow;
     private String lastError;
+    private Instant stateEnteredAt;
 
     public FlowInstance(String id, String sessionId, FlowDefinition<S> definition,
                         FlowContext context, S currentState, Instant expiresAt) {
@@ -37,6 +38,7 @@ public final class FlowInstance<S extends Enum<S> & FlowState> {
         this.guardFailureCount = guardFailureCount;
         this.version = version;
         this.exitState = exitState;
+        this.stateEnteredAt = createdAt; // initial state entered at creation time
     }
 
     /**
@@ -72,6 +74,9 @@ public final class FlowInstance<S extends Enum<S> & FlowState> {
 
     /** Last error message (set when a processor throws and error transition fires). */
     public String lastError() { return lastError; }
+
+    /** When the current state was entered. Used for per-state timeout. */
+    public Instant stateEnteredAt() { return stateEnteredAt; }
 
     /** State path from root to deepest active sub-flow. E.g. ["PAYMENT", "CONFIRM"]. */
     public java.util.List<String> statePath() {
@@ -134,7 +139,7 @@ public final class FlowInstance<S extends Enum<S> & FlowState> {
         return copy;
     }
 
-    void transitionTo(S newState) { this.currentState = newState; }
+    void transitionTo(S newState) { this.currentState = newState; this.stateEnteredAt = Instant.now(); }
     void incrementGuardFailure() { this.guardFailureCount++; }
     void complete(String exitState) { this.exitState = exitState; }
     void setVersion(int version) { this.version = version; }

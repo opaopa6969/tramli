@@ -127,6 +127,17 @@ public final class FlowEngine {
         }
 
         Transition<S> transition = externalOpt.get();
+
+        // Per-state timeout check
+        if (transition.timeout() != null && flow.stateEnteredAt() != null) {
+            Instant deadline = flow.stateEnteredAt().plus(transition.timeout());
+            if (Instant.now().isAfter(deadline)) {
+                flow.complete("EXPIRED");
+                store.save(flow);
+                return flow;
+            }
+        }
+
         TransitionGuard guard = transition.guard();
 
         if (guard != null) {

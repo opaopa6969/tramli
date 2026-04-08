@@ -85,6 +85,16 @@ export class FlowEngine {
     const transition = definition.externalFrom(currentState);
     if (!transition) throw FlowError.invalidTransition(currentState, currentState);
 
+    // Per-state timeout check
+    if (transition.timeout != null) {
+      const deadline = new Date(flow.stateEnteredAt.getTime() + transition.timeout);
+      if (new Date() > deadline) {
+        flow.complete('EXPIRED');
+        this.store.save(flow);
+        return flow;
+      }
+    }
+
     const guard = transition.guard;
     if (guard) {
       const output: GuardOutput = await guard.validate(flow.context);

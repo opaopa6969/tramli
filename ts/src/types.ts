@@ -24,6 +24,8 @@ export interface Transition<S extends string> {
   branchTargets: Map<string, S>;
   subFlowDefinition?: import('./flow-definition.js').FlowDefinition<any>;
   exitMappings?: Map<string, S>;
+  /** Per-state timeout in milliseconds. If set, resumeAndExecute checks this before guard. */
+  timeout?: number;
 }
 
 /**

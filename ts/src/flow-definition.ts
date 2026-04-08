@@ -430,10 +430,19 @@ export class FromBuilder<S extends string> {
     return this.builder;
   }
 
-  external(to: S, guard: TransitionGuard<S>, processor?: StateProcessor<S>): Builder<S> {
+  external(to: S, guard: TransitionGuard<S>, processorOrOptions?: StateProcessor<S> | { processor?: StateProcessor<S>; timeout?: number }): Builder<S> {
+    let processor: StateProcessor<S> | undefined;
+    let timeout: number | undefined;
+    if (processorOrOptions && 'process' in processorOrOptions) {
+      processor = processorOrOptions as StateProcessor<S>;
+    } else if (processorOrOptions) {
+      const opts = processorOrOptions as { processor?: StateProcessor<S>; timeout?: number };
+      processor = opts.processor;
+      timeout = opts.timeout;
+    }
     this.builder.addTransition({
       from: this.fromState, to, type: 'external', processor,
-      guard, branch: undefined, branchTargets: new Map(),
+      guard, branch: undefined, branchTargets: new Map(), timeout,
     });
     return this.builder;
   }

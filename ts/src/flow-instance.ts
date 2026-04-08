@@ -14,6 +14,7 @@ export class FlowInstance<S extends string> {
   private _exitState: string | null;
   private _activeSubFlow: FlowInstance<any> | null = null;
   private _lastError: string | null = null;
+  private _stateEnteredAt: Date = new Date();
 
   constructor(
     id: string, sessionId: string, definition: FlowDefinition<S>,
@@ -109,7 +110,8 @@ export class FlowInstance<S extends string> {
     return copy;
   }
 
-  /** @internal */ transitionTo(state: S): void { this._currentState = state; }
+  get stateEnteredAt(): Date { return this._stateEnteredAt; }
+  /** @internal */ transitionTo(state: S): void { this._currentState = state; this._stateEnteredAt = new Date(); }
   /** @internal */ incrementGuardFailure(): void { this._guardFailureCount++; }
   /** @internal */ complete(exitState: string): void { this._exitState = exitState; }
   /** @internal */ setVersion(version: number): void { this._version = version; }

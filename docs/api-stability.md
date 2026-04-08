@@ -31,3 +31,19 @@ If the analysis API surface becomes a maintenance burden, these methods may be
 moved to a separate package (`tramli-analysis` / `@unlaxer/tramli-analysis` /
 `tramli-analysis` crate) in a future major version. The core API will remain
 in the main package.
+
+## Migration notes
+
+### v1.15.0 — per-state timeout
+
+`FlowInstance` gains a `stateEnteredAt` field (Instant/Date). This is set
+automatically on state transitions. Custom `FlowStore` implementations that
+persist/restore FlowInstance should include this field:
+
+- **Java**: `FlowInstance.stateEnteredAt()` — `Instant`
+- **TypeScript**: `FlowInstance.stateEnteredAt` — `Date`
+
+If your FlowStore does not persist `stateEnteredAt`, per-state timeouts will
+use the flow creation time as fallback (conservative — may expire earlier
+than expected on restored flows). To get accurate per-state timeouts,
+persist and restore this field.

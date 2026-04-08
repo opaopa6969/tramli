@@ -240,8 +240,18 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
                 return Builder.this;
             }
 
+            public Builder<S> external(S to, TransitionGuard guard, Duration timeout) {
+                transitions.add(new Transition<>(from, to, TransitionType.EXTERNAL, null, guard, null, Map.of(), null, Map.of(), timeout));
+                return Builder.this;
+            }
+
             public Builder<S> external(S to, TransitionGuard guard, StateProcessor processor) {
                 transitions.add(new Transition<>(from, to, TransitionType.EXTERNAL, processor, guard, null, Map.of()));
+                return Builder.this;
+            }
+
+            public Builder<S> external(S to, TransitionGuard guard, StateProcessor processor, Duration timeout) {
+                transitions.add(new Transition<>(from, to, TransitionType.EXTERNAL, processor, guard, null, Map.of(), null, Map.of(), timeout));
                 return Builder.this;
             }
 
