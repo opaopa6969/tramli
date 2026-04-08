@@ -61,6 +61,20 @@ In tramli, a [StateProcessor](#stateprocessor) is a closed unit. Its [requires()
 
 This helps **humans** (limited working memory) and **LLMs** (limited context window) equally.
 
+### Why flat states? (DD-021)
+
+tramli uses flat enums for states — no hierarchical states, no orthogonal regions. This is **not a limitation**. It's the correct design for data-flow verification.
+
+When David Harel (Statecharts inventor) and Pat Helland (distributed systems pioneer) independently designed alternative state machines in [DGE sessions](dge/sessions/dge-session-harel-carta.md), both arrived at the same conclusion:
+
+- **Hierarchical states** degrade data-flow verification (implicit paths through super-states)
+- **Orthogonal regions** break data-flow verification (exponential path combinations)
+- **Flat enums** enable complete verification (every path enumerable)
+
+Data-flow verification is **paradigm-agnostic** — it works on mutable context, event logs, or Statecharts. But only flat models preserve **complete** verification. tramli trades expressiveness for this guarantee.
+
+If you need hierarchy, use [SubFlow](docs/example-oidc-auth-flow.md) (composition, not nesting). If you need concurrent concerns, use [separate flows](docs/patterns/long-lived-flows.md) linked by `crossFlowMap()`.
+
 ---
 
 ## Quick Start

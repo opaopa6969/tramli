@@ -61,6 +61,18 @@ tramli では [StateProcessor](#stateprocessor) が閉じた単位。[requires()
 
 これは**人間**（限られたワーキングメモリ）にも **LLM**（限られたコンテキスト窓）にも等しく効く。
 
+### なぜフラットな状態か？（DD-021）
+
+tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。
+
+David Harel（Statecharts の発明者）と Pat Helland（分散システムの先駆者）が独立に別の状態機械を設計した [DGE セッション](dge/sessions/dge-session-harel-carta.md)で、両者とも同じ結論に到達:
+
+- **階層状態**はデータフロー検証を劣化させる（super-state を通る暗黙のパス）
+- **直交領域**はデータフロー検証を破壊する（指数的なパス組み合わせ）
+- **flat enum** は完全な検証を可能にする（全パス列挙可能）
+
+階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（ネストではなく合成）を使う。並行する関心事は[別フロー](docs/patterns/long-lived-flows.md)にして `crossFlowMap()` でリンク。
+
 ---
 
 ## クイックスタート

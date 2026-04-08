@@ -409,6 +409,16 @@ tramli's core mechanism — requires/produces contracts verified at definition t
 
 The requires/produces contract is the **invariant common to all four theories**. Each theory projects this invariant differently: Allen tracks variable definitions, Strom tracks object states, Harel tracks hierarchical state structure, Milner tracks channel types. tramli implements the invariant directly at the data-type level.
 
+### Validation by alternative designs (DD-021)
+
+Two independent DGE sessions tested whether tramli's flat model is limiting:
+
+**Carta** (Harel Statechart design): Hierarchical states with entry/exit actions and visual formalism. When data-flow verification was applied, hierarchical states degraded verification (implicit paths through super-states) and orthogonal regions broke it entirely (exponential path combinations).
+
+**Tenure** (Helland event sourcing design): Events as first-class objects with immutable logs and compensation. When data-flow verification was applied, the same requires/produces logic worked on event `apply()` instead of processor `produce()`.
+
+**Discovery**: Data-flow verification is **state-management-paradigm-agnostic** — it works equally on mutable context (tramli), event logs (Tenure), or Statecharts (Carta, with degradation). Flat enum is the **maximum expressiveness** that preserves complete data-flow verification. This is not a limitation but the **correct design choice** for tramli's verification guarantees.
+
 ### 6.7 Limitations
 
 - **Not formal verification**: build-time checks are structural well-formedness checks, not model checking. tramli cannot verify arbitrary temporal logic properties (cf. SPIN, TLA+, Alloy). It catches 8 specific categories of structural errors.
