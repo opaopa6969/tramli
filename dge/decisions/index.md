@@ -21,3 +21,5 @@
 | [DD-017](DD-017-flow-composition-subflow.md) | Flow Composition（サブフロー） | [state-tree](../sessions/2026-04-07-tramli-state-tree.md) | 2026-04-07 |
 | [DD-018](DD-018-portability-no-flowstore-service.md) | FlowStore サービス化しない + エイリアス API | [flowstore-portability](../sessions/2026-04-07-tramli-flowstore-portability.md) | 2026-04-07 |
 | [DD-019](DD-019-pipeline.md) | Tramli.pipeline() — build 時検証付き直列パイプライン | [pipeline-vision](../sessions/2026-04-08-tramli-pipeline-vision.md) | 2026-04-08 |
+| [DD-020](DD-020-multi-external-entry-exit.md) | Multi-External + Entry/Exit Actions | [R2](../sessions/dge-session-r2-multi-external.md), [R3](../sessions/dge-session-r3-requires-routing.md), [R4](../sessions/dge-session-r4-self-transition.md), [review](../sessions/dge-session-external-review.md) | 2026-04-09 |
+| [DD-021](DD-021-flat-is-correct.md) | Flat Enum は正しい設計（Carta/Tenure 検証） | [Carta](../sessions/dge-session-harel-carta.md), [Carta DataFlow](../sessions/dge-session-carta-dataflow.md), [Tenure](../sessions/dge-session-helland-tenure.md) | 2026-04-09 |
