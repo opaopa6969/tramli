@@ -82,6 +82,8 @@ If you need hierarchy, use [SubFlow](docs/example-oidc-auth-flow.md) (compositio
 
 ### 1. Define [states](#flowstate)
 
+<details open><summary><b>Java</b></summary>
+
 ```java
 enum OrderState implements FlowState {
     CREATED(false, true),           // initial state
@@ -97,9 +99,51 @@ enum OrderState implements FlowState {
 }
 ```
 
+</details>
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+type OrderState = 'CREATED' | 'PAYMENT_PENDING' | 'PAYMENT_CONFIRMED' | 'SHIPPED' | 'CANCELLED';
+
+const stateConfig: Record<OrderState, StateConfig> = {
+    CREATED:           { terminal: false, initial: true },
+    PAYMENT_PENDING:   { terminal: false, initial: false },
+    PAYMENT_CONFIRMED: { terminal: false, initial: false },
+    SHIPPED:           { terminal: true,  initial: false },
+    CANCELLED:         { terminal: true,  initial: false },
+};
+```
+
+</details>
+<details><summary><b>Rust</b></summary>
+
+```rust
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum OrderState {
+    Created,
+    PaymentPending,
+    PaymentConfirmed,
+    Shipped,
+    Cancelled,
+}
+
+impl FlowState for OrderState {
+    fn is_terminal(&self) -> bool {
+        matches!(self, Self::Shipped | Self::Cancelled)
+    }
+    fn is_initial(&self) -> bool {
+        matches!(self, Self::Created)
+    }
+}
+```
+
+</details>
+
 Why `enum`? Because the compiler enforces exhaustiveness. A typo like `"COMLETE"` is impossible — it's a compile error.
 
 ### 2. Write [processors](#stateprocessor) (1 transition = 1 processor)
+
+<details open><summary><b>Java</b></summary>
 
 ```java
 StateProcessor orderInit = new StateProcessor() {
@@ -113,9 +157,49 @@ StateProcessor orderInit = new StateProcessor() {
 };
 ```
 
+</details>
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+const OrderRequest = flowKey<OrderRequest>('OrderRequest');
+const PaymentIntent = flowKey<PaymentIntent>('PaymentIntent');
+
+const orderInit: StateProcessor<OrderState> = {
+    name: 'OrderInit',
+    requires: [OrderRequest],
+    produces: [PaymentIntent],
+    process(ctx) {
+        const req = ctx.get(OrderRequest);  // type-safe
+        ctx.put(PaymentIntent, { txnId: `txn-${req.itemId}` });
+    },
+};
+```
+
+</details>
+<details><summary><b>Rust</b></summary>
+
+```rust
+struct OrderInit;
+
+impl StateProcessor<OrderState> for OrderInit {
+    fn name(&self) -> &str { "OrderInit" }
+    fn requires(&self) -> Vec<TypeId> { requires![OrderRequest] }
+    fn produces(&self) -> Vec<TypeId> { produces![PaymentIntent] }
+    fn process(&self, ctx: &mut FlowContext) -> Result<(), FlowError> {
+        let req = ctx.get::<OrderRequest>()?;
+        ctx.put(PaymentIntent { txn_id: format!("txn-{}", req.item_id) });
+        Ok(())
+    }
+}
+```
+
+</details>
+
 `requires()` and `produces()` aren't just documentation — they're **verified at [build() time](#8-item-build-validation)** across all paths in the flow.
 
 ### 3. Define the [flow](#flowdefinition)
+
+<details open><summary><b>Java</b></summary>
 
 ```java
 var orderFlow = Tramli.define("order", OrderState.class)
@@ -128,9 +212,42 @@ var orderFlow = Tramli.define("order", OrderState.class)
     .build();  // ← 8-item validation here
 ```
 
+</details>
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+const orderFlow = Tramli.define<OrderState>('order', stateConfig)
+    .setTtl(24 * 60 * 60 * 1000)
+    .initiallyAvailable(OrderRequest)
+    .from('CREATED').auto('PAYMENT_PENDING', orderInit)
+    .from('PAYMENT_PENDING').external('PAYMENT_CONFIRMED', paymentGuard)
+    .from('PAYMENT_CONFIRMED').auto('SHIPPED', shipProcessor)
+    .onAnyError('CANCELLED')
+    .build();
+```
+
+</details>
+<details><summary><b>Rust</b></summary>
+
+```rust
+let order_flow = Builder::new("order")
+    .ttl(Duration::from_secs(86400))
+    .initially_available::<OrderRequest>()
+    .from(OrderState::Created).auto(OrderState::PaymentPending, OrderInit)
+    .from(OrderState::PaymentPending).external(OrderState::PaymentConfirmed, PaymentGuard)
+    .from(OrderState::PaymentConfirmed).auto(OrderState::Shipped, ShipProcessor)
+    .on_any_error(OrderState::Cancelled)
+    .build()
+    .unwrap();
+```
+
+</details>
+
 Read this top-to-bottom — it **is** the flow. No other file needed to understand the structure.
 
 ### 4. Run it
+
+<details open><summary><b>Java</b></summary>
 
 ```java
 var engine = Tramli.engine(new InMemoryFlowStore());
@@ -144,11 +261,63 @@ flow = engine.resumeAndExecute(flow.id(), orderFlow);
 // → guard validates → CONFIRMED → auto-chain → SHIPPED (terminal, done)
 ```
 
+</details>
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+const engine = Tramli.engine(new InMemoryFlowStore());
+
+// Start: CREATED → auto-chain → PAYMENT_PENDING (stops, needs external)
+const flow = engine.startFlow(orderFlow, undefined,
+    new Map([[OrderRequest, { itemId: 'item-1', quantity: 3 }]]));
+
+// External event: payment webhook arrives
+const result = await engine.resumeAndExecute(flow.id, orderFlow);
+// → guard validates → CONFIRMED → auto-chain → SHIPPED (terminal, done)
+```
+
+</details>
+<details><summary><b>Rust</b></summary>
+
+```rust
+let engine = FlowEngine::new(InMemoryFlowStore::new());
+
+// Start: Created → auto-chain → PaymentPending (stops, needs external)
+let flow = engine.start_flow(
+    Arc::new(order_flow), "s1",
+    vec![Box::new(OrderRequest { item_id: "item-1".into(), quantity: 3 })],
+);
+
+// External event: payment webhook arrives
+let result = engine.resume_and_execute(&flow.id, &order_flow);
+// → guard validates → PaymentConfirmed → auto-chain → Shipped (terminal, done)
+```
+
+</details>
+
 ### 5. Generate [Mermaid diagram](#mermaid-diagram-generation)
+
+<details open><summary><b>Java</b></summary>
 
 ```java
 String mermaid = MermaidGenerator.generate(orderFlow);
 ```
+
+</details>
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+const mermaid = MermaidGenerator.generate(orderFlow);
+```
+
+</details>
+<details><summary><b>Rust</b></summary>
+
+```rust
+let mermaid = MermaidGenerator::generate(&order_flow);
+```
+
+</details>
 
 ```mermaid
 stateDiagram-v2
@@ -172,6 +341,8 @@ tramli has 8 building blocks. Each is small, focused, and testable in isolation.
 
 An `enum` that defines all possible states. Each state knows if it's [terminal](#terminal-state) (flow ends here) or [initial](#initial-state) (flow starts here).
 
+<details open><summary><b>Java</b></summary>
+
 ```java
 public interface FlowState {
     String name();
@@ -180,11 +351,39 @@ public interface FlowState {
 }
 ```
 
+</details>
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+interface StateConfig {
+    terminal: boolean;
+    initial: boolean;
+}
+// States are string literal union types:
+type MyState = 'A' | 'B' | 'C';
+const config: Record<MyState, StateConfig> = { /* ... */ };
+```
+
+</details>
+<details><summary><b>Rust</b></summary>
+
+```rust
+pub trait FlowState: Clone + Copy + Eq + Hash + Debug {
+    fn is_terminal(&self) -> bool;
+    fn is_initial(&self) -> bool;
+}
+// Implement on an enum with #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+```
+
+</details>
+
 **Why enum?** The compiler guarantees exhaustiveness. `switch` over states → the compiler warns about missing cases. An LLM can't hallucinate a state that doesn't exist.
 
 ### StateProcessor
 
 The **business logic** for one transition. The most important rule: **1 transition = 1 processor.**
+
+<details open><summary><b>Java</b></summary>
 
 ```java
 public interface StateProcessor {
@@ -195,6 +394,32 @@ public interface StateProcessor {
 }
 ```
 
+</details>
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+interface StateProcessor<S extends string> {
+    name: string;
+    requires: FlowKey<unknown>[];
+    produces: FlowKey<unknown>[];
+    process(ctx: FlowContext): void | Promise<void>;
+}
+```
+
+</details>
+<details><summary><b>Rust</b></summary>
+
+```rust
+pub trait StateProcessor<S: FlowState> {
+    fn name(&self) -> &str;
+    fn requires(&self) -> Vec<TypeId>;
+    fn produces(&self) -> Vec<TypeId>;
+    fn process(&self, ctx: &mut FlowContext) -> Result<(), FlowError>;
+}
+```
+
+</details>
+
 This means:
 - Changing processor A cannot break processor B
 - Testing is trivial: mock [FlowContext](#flowcontext), call `process()`, check output
@@ -203,6 +428,8 @@ This means:
 ### TransitionGuard
 
 Validates an [External transition](#external-transition). A **pure function** — it must not modify [FlowContext](#flowcontext).
+
+<details open><summary><b>Java</b></summary>
 
 ```java
 public interface TransitionGuard {
@@ -220,6 +447,45 @@ public interface TransitionGuard {
 }
 ```
 
+</details>
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+interface TransitionGuard<S extends string> {
+    name: string;
+    requires: FlowKey<unknown>[];
+    produces: FlowKey<unknown>[];
+    maxRetries: number;
+    validate(ctx: FlowContext): GuardOutput;
+}
+
+type GuardOutput =
+    | { type: 'accepted'; data: Map<FlowKey<unknown>, unknown> }
+    | { type: 'rejected'; reason: string }
+    | { type: 'expired' };
+```
+
+</details>
+<details><summary><b>Rust</b></summary>
+
+```rust
+pub trait TransitionGuard<S: FlowState> {
+    fn name(&self) -> &str;
+    fn requires(&self) -> Vec<TypeId>;
+    fn produces(&self) -> Vec<TypeId>;
+    fn max_retries(&self) -> usize;
+    fn validate(&self, ctx: &FlowContext) -> GuardOutput;
+}
+
+pub enum GuardOutput {
+    Accepted { data: Vec<Box<dyn Any>> },
+    Rejected { reason: String },
+    Expired,
+}
+```
+
+</details>
+
 The `sealed interface` means the [FlowEngine](#flowengine) handles exactly 3 cases — the compiler enforces this via `switch`. No forgotten edge cases.
 
 **Accepted** → data merged into context, transition proceeds.
@@ -229,6 +495,8 @@ The `sealed interface` means the [FlowEngine](#flowengine) handles exactly 3 cas
 ### BranchProcessor
 
 Chooses which path to take at a decision point. Returns a **label** (string) that maps to a target state in the [FlowDefinition](#flowdefinition).
+
+<details open><summary><b>Java</b></summary>
 
 ```java
 public interface BranchProcessor {
@@ -253,15 +521,103 @@ Example: after user resolution, decide if MFA is required:
 }
 ```
 
+</details>
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+interface BranchProcessor<S extends string> {
+    name: string;
+    requires: FlowKey<unknown>[];
+    decide(ctx: FlowContext): string;
+}
+```
+
+Example:
+
+```typescript
+// FlowDefinition:
+.from('USER_RESOLVED').branch(mfaCheck)
+    .to('COMPLETE', 'no_mfa', sessionProcessor)
+    .to('MFA_PENDING', 'mfa_required', sessionProcessor)
+    .endBranch()
+
+// BranchProcessor:
+const mfaCheck: BranchProcessor<AuthState> = {
+    name: 'MfaCheck',
+    requires: [ResolvedUser],
+    decide(ctx) {
+        return ctx.get(ResolvedUser).mfaRequired ? 'mfa_required' : 'no_mfa';
+    },
+};
+```
+
+</details>
+<details><summary><b>Rust</b></summary>
+
+```rust
+pub trait BranchProcessor<S: FlowState> {
+    fn name(&self) -> &str;
+    fn requires(&self) -> Vec<TypeId>;
+    fn decide(&self, ctx: &FlowContext) -> String;
+}
+```
+
+Example:
+
+```rust
+// FlowDefinition:
+.from(AuthState::UserResolved).branch(MfaCheck)
+    .to(AuthState::Complete, "no_mfa", SessionProcessor)
+    .to(AuthState::MfaPending, "mfa_required", SessionProcessor)
+    .end_branch()
+
+// BranchProcessor:
+struct MfaCheck;
+impl BranchProcessor<AuthState> for MfaCheck {
+    fn name(&self) -> &str { "MfaCheck" }
+    fn requires(&self) -> Vec<TypeId> { requires![ResolvedUser] }
+    fn decide(&self, ctx: &FlowContext) -> String {
+        let user = ctx.get::<ResolvedUser>().unwrap();
+        if user.mfa_required { "mfa_required" } else { "no_mfa" }.into()
+    }
+}
+```
+
+</details>
+
 ### FlowContext
 
 Type-safe data bucket. Keyed by `Class<?>` — each type appears at most once.
+
+<details open><summary><b>Java</b></summary>
 
 ```java
 ctx.put(PaymentResult.class, new PaymentResult("OK"));  // write
 PaymentResult r = ctx.get(PaymentResult.class);          // read (type-safe)
 Optional<PaymentResult> o = ctx.find(PaymentResult.class); // optional read
 ```
+
+</details>
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+const PaymentResult = flowKey<PaymentResult>('PaymentResult');
+
+ctx.put(PaymentResult, { status: 'OK' });          // write
+const r = ctx.get(PaymentResult);                   // read (type-safe)
+const o = ctx.find(PaymentResult);                  // optional read (undefined if missing)
+```
+
+</details>
+<details><summary><b>Rust</b></summary>
+
+```rust
+ctx.put(PaymentResult { status: "OK".into() });              // write
+let r = ctx.get::<PaymentResult>()?;                         // read (type-safe)
+let o: Option<&PaymentResult> = ctx.find::<PaymentResult>(); // optional read
+```
+
+</details>
 
 **Why Class-keyed?** Three reasons:
 1. **No typos** — `ctx.get(PaymentResult.class)` can't be misspelled (unlike `map.get("payment_result")`)
@@ -273,6 +629,8 @@ Optional<PaymentResult> o = ctx.find(PaymentResult.class); // optional read
 ### FlowDefinition
 
 The **single source of truth** for a flow's structure. A declarative [transition table](#transition-table) built with a DSL and validated at `build()`.
+
+<details open><summary><b>Java</b></summary>
 
 ```java
 var flow = Tramli.define("order", OrderState.class)
@@ -288,6 +646,45 @@ var flow = Tramli.define("order", OrderState.class)
     .onAnyError(CANCELLED)
     .build();
 ```
+
+</details>
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+const flow = Tramli.define<OrderState>('order', stateConfig)
+    .setTtl(24 * 60 * 60 * 1000)
+    .maxGuardRetries(3)
+    .initiallyAvailable(OrderRequest)
+    .from('CREATED').auto('PAYMENT_PENDING', orderInit)
+    .from('PAYMENT_PENDING').external('PAYMENT_CONFIRMED', paymentGuard)
+    .from('PAYMENT_CONFIRMED').branch(stockCheck)
+        .to('SHIPPED', 'in_stock', shipProcessor)
+        .to('CANCELLED', 'out_of_stock', cancelProcessor)
+        .endBranch()
+    .onAnyError('CANCELLED')
+    .build();
+```
+
+</details>
+<details><summary><b>Rust</b></summary>
+
+```rust
+let flow = Builder::new("order")
+    .ttl(Duration::from_secs(86400))
+    .max_guard_retries(3)
+    .initially_available::<OrderRequest>()
+    .from(OrderState::Created).auto(OrderState::PaymentPending, OrderInit)
+    .from(OrderState::PaymentPending).external(OrderState::PaymentConfirmed, PaymentGuard)
+    .from(OrderState::PaymentConfirmed).branch(StockCheck)
+        .to(OrderState::Shipped, "in_stock", ShipProcessor)
+        .to(OrderState::Cancelled, "out_of_stock", CancelProcessor)
+        .end_branch()
+    .on_any_error(OrderState::Cancelled)
+    .build()
+    .unwrap();
+```
+
+</details>
 
 Reading this is like reading a map — you see the entire journey in 15 lines. This is why LLMs and humans can work with tramli efficiently: **the map IS the code.**
 
@@ -305,6 +702,8 @@ The engine never changes when you add flows. It's the rails — your [processors
 
 Pluggable persistence interface. Implement 4 methods:
 
+<details open><summary><b>Java</b></summary>
+
 ```java
 public interface FlowStore {
     void create(FlowInstance<?> flow);
@@ -313,6 +712,32 @@ public interface FlowStore {
     void recordTransition(String flowId, FlowState from, FlowState to, String trigger, FlowContext ctx);
 }
 ```
+
+</details>
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+interface FlowStore {
+    create(flow: FlowInstance<string>): void;
+    loadForUpdate<S extends string>(flowId: string, def: FlowDefinition<S>): FlowInstance<S> | undefined;
+    save(flow: FlowInstance<string>): void;
+    recordTransition(flowId: string, from: string, to: string, trigger: string, ctx: FlowContext): void;
+}
+```
+
+</details>
+<details><summary><b>Rust</b></summary>
+
+```rust
+pub trait FlowStore<S: FlowState> {
+    fn create(&mut self, flow: &FlowInstance<S>);
+    fn load_for_update(&self, flow_id: &str, def: &FlowDefinition<S>) -> Option<FlowInstance<S>>;
+    fn save(&mut self, flow: &FlowInstance<S>);
+    fn record_transition(&mut self, flow_id: &str, from: S, to: S, trigger: &str, ctx: &FlowContext);
+}
+```
+
+</details>
 
 | Implementation | Use case |
 |-------|----------|
@@ -445,6 +870,8 @@ flowchart LR
 
 ### Query API
 
+<details open><summary><b>Java</b></summary>
+
 ```java
 DataFlowGraph<OrderState> graph = orderFlow.dataFlowGraph();
 
@@ -465,7 +892,57 @@ Set<Class<?>> dead = graph.deadData();
 // → {ShipmentInfo}  (terminal data — no downstream consumer)
 ```
 
+</details>
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+const graph = orderFlow.dataFlowGraph();
+
+// What data is available when the flow reaches PAYMENT_PENDING?
+const available = graph.availableAt('PAYMENT_PENDING');
+// → Set { OrderRequest, PaymentIntent }
+
+// Who produces PaymentIntent?
+const producers = graph.producersOf(PaymentIntent);
+// → [{name: "OrderInit", from: "CREATED", to: "PAYMENT_PENDING"}]
+
+// Who consumes OrderRequest?
+const consumers = graph.consumersOf(OrderRequest);
+// → [{name: "OrderInit", from: "CREATED", to: "PAYMENT_PENDING"}]
+
+// Dead data: produced but never required downstream
+const dead = graph.deadData();
+// → Set { ShipmentInfo }
+```
+
+</details>
+<details><summary><b>Rust</b></summary>
+
+```rust
+let graph = order_flow.data_flow_graph();
+
+// What data is available when the flow reaches PaymentPending?
+let available = graph.available_at(OrderState::PaymentPending);
+// → {TypeId of OrderRequest, TypeId of PaymentIntent}
+
+// Who produces PaymentIntent?
+let producers = graph.producers_of::<PaymentIntent>();
+// → [{name: "OrderInit", from: Created, to: PaymentPending}]
+
+// Who consumes OrderRequest?
+let consumers = graph.consumers_of::<OrderRequest>();
+// → [{name: "OrderInit", from: Created, to: PaymentPending}]
+
+// Dead data: produced but never required downstream
+let dead = graph.dead_data();
+// → {TypeId of ShipmentInfo}
+```
+
+</details>
+
 ### Analysis API
+
+<details open><summary><b>Java</b></summary>
 
 ```java
 // Data lifetime — when a type is first produced and last consumed
@@ -488,6 +965,58 @@ List<String> violations = DataFlowGraph.verifyProcessor(orderInit, ctx);
 boolean ok = DataFlowGraph.isCompatible(processorA, processorB);
 // → true if B requires ⊆ A requires AND A produces ⊆ B produces
 ```
+
+</details>
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+// Data lifetime — when a type is first produced and last consumed
+const lt = graph.lifetime(PaymentIntent);
+// → { firstProduced: 'PAYMENT_PENDING', lastConsumed: 'PAYMENT_CONFIRMED' }
+
+// Context pruning hints — types no longer needed at each state
+const hints = graph.pruningHints();
+// → Map { 'SHIPPED' => Set { OrderRequest, PaymentIntent, PaymentResult, ShipmentInfo } }
+
+// Assert data-flow invariant on a running flow instance
+const missing = graph.assertDataFlow(flow.context, flow.currentState);
+// → [] (empty = all expected types present)
+
+// Verify processor's actual behavior matches its declarations
+const violations = DataFlowGraph.verifyProcessor(orderInit, ctx);
+// → [] (empty = requires/produces match actual get/put)
+
+// Check if processor B can replace processor A
+const ok = DataFlowGraph.isCompatible(processorA, processorB);
+// → true if B requires ⊆ A requires AND A produces ⊆ B produces
+```
+
+</details>
+<details><summary><b>Rust</b></summary>
+
+```rust
+// Data lifetime — when a type is first produced and last consumed
+let lt = graph.lifetime::<PaymentIntent>();
+// → Lifetime { first_produced: PaymentPending, last_consumed: PaymentConfirmed }
+
+// Context pruning hints — types no longer needed at each state
+let hints = graph.pruning_hints();
+// → {Shipped: {OrderRequest, PaymentIntent, PaymentResult, ShipmentInfo}}
+
+// Assert data-flow invariant on a running flow instance
+let missing = graph.assert_data_flow(&flow.context(), flow.current_state());
+// → vec![] (empty = all expected types present)
+
+// Verify processor's actual behavior matches its declarations
+let violations = DataFlowGraph::verify_processor(&order_init, &ctx);
+// → vec![] (empty = requires/produces match actual get/put)
+
+// Check if processor B can replace processor A
+let ok = DataFlowGraph::is_compatible(&processor_a, &processor_b);
+// → true if B requires ⊆ A requires AND A produces ⊆ B produces
+```
+
+</details>
 
 ### Why This Matters
 
@@ -624,6 +1153,8 @@ record SaveResult(int savedCount) {}
 
 ### 2. Write steps (1 step = 1 [PipelineStep](#pipelinestep))
 
+<details open><summary><b>Java</b></summary>
+
 ```java
 PipelineStep parse = new PipelineStep() {
     @Override public String name() { return "Parse"; }
@@ -638,9 +1169,53 @@ PipelineStep parse = new PipelineStep() {
 // validate, enrich, save follow the same pattern
 ```
 
+</details>
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+const RawInput = flowKey<RawInput>('RawInput');
+const Parsed = flowKey<Parsed>('Parsed');
+
+const parse: PipelineStep = {
+    name: 'Parse',
+    requires: [RawInput],
+    produces: [Parsed],
+    process(ctx) {
+        const raw = ctx.get(RawInput);
+        const rows = CsvParser.parse(raw.csv);
+        ctx.put(Parsed, { rows });
+    },
+};
+// validate, enrich, save follow the same pattern
+```
+
+</details>
+<details><summary><b>Rust</b></summary>
+
+```rust
+struct Parse;
+
+impl PipelineStep for Parse {
+    fn name(&self) -> &str { "Parse" }
+    fn requires(&self) -> Vec<TypeId> { requires![RawInput] }
+    fn produces(&self) -> Vec<TypeId> { produces![Parsed] }
+    fn process(&self, ctx: &mut FlowContext) -> Result<(), FlowError> {
+        let raw = ctx.get::<RawInput>()?;
+        let rows = CsvParser::parse(&raw.csv);
+        ctx.put(Parsed { rows });
+        Ok(())
+    }
+}
+// validate, enrich, save follow the same pattern
+```
+
+</details>
+
 Each step declares what it needs (`requires`) and what it provides (`produces`). **Same contract as [StateProcessor](#stateprocessor)**, but without the state generic.
 
 ### 3. Define the pipeline
+
+<details open><summary><b>Java</b></summary>
 
 ```java
 var pipeline = Tramli.pipeline("csv-import")
@@ -652,6 +1227,35 @@ var pipeline = Tramli.pipeline("csv-import")
     .build();          // ← requires/produces chain verified at build time
 ```
 
+</details>
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+const pipeline = Tramli.pipeline('csv-import')
+    .initiallyAvailable(RawInput)
+    .step(parse)       // requires: RawInput,   produces: Parsed
+    .step(validate)    // requires: Parsed,     produces: Validated
+    .step(enrich)      // requires: Validated,  produces: Enriched
+    .step(save)        // requires: Enriched,   produces: SaveResult
+    .build();
+```
+
+</details>
+<details><summary><b>Rust</b></summary>
+
+```rust
+let pipeline = PipelineBuilder::new("csv-import")
+    .initially_available::<RawInput>()
+    .step(Box::new(Parse))       // requires: RawInput,   produces: Parsed
+    .step(Box::new(Validate))    // requires: Parsed,     produces: Validated
+    .step(Box::new(Enrich))      // requires: Validated,  produces: Enriched
+    .step(Box::new(Save))        // requires: Enriched,   produces: SaveResult
+    .build()
+    .unwrap();
+```
+
+</details>
+
 If `enrich` requires `Validated` but nothing produces it, `build()` fails:
 
 ```
@@ -660,6 +1264,8 @@ Pipeline 'csv-import' has 1 error(s):
 ```
 
 ### 4. Run it
+
+<details open><summary><b>Java</b></summary>
 
 ```java
 FlowContext result = pipeline.execute(Map.of(RawInput.class, new RawInput(csvString)));
@@ -680,11 +1286,78 @@ try {
 }
 ```
 
+</details>
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+const result = pipeline.execute(new Map([[RawInput, { csv: csvString }]]));
+const saved = result.get(SaveResult);
+console.log(`Saved ${saved.savedCount} records`);
+```
+
+Error handling:
+
+```typescript
+try {
+    pipeline.execute(data);
+} catch (e) {
+    if (e instanceof PipelineError) {
+        e.completedSteps;  // ['Parse', 'Validate']
+        e.failedStep;      // 'Enrich'
+        e.context;         // FlowContext with Parsed + Validated
+        e.cause;           // original error
+    }
+}
+```
+
+</details>
+<details><summary><b>Rust</b></summary>
+
+```rust
+let result = pipeline.execute(vec![Box::new(RawInput { csv: csv_string })])?;
+let saved = result.get::<SaveResult>()?;
+println!("Saved {} records", saved.saved_count);
+```
+
+Error handling:
+
+```rust
+match pipeline.execute(data) {
+    Ok(ctx) => { /* success */ }
+    Err(PipelineError { completed_steps, failed_step, context, cause }) => {
+        // completed_steps: ["Parse", "Validate"]
+        // failed_step:     "Enrich"
+        // context:         FlowContext with Parsed + Validated
+        // cause:           original error
+    }
+}
+```
+
+</details>
+
 ### 5. Generate diagram
+
+<details open><summary><b>Java</b></summary>
 
 ```java
 String mermaid = pipeline.dataFlow().toMermaid();
 ```
+
+</details>
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+const mermaid = pipeline.dataFlow().toMermaid();
+```
+
+</details>
+<details><summary><b>Rust</b></summary>
+
+```rust
+let mermaid = pipeline.data_flow().to_mermaid();
+```
+
+</details>
 
 ```mermaid
 flowchart LR
@@ -734,6 +1407,8 @@ Pipeline is tramli's **on-ramp**: start with `pipeline()`, upgrade to `define()`
 
 tramli has **zero logging dependencies**. You plug in your own logger via lambda/callback:
 
+<details open><summary><b>Java</b></summary>
+
 ```java
 var engine = Tramli.engine(store);
 
@@ -753,17 +1428,33 @@ engine.setStateLogger(entry ->
 engine.removeAllLoggers();
 ```
 
-Log entries are **records** (Java) / **interfaces** (TS) / **structs** (Rust). Type-safe: `StateLogEntry.type()` gives you `Class<?>`, `typeName()` gives you the simple name string.
+</details>
+<details><summary><b>TypeScript</b></summary>
 
 ```typescript
-// TypeScript
-engine.setTransitionLogger(entry => console.log(`${entry.from} → ${entry.to}`));
+const engine = Tramli.engine(store);
+
+engine.setTransitionLogger(entry => console.log(`${entry.from} → ${entry.to} (${entry.trigger})`));
+engine.setErrorLogger(entry => console.error(`error at ${entry.from}: ${entry.cause.message}`));
+engine.setStateLogger(entry => console.debug(`put ${entry.typeName} = ${entry.value}`));
+engine.removeAllLoggers();
 ```
 
+</details>
+<details><summary><b>Rust</b></summary>
+
 ```rust
-// Rust
-engine.set_transition_logger(|entry| println!("{} → {}", entry.from, entry.to));
+let engine = FlowEngine::new(store);
+
+engine.set_transition_logger(|entry| println!("{} → {} ({})", entry.from, entry.to, entry.trigger));
+engine.set_error_logger(|entry| eprintln!("error at {}: {}", entry.from, entry.cause));
+engine.set_state_logger(|entry| println!("put {} = {:?}", entry.type_name, entry.value));
+engine.remove_all_loggers();
 ```
+
+</details>
+
+Log entries are **records** (Java) / **interfaces** (TS) / **structs** (Rust). Type-safe: `StateLogEntry.type()` gives you `Class<?>`, `typeName()` gives you the simple name string.
 
 ---
 
@@ -773,11 +1464,33 @@ engine.set_transition_logger(|entry| println!("{} → {}", entry.from, entry.to)
 
 When a [guard](#transitionguard) returns `Rejected`, the [engine](#flowengine) increments a failure counter. After `maxRetries` rejections, the flow transitions to the error state:
 
+<details open><summary><b>Java</b></summary>
+
 ```java
 .maxGuardRetries(3)            // definition-level default
 .onAnyError(CANCELLED)         // all non-terminal states → CANCELLED on error
 .onError(CHECKOUT, RETRY)      // override for specific states
 ```
+
+</details>
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+.maxGuardRetries(3)
+.onAnyError('CANCELLED')
+.onError('CHECKOUT', 'RETRY')
+```
+
+</details>
+<details><summary><b>Rust</b></summary>
+
+```rust
+.max_guard_retries(3)
+.on_any_error(OrderState::Cancelled)
+.on_error(OrderState::Checkout, OrderState::Retry)
+```
+
+</details>
 
 ### Error Transitions
 
@@ -787,12 +1500,36 @@ When a [guard](#transitionguard) returns `Rejected`, the [engine](#flowengine) i
 
 Different exceptions can route to different error states. Use `onStepError` for fine-grained control:
 
+<details open><summary><b>Java</b></summary>
+
 ```java
 .from(TOKEN_EXCHANGE).auto(USER_RESOLVED, tokenExchange)
 .onStepError(TOKEN_EXCHANGE, HttpTimeoutException.class, RETRIABLE_ERROR)  // timeout → retry
 .onStepError(TOKEN_EXCHANGE, InvalidTokenException.class, TERMINAL_ERROR)  // bad token → fatal
 .onAnyError(GENERAL_ERROR)  // fallback for unmatched exceptions
 ```
+
+</details>
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+.from('TOKEN_EXCHANGE').auto('USER_RESOLVED', tokenExchange)
+.onStepError('TOKEN_EXCHANGE', HttpTimeoutError, 'RETRIABLE_ERROR')  // timeout → retry
+.onStepError('TOKEN_EXCHANGE', InvalidTokenError, 'TERMINAL_ERROR')  // bad token → fatal
+.onAnyError('GENERAL_ERROR')
+```
+
+</details>
+<details><summary><b>Rust</b></summary>
+
+```rust
+.from(AuthState::TokenExchange).auto(AuthState::UserResolved, TokenExchange)
+.on_step_error::<HttpTimeoutError>(AuthState::TokenExchange, AuthState::RetriableError)
+.on_step_error::<InvalidTokenError>(AuthState::TokenExchange, AuthState::TerminalError)
+.on_any_error(AuthState::GeneralError)
+```
+
+</details>
 
 Matching order:
 1. `onStepError` — first matching `instanceof` check wins
@@ -866,6 +1603,25 @@ rust-plugins/   →  tramli-plugins              (crates.io)
 
 ### PluginRegistry
 
+<details open><summary><b>Java</b></summary>
+
+```java
+var registry = new PluginRegistry<MyState>();
+registry
+    .register(PolicyLintPlugin.defaults())
+    .register(new AuditStorePlugin())
+    .register(new EventLogStorePlugin())
+    .register(new ObservabilityEnginePlugin(sink));
+
+var report = registry.analyzeAll(definition);        // run lint
+var store  = registry.applyStorePlugins(rawStore);   // wrap store
+registry.installEnginePlugins(engine);                // install hooks
+var adapters = registry.bindRuntimeAdapters(engine);  // get rich APIs
+```
+
+</details>
+<details><summary><b>TypeScript</b></summary>
+
 ```typescript
 const registry = new PluginRegistry<MyState>();
 registry
@@ -879,6 +1635,25 @@ const store  = registry.applyStorePlugins(rawStore); // wrap store
 registry.installEnginePlugins(engine);               // install hooks
 const adapters = registry.bindRuntimeAdapters(engine); // get rich APIs
 ```
+
+</details>
+<details><summary><b>Rust</b></summary>
+
+```rust
+let mut registry = PluginRegistry::<MyState>::new();
+registry
+    .register(Box::new(PolicyLintPlugin::defaults()))
+    .register(Box::new(AuditStorePlugin::new()))
+    .register(Box::new(EventLogStorePlugin::new()))
+    .register(Box::new(ObservabilityEnginePlugin::new(sink)));
+
+let report = registry.analyze_all(&definition);         // run lint
+let store  = registry.apply_store_plugins(raw_store);    // wrap store
+registry.install_engine_plugins(&mut engine);             // install hooks
+let adapters = registry.bind_runtime_adapters(&engine);   // get rich APIs
+```
+
+</details>
 
 **Design principle: core never changes, plugins layer on top.** See the [Plugin Tutorial](docs/tutorial-plugins.md) for a complete walkthrough.
 

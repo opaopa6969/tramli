@@ -36,10 +36,10 @@ type S = 'CREATED' | 'PENDING' | 'CONFIRMED' | 'DONE' | 'ERROR';
 
 const config: Record<S, StateConfig> = {
   CREATED:   { terminal: false, initial: true },
-  PENDING:   { terminal: false, initial: false },
-  CONFIRMED: { terminal: false, initial: false },
-  DONE:      { terminal: true,  initial: false },
-  ERROR:     { terminal: true,  initial: false },
+  PENDING:   { terminal: false },
+  CONFIRMED: { terminal: false },
+  DONE:      { terminal: true },
+  ERROR:     { terminal: true },
 };
 
 interface Input { value: string }
@@ -356,7 +356,7 @@ describe('Plugin Integration', () => {
     const parentDef = buildDef(true);
     const subConfig: Record<'SUB_A' | 'SUB_B', StateConfig> = {
       SUB_A: { terminal: false, initial: true },
-      SUB_B: { terminal: true, initial: false },
+      SUB_B: { terminal: true },
     };
     const subDef = Tramli.define<'SUB_A' | 'SUB_B'>('sub', subConfig)
       .from('SUB_A').auto('SUB_B', {

@@ -13,10 +13,10 @@ type OrderState = 'CREATED' | 'PAYMENT_PENDING' | 'PAYMENT_CONFIRMED' | 'SHIPPED
 
 const stateConfig: Record<OrderState, StateConfig> = {
   CREATED:           { terminal: false, initial: true },
-  PAYMENT_PENDING:   { terminal: false, initial: false },
-  PAYMENT_CONFIRMED: { terminal: false, initial: false },
-  SHIPPED:           { terminal: true,  initial: false },
-  CANCELLED:         { terminal: true,  initial: false },
+  PAYMENT_PENDING:   { terminal: false },
+  PAYMENT_CONFIRMED: { terminal: false },
+  SHIPPED:           { terminal: true },
+  CANCELLED:         { terminal: true },
 };
 
 // ─── Context data ─────────────────────���─────────────
@@ -275,7 +275,7 @@ describe('OrderFlow', () => {
     type SubSimple = 'SS_INIT' | 'SS_DONE';
     const ssConfig: Record<SubSimple, import('../src/types.js').StateConfig> = {
       SS_INIT: { terminal: false, initial: true },
-      SS_DONE: { terminal: true, initial: false },
+      SS_DONE: { terminal: true },
     };
     const pluginDef = Tramli.define<SubSimple>('plugin', ssConfig)
       .from('SS_INIT').auto('SS_DONE', {

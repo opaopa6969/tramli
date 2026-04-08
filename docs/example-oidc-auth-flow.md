@@ -281,4 +281,371 @@ Flow 'oidc' has 1 validation error(s):
 
 ---
 
+## 8. Extending with Plugins
+
+The flow definition above stays **exactly the same**. Plugins layer on top — zero changes to processors or the flow graph.
+
+> Code examples below are shown in all 3 languages. Pick your language.
+
+### 8.1 Plugin Registration
+
+<details open><summary><b>Java</b></summary>
+
+```java
+var sink = new InMemoryTelemetrySink();
+var registry = new PluginRegistry<OidcState>();
+registry
+    .register(PolicyLintPlugin.defaults())
+    .register(new AuditStorePlugin())
+    .register(new EventLogStorePlugin())
+    .register(new ObservabilityEnginePlugin(sink))
+    .register(new RichResumeRuntimePlugin())
+    .register(new IdempotencyRuntimePlugin(new InMemoryIdempotencyRegistry()));
+
+var report = registry.analyzeAll(oidcFlow);
+var wrappedStore = registry.applyStorePlugins(new InMemoryFlowStore());
+var engine = Tramli.engine(wrappedStore);
+registry.installEnginePlugins(engine);
+var adapters = registry.bindRuntimeAdapters(engine);
+```
+</details>
+
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+const sink = new InMemoryTelemetrySink();
+const registry = new PluginRegistry<OidcState>();
+registry
+  .register(PolicyLintPlugin.defaults())
+  .register(new AuditStorePlugin())
+  .register(new EventLogStorePlugin())
+  .register(new ObservabilityEnginePlugin(sink))
+  .register(new RichResumeRuntimePlugin())
+  .register(new IdempotencyRuntimePlugin(new InMemoryIdempotencyRegistry()));
+
+const report = registry.analyzeAll(oidcFlow);
+const wrappedStore = registry.applyStorePlugins(new InMemoryFlowStore());
+const engine = Tramli.engine(wrappedStore);
+registry.installEnginePlugins(engine);
+const adapters = registry.bindRuntimeAdapters(engine);
+```
+</details>
+
+<details><summary><b>Rust</b></summary>
+
+```rust
+let sink = Arc::new(InMemoryTelemetrySink::new());
+let observability = ObservabilityPlugin::new(sink.clone());
+
+let linter = PolicyLintPlugin::<OidcState>::defaults();
+let mut report = PluginReport::new();
+linter.analyze(&oidc_flow, &mut report);
+
+let mut engine = FlowEngine::new(InMemoryFlowStore::new());
+observability.install(&mut engine);
+
+let idempotency = InMemoryIdempotencyRegistry::new();
+```
+</details>
+
+### 8.2 Lint — Design-Time Policy Check
+
+Run lint in CI to catch design smells before they ship.
+
+<details open><summary><b>Java</b></summary>
+
+```java
+var report = registry.analyzeAll(oidcFlow);
+for (var finding : report.findings()) {
+    System.out.println("[" + finding.severity() + "] " + finding.pluginId() + ": " + finding.message());
+}
+// → [WARN] policy/dead-data: produced but never consumed: IssuedSession
+```
+</details>
+
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+const report = registry.analyzeAll(oidcFlow);
+for (const finding of report.findings()) {
+  console.warn(`[${finding.severity}] ${finding.pluginId}: ${finding.message}`);
+}
+```
+</details>
+
+<details><summary><b>Rust</b></summary>
+
+```rust
+let linter = PolicyLintPlugin::<OidcState>::defaults();
+let mut report = PluginReport::new();
+linter.analyze(&oidc_flow, &mut report);
+println!("{}", report.as_text());
+```
+</details>
+
+4 default policies: **terminal-outgoing**, **external-count** (>3), **dead-data**, **overwide-processor** (>3 produces). Custom policies are just functions.
+
+### 8.3 Audit — "What happened during this login?"
+
+Every transition is recorded with a snapshot of produced data.
+
+<details open><summary><b>Java</b></summary>
+
+```java
+var auditStore = (AuditingFlowStore) wrappedStore;
+for (var record : auditStore.auditedTransitions()) {
+    log.info("{} → {} at {}", record.from(), record.to(), record.timestamp());
+    log.info("  produced: {}", record.producedDataSnapshot());
+}
+// → INIT → REDIRECTED at 2026-04-09T10:00:01 produced: {OidcRedirect=...}
+// → REDIRECTED → CALLBACK_RECEIVED at ... produced: {OidcCallback=...}
+// → CALLBACK_RECEIVED → TOKEN_EXCHANGED at ... produced: {OidcTokens=...}
+```
+</details>
+
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+const auditStore = wrappedStore as AuditingFlowStore;
+for (const record of auditStore.auditedTransitions) {
+  console.log(`${record.from} → ${record.to} at ${record.timestamp}`);
+  console.log('  produced:', record.producedDataSnapshot);
+}
+```
+</details>
+
+<details><summary><b>Rust</b></summary>
+
+```rust
+for record in audit_store.audited_transitions() {
+    println!("{} → {} at {:?}", record.from, record.to, record.timestamp);
+}
+```
+</details>
+
+### 8.4 Event Store — Replay and Compensation
+
+Versioned event log enables state reconstruction and saga compensation.
+
+<details open><summary><b>Java</b></summary>
+
+```java
+// Replay: "What state was the user in at version 3?"
+var replay = new ReplayService();
+var stateAtV3 = replay.stateAtVersion(eventStore.events(), flowId, 3);
+// → "TOKEN_EXCHANGED"
+
+// Projection: count transitions per flow
+var projection = new ProjectionReplayService();
+int count = projection.stateAtVersion(eventStore.events(), flowId, 999,
+    new ProjectionReducer<Integer>() {
+        public Integer initialState() { return 0; }
+        public Integer apply(Integer state, VersionedTransitionEvent e) { return state + 1; }
+    });
+
+// Compensation: rollback on token exchange failure
+var compensation = new CompensationService(
+    (event, cause) -> event.trigger().equals("OidcTokenExchangeProcessor")
+        ? new CompensationPlan("REVOKE_PARTIAL_SESSION", Map.of("reason", cause.getMessage()))
+        : null,
+    eventStore);
+```
+</details>
+
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+// Replay
+const replay = new ReplayService();
+const stateAtV3 = replay.stateAtVersion(eventStore.events(), flowId, 3);
+
+// Projection
+const projection = new ProjectionReplayService();
+const count = projection.stateAtVersion(eventStore.events(), flowId, 999,
+  { initialState: () => 0, apply: (n, _event) => n + 1 });
+
+// Compensation
+const compensation = new CompensationService(
+  (event, cause) => event.trigger === 'OidcTokenExchangeProcessor'
+    ? { action: 'REVOKE_PARTIAL_SESSION', metadata: { reason: cause.message } }
+    : null,
+  eventStore);
+```
+</details>
+
+<details><summary><b>Rust</b></summary>
+
+```rust
+// Replay
+let state_at_v3 = ReplayService::state_at_version(event_store.events(), &flow_id, 3);
+
+// Projection
+struct CountReducer;
+impl ProjectionReducer<usize> for CountReducer {
+    fn initial_state(&self) -> usize { 0 }
+    fn apply(&self, state: usize, _event: &VersionedTransitionEvent) -> usize { state + 1 }
+}
+let count = ProjectionReplayService::state_at_version(
+    event_store.events(), &flow_id, 999, &CountReducer);
+
+// Compensation
+let compensation = CompensationService::new(Box::new(|event, cause| {
+    if event.trigger == "OidcTokenExchangeProcessor" {
+        Some(CompensationPlan { action: "REVOKE_PARTIAL_SESSION".into(), metadata: cause.into() })
+    } else { None }
+}));
+```
+</details>
+
+### 8.5 Rich Resume — Status Classification
+
+Know exactly what happened when a callback arrives.
+
+<details open><summary><b>Java</b></summary>
+
+```java
+var resume = (RichResumeExecutor) adapters.get("rich-resume");
+var result = resume.resume(flowId, oidcFlow, externalData, OidcState.REDIRECTED);
+
+switch (result.status()) {
+    case TRANSITIONED          -> handleSuccess(result.flow());
+    case ALREADY_COMPLETED     -> respond(200, "already logged in");
+    case REJECTED              -> respond(400, "callback invalid");
+    case NO_APPLICABLE_TRANSITION -> respond(404, "no pending login");
+    case EXCEPTION_ROUTED      -> handleError(result.error());
+}
+```
+</details>
+
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+const executor = new RichResumeExecutor(engine);
+const result = await executor.resume(flowId, oidcFlow, externalData, 'REDIRECTED');
+
+switch (result.status) {
+  case 'TRANSITIONED':          return handleSuccess(result.flow!);
+  case 'ALREADY_COMPLETE':      return res.json({ msg: 'already logged in' });
+  case 'REJECTED':              return res.status(400).json({ msg: 'callback invalid' });
+  case 'NO_APPLICABLE_TRANSITION': return res.status(404).json({ msg: 'no pending login' });
+  case 'EXCEPTION_ROUTED':      return handleError(result.error!);
+}
+```
+</details>
+
+<details><summary><b>Rust</b></summary>
+
+```rust
+let result = RichResumeExecutor::resume(&mut engine, &flow_id, external_data, OidcState::Redirected);
+
+match result.status {
+    RichResumeStatus::Transitioned      => handle_success(&flow_id),
+    RichResumeStatus::AlreadyComplete   => respond(200, "already logged in"),
+    RichResumeStatus::Rejected          => respond(400, "callback invalid"),
+    RichResumeStatus::NoApplicableTransition => respond(404, "no pending login"),
+    RichResumeStatus::ExceptionRouted   => handle_error(result.error),
+}
+```
+</details>
+
+### 8.6 Idempotency — Double Callback Protection
+
+OAuth callbacks can arrive twice (user refreshes, network retry). Use the `state` parameter as `commandId`.
+
+<details open><summary><b>Java</b></summary>
+
+```java
+var idempotent = (IdempotentRichResumeExecutor) adapters.get("idempotency");
+var result = idempotent.resume(flowId, oidcFlow,
+    new CommandEnvelope("callback-" + oauthState, externalData),
+    OidcState.REDIRECTED);
+
+if (result.status() == ALREADY_COMPLETED) {
+    // Second callback — safe no-op
+    return "login already processed";
+}
+```
+</details>
+
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+const idempotent = new IdempotentRichResumeExecutor(engine, new InMemoryIdempotencyRegistry());
+const result = await idempotent.resume(flowId, oidcFlow,
+  { commandId: `callback-${oauthState}`, externalData },
+  'REDIRECTED');
+
+if (result.status === 'ALREADY_COMPLETE') {
+  return 'login already processed';
+}
+```
+</details>
+
+<details><summary><b>Rust</b></summary>
+
+```rust
+let registry = InMemoryIdempotencyRegistry::new();
+let result = IdempotentRichResumeExecutor::resume(
+    &mut engine, &registry, &flow_id,
+    CommandEnvelope { command_id: format!("callback-{}", oauth_state), external_data },
+    OidcState::Redirected);
+
+if result.status == RichResumeStatus::AlreadyComplete {
+    return "login already processed";
+}
+```
+</details>
+
+### 8.7 Diagram and Documentation Generation
+
+<details open><summary><b>Java</b></summary>
+
+```java
+// All-in-one diagram bundle
+var bundle = new DiagramPlugin().generate(oidcFlow);
+writeFile("oidc-state.mmd", bundle.mermaid());
+writeFile("oidc-dataflow.json", bundle.dataFlowJson());
+
+// Markdown catalog
+var docs = new DocumentationPlugin().toMarkdown(oidcFlow);
+
+// BDD test scenarios (1 per transition)
+var plan = new ScenarioTestPlugin().generate(oidcFlow);
+// → 11 scenarios generated automatically
+```
+</details>
+
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+const bundle = new DiagramPlugin().generate(oidcFlow);
+const docs = new DocumentationPlugin().toMarkdown(oidcFlow);
+const plan = new ScenarioTestPlugin().generate(oidcFlow);
+```
+</details>
+
+<details><summary><b>Rust</b></summary>
+
+```rust
+let bundle = DiagramPlugin::generate(&oidc_flow);
+let docs = DocumentationPlugin::to_markdown(&oidc_flow);
+let plan = ScenarioTestPlugin::generate(&oidc_flow);
+```
+</details>
+
+### What Plugins Add to this Flow
+
+| Concern | Without plugins | With plugins |
+|---------|----------------|--------------|
+| Double OAuth callback | Runs twice, double session | `IdempotencyRuntimePlugin` deduplicates by `state` param |
+| "What happened during login X?" | `transitionLog` only | `AuditStorePlugin` records data snapshots per transition |
+| State reconstruction after crash | Latest state only | `ReplayService` rebuilds any version |
+| "Did the callback transition or was it rejected?" | Compare states manually | `RichResumeStatus` in 5 classifications |
+| Design mistakes in CI | `build()` 8-item check | `PolicyLintPlugin` adds dead-data / overwide-processor detection |
+| Docs for non-engineers | Mermaid only | `DiagramBundle` + markdown catalog + BDD scenarios |
+
+**Core flow definition: unchanged. Processors: unchanged. Plugins: layered on top.**
+
+---
+
 *This is the same flow that powers volta-auth-proxy in production, handling OIDC, Passkey, MFA, and invitation flows.*

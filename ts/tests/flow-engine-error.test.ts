@@ -11,35 +11,35 @@ import type { FlowContext } from '../src/flow-context.js';
 type TwoStep = 'INIT' | 'DONE' | 'ERROR';
 const twoStepConfig: Record<TwoStep, StateConfig> = {
   INIT:  { terminal: false, initial: true },
-  DONE:  { terminal: true,  initial: false },
-  ERROR: { terminal: true,  initial: false },
+  DONE:  { terminal: true },
+  ERROR: { terminal: true },
 };
 
 type WithWait = 'INIT' | 'WAIT' | 'DONE' | 'ERROR';
 const withWaitConfig: Record<WithWait, StateConfig> = {
   INIT:  { terminal: false, initial: true },
-  WAIT:  { terminal: false, initial: false },
-  DONE:  { terminal: true,  initial: false },
-  ERROR: { terminal: true,  initial: false },
+  WAIT:  { terminal: false },
+  DONE:  { terminal: true },
+  ERROR: { terminal: true },
 };
 
 type Chain = 'INIT' | 'A' | 'B' | 'C' | 'DONE' | 'ERROR';
 const chainConfig: Record<Chain, StateConfig> = {
   INIT:  { terminal: false, initial: true },
-  A:     { terminal: false, initial: false },
-  B:     { terminal: false, initial: false },
-  C:     { terminal: false, initial: false },
-  DONE:  { terminal: true,  initial: false },
-  ERROR: { terminal: true,  initial: false },
+  A:     { terminal: false },
+  B:     { terminal: false },
+  C:     { terminal: false },
+  DONE:  { terminal: true },
+  ERROR: { terminal: true },
 };
 
 type Conflict = 'INIT' | 'A' | 'B' | 'DONE' | 'ERROR';
 const conflictConfig: Record<Conflict, StateConfig> = {
   INIT:  { terminal: false, initial: true },
-  A:     { terminal: false, initial: false },
-  B:     { terminal: false, initial: false },
-  DONE:  { terminal: true,  initial: false },
-  ERROR: { terminal: true,  initial: false },
+  A:     { terminal: false },
+  B:     { terminal: false },
+  DONE:  { terminal: true },
+  ERROR: { terminal: true },
 };
 
 // ─── Context ─────────────────────��──────────────────
@@ -213,8 +213,8 @@ describe('FlowEngineError', () => {
     type SubStep = 'S_INIT' | 'S_PROCESS' | 'S_DONE';
     const subConfig: Record<SubStep, StateConfig> = {
       S_INIT: { terminal: false, initial: true },
-      S_PROCESS: { terminal: false, initial: false },
-      S_DONE: { terminal: true, initial: false },
+      S_PROCESS: { terminal: false },
+      S_DONE: { terminal: true },
     };
     const SubOutput = flowKey<{ v: string }>('SubOutput');
 
@@ -240,8 +240,8 @@ describe('FlowEngineError', () => {
     type SubStep = 'S_INIT' | 'S_WAIT' | 'S_DONE';
     const subConfig: Record<SubStep, StateConfig> = {
       S_INIT: { terminal: false, initial: true },
-      S_WAIT: { terminal: false, initial: false },
-      S_DONE: { terminal: true, initial: false },
+      S_WAIT: { terminal: false },
+      S_DONE: { terminal: true },
     };
     const SubOutput = flowKey<{ v: string }>('SubOutput');
 
@@ -275,7 +275,7 @@ describe('FlowEngineError', () => {
     type SubSimple = 'SS_INIT' | 'SS_DONE';
     const ssConfig: Record<SubSimple, StateConfig> = {
       SS_INIT: { terminal: false, initial: true },
-      SS_DONE: { terminal: true, initial: false },
+      SS_DONE: { terminal: true },
     };
     const subDef = Tramli.define<SubSimple>('sub-inc', ssConfig)
       .from('SS_INIT').auto('SS_DONE', ok('P', [], []))
@@ -295,9 +295,9 @@ describe('FlowEngineError', () => {
     type ErrPath = 'START' | 'MID' | 'ERR' | 'DONE';
     const errConfig: Record<ErrPath, StateConfig> = {
       START: { terminal: false, initial: true },
-      MID:   { terminal: false, initial: false },
-      ERR:   { terminal: false, initial: false },
-      DONE:  { terminal: true,  initial: false },
+      MID:   { terminal: false },
+      ERR:   { terminal: false },
+      DONE:  { terminal: true },
     };
     const ErrMiddle = flowKey<{ v: string }>('ErrMiddle');
 

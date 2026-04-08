@@ -214,4 +214,370 @@ Flow 'oidc' has 1 validation error(s):
 
 ---
 
+## 8. プラグインで拡張する
+
+上のフロー定義は**一切変更しない**。プラグインは外側から重ねるだけ — Processor もフローグラフも触らない。
+
+> 以下のコード例は 3 言語すべてで示す。使う言語を選んでください。
+
+### 8.1 プラグイン登録
+
+<details open><summary><b>Java</b></summary>
+
+```java
+var sink = new InMemoryTelemetrySink();
+var registry = new PluginRegistry<OidcState>();
+registry
+    .register(PolicyLintPlugin.defaults())
+    .register(new AuditStorePlugin())
+    .register(new EventLogStorePlugin())
+    .register(new ObservabilityEnginePlugin(sink))
+    .register(new RichResumeRuntimePlugin())
+    .register(new IdempotencyRuntimePlugin(new InMemoryIdempotencyRegistry()));
+
+var report = registry.analyzeAll(oidcFlow);
+var wrappedStore = registry.applyStorePlugins(new InMemoryFlowStore());
+var engine = Tramli.engine(wrappedStore);
+registry.installEnginePlugins(engine);
+var adapters = registry.bindRuntimeAdapters(engine);
+```
+</details>
+
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+const sink = new InMemoryTelemetrySink();
+const registry = new PluginRegistry<OidcState>();
+registry
+  .register(PolicyLintPlugin.defaults())
+  .register(new AuditStorePlugin())
+  .register(new EventLogStorePlugin())
+  .register(new ObservabilityEnginePlugin(sink))
+  .register(new RichResumeRuntimePlugin())
+  .register(new IdempotencyRuntimePlugin(new InMemoryIdempotencyRegistry()));
+
+const report = registry.analyzeAll(oidcFlow);
+const wrappedStore = registry.applyStorePlugins(new InMemoryFlowStore());
+const engine = Tramli.engine(wrappedStore);
+registry.installEnginePlugins(engine);
+const adapters = registry.bindRuntimeAdapters(engine);
+```
+</details>
+
+<details><summary><b>Rust</b></summary>
+
+```rust
+let sink = Arc::new(InMemoryTelemetrySink::new());
+let observability = ObservabilityPlugin::new(sink.clone());
+
+let linter = PolicyLintPlugin::<OidcState>::defaults();
+let mut report = PluginReport::new();
+linter.analyze(&oidc_flow, &mut report);
+
+let mut engine = FlowEngine::new(InMemoryFlowStore::new());
+observability.install(&mut engine);
+
+let idempotency = InMemoryIdempotencyRegistry::new();
+```
+</details>
+
+### 8.2 Lint — 設計時ポリシーチェック
+
+CI で回して設計の臭いを出荷前に検出する。
+
+<details open><summary><b>Java</b></summary>
+
+```java
+var report = registry.analyzeAll(oidcFlow);
+for (var finding : report.findings()) {
+    System.out.println("[" + finding.severity() + "] " + finding.pluginId() + ": " + finding.message());
+}
+// → [WARN] policy/dead-data: produced but never consumed: IssuedSession
+```
+</details>
+
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+const report = registry.analyzeAll(oidcFlow);
+for (const finding of report.findings()) {
+  console.warn(`[${finding.severity}] ${finding.pluginId}: ${finding.message}`);
+}
+```
+</details>
+
+<details><summary><b>Rust</b></summary>
+
+```rust
+let linter = PolicyLintPlugin::<OidcState>::defaults();
+let mut report = PluginReport::new();
+linter.analyze(&oidc_flow, &mut report);
+println!("{}", report.as_text());
+```
+</details>
+
+デフォルト4ポリシー: **terminal-outgoing**、**external-count** (>3)、**dead-data**、**overwide-processor** (>3 produces)。カスタムポリシーは関数1つで追加可能。
+
+### 8.3 Audit — 「このログインで何が起きた？」
+
+全遷移が生成データのスナップショット付きで記録される。
+
+<details open><summary><b>Java</b></summary>
+
+```java
+var auditStore = (AuditingFlowStore) wrappedStore;
+for (var record : auditStore.auditedTransitions()) {
+    log.info("{} → {} at {}", record.from(), record.to(), record.timestamp());
+    log.info("  produced: {}", record.producedDataSnapshot());
+}
+// → INIT → REDIRECTED at 2026-04-09T10:00:01 produced: {OidcRedirect=...}
+// → REDIRECTED → CALLBACK_RECEIVED at ... produced: {OidcCallback=...}
+// → CALLBACK_RECEIVED → TOKEN_EXCHANGED at ... produced: {OidcTokens=...}
+```
+</details>
+
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+const auditStore = wrappedStore as AuditingFlowStore;
+for (const record of auditStore.auditedTransitions) {
+  console.log(`${record.from} → ${record.to} at ${record.timestamp}`);
+  console.log('  produced:', record.producedDataSnapshot);
+}
+```
+</details>
+
+<details><summary><b>Rust</b></summary>
+
+```rust
+for record in audit_store.audited_transitions() {
+    println!("{} → {} at {:?}", record.from, record.to, record.timestamp);
+}
+```
+</details>
+
+### 8.4 Event Store — リプレイと補償
+
+バージョン付きイベントログで状態再構築と Saga 補償ができる。
+
+<details open><summary><b>Java</b></summary>
+
+```java
+// リプレイ: 「バージョン3時点でユーザーはどの状態だった？」
+var replay = new ReplayService();
+var stateAtV3 = replay.stateAtVersion(eventStore.events(), flowId, 3);
+// → "TOKEN_EXCHANGED"
+
+// プロジェクション: フローごとの遷移回数をカウント
+var projection = new ProjectionReplayService();
+int count = projection.stateAtVersion(eventStore.events(), flowId, 999,
+    new ProjectionReducer<Integer>() {
+        public Integer initialState() { return 0; }
+        public Integer apply(Integer state, VersionedTransitionEvent e) { return state + 1; }
+    });
+
+// 補償: トークン交換失敗時のロールバック
+var compensation = new CompensationService(
+    (event, cause) -> event.trigger().equals("OidcTokenExchangeProcessor")
+        ? new CompensationPlan("REVOKE_PARTIAL_SESSION", Map.of("reason", cause.getMessage()))
+        : null,
+    eventStore);
+```
+</details>
+
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+// リプレイ
+const replay = new ReplayService();
+const stateAtV3 = replay.stateAtVersion(eventStore.events(), flowId, 3);
+
+// プロジェクション
+const projection = new ProjectionReplayService();
+const count = projection.stateAtVersion(eventStore.events(), flowId, 999,
+  { initialState: () => 0, apply: (n, _event) => n + 1 });
+
+// 補償
+const compensation = new CompensationService(
+  (event, cause) => event.trigger === 'OidcTokenExchangeProcessor'
+    ? { action: 'REVOKE_PARTIAL_SESSION', metadata: { reason: cause.message } }
+    : null,
+  eventStore);
+```
+</details>
+
+<details><summary><b>Rust</b></summary>
+
+```rust
+// リプレイ
+let state_at_v3 = ReplayService::state_at_version(event_store.events(), &flow_id, 3);
+
+// プロジェクション
+struct CountReducer;
+impl ProjectionReducer<usize> for CountReducer {
+    fn initial_state(&self) -> usize { 0 }
+    fn apply(&self, state: usize, _event: &VersionedTransitionEvent) -> usize { state + 1 }
+}
+let count = ProjectionReplayService::state_at_version(
+    event_store.events(), &flow_id, 999, &CountReducer);
+
+// 補償
+let compensation = CompensationService::new(Box::new(|event, cause| {
+    if event.trigger == "OidcTokenExchangeProcessor" {
+        Some(CompensationPlan { action: "REVOKE_PARTIAL_SESSION".into(), metadata: cause.into() })
+    } else { None }
+}));
+```
+</details>
+
+### 8.5 Rich Resume — ステータス分類
+
+コールバック到着時に何が起きたかを正確に知る。
+
+<details open><summary><b>Java</b></summary>
+
+```java
+var resume = (RichResumeExecutor) adapters.get("rich-resume");
+var result = resume.resume(flowId, oidcFlow, externalData, OidcState.REDIRECTED);
+
+switch (result.status()) {
+    case TRANSITIONED          -> handleSuccess(result.flow());
+    case ALREADY_COMPLETED     -> respond(200, "already logged in");
+    case REJECTED              -> respond(400, "callback invalid");
+    case NO_APPLICABLE_TRANSITION -> respond(404, "no pending login");
+    case EXCEPTION_ROUTED      -> handleError(result.error());
+}
+```
+</details>
+
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+const executor = new RichResumeExecutor(engine);
+const result = await executor.resume(flowId, oidcFlow, externalData, 'REDIRECTED');
+
+switch (result.status) {
+  case 'TRANSITIONED':          return handleSuccess(result.flow!);
+  case 'ALREADY_COMPLETE':      return res.json({ msg: 'already logged in' });
+  case 'REJECTED':              return res.status(400).json({ msg: 'callback invalid' });
+  case 'NO_APPLICABLE_TRANSITION': return res.status(404).json({ msg: 'no pending login' });
+  case 'EXCEPTION_ROUTED':      return handleError(result.error!);
+}
+```
+</details>
+
+<details><summary><b>Rust</b></summary>
+
+```rust
+let result = RichResumeExecutor::resume(&mut engine, &flow_id, external_data, OidcState::Redirected);
+
+match result.status {
+    RichResumeStatus::Transitioned      => handle_success(&flow_id),
+    RichResumeStatus::AlreadyComplete   => respond(200, "already logged in"),
+    RichResumeStatus::Rejected          => respond(400, "callback invalid"),
+    RichResumeStatus::NoApplicableTransition => respond(404, "no pending login"),
+    RichResumeStatus::ExceptionRouted   => handle_error(result.error),
+}
+```
+</details>
+
+### 8.6 Idempotency — 二重コールバック防止
+
+OAuth コールバックは二重送信されうる（ユーザーのリフレッシュ、ネットワークリトライ）。`state` パラメータを `commandId` に使う。
+
+<details open><summary><b>Java</b></summary>
+
+```java
+var idempotent = (IdempotentRichResumeExecutor) adapters.get("idempotency");
+var result = idempotent.resume(flowId, oidcFlow,
+    new CommandEnvelope("callback-" + oauthState, externalData),
+    OidcState.REDIRECTED);
+
+if (result.status() == ALREADY_COMPLETED) {
+    return "login already processed";  // 2回目のコールバック → 安全な no-op
+}
+```
+</details>
+
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+const idempotent = new IdempotentRichResumeExecutor(engine, new InMemoryIdempotencyRegistry());
+const result = await idempotent.resume(flowId, oidcFlow,
+  { commandId: `callback-${oauthState}`, externalData },
+  'REDIRECTED');
+
+if (result.status === 'ALREADY_COMPLETE') {
+  return 'login already processed';
+}
+```
+</details>
+
+<details><summary><b>Rust</b></summary>
+
+```rust
+let registry = InMemoryIdempotencyRegistry::new();
+let result = IdempotentRichResumeExecutor::resume(
+    &mut engine, &registry, &flow_id,
+    CommandEnvelope { command_id: format!("callback-{}", oauth_state), external_data },
+    OidcState::Redirected);
+
+if result.status == RichResumeStatus::AlreadyComplete {
+    return "login already processed";
+}
+```
+</details>
+
+### 8.7 ダイアグラムとドキュメント生成
+
+<details open><summary><b>Java</b></summary>
+
+```java
+// ダイアグラム一括生成
+var bundle = new DiagramPlugin().generate(oidcFlow);
+writeFile("oidc-state.mmd", bundle.mermaid());
+writeFile("oidc-dataflow.json", bundle.dataFlowJson());
+
+// マークダウンカタログ
+var docs = new DocumentationPlugin().toMarkdown(oidcFlow);
+
+// BDD テストシナリオ（遷移ごとに1つ）
+var plan = new ScenarioTestPlugin().generate(oidcFlow);
+// → 11 シナリオが自動生成
+```
+</details>
+
+<details><summary><b>TypeScript</b></summary>
+
+```typescript
+const bundle = new DiagramPlugin().generate(oidcFlow);
+const docs = new DocumentationPlugin().toMarkdown(oidcFlow);
+const plan = new ScenarioTestPlugin().generate(oidcFlow);
+```
+</details>
+
+<details><summary><b>Rust</b></summary>
+
+```rust
+let bundle = DiagramPlugin::generate(&oidc_flow);
+let docs = DocumentationPlugin::to_markdown(&oidc_flow);
+let plan = ScenarioTestPlugin::generate(&oidc_flow);
+```
+</details>
+
+### プラグインがこのフローに追加する価値
+
+| 課題 | プラグインなし | プラグインあり |
+|------|--------------|--------------|
+| OAuth コールバック二重送信 | 2回実行される | `IdempotencyRuntimePlugin` が `state` パラメータで弾く |
+| 「ログインXで何が起きた？」 | `transitionLog` だけ | `AuditStorePlugin` が各遷移のデータスナップショットも残す |
+| 障害後のステート再構築 | 最新状態のみ | `ReplayService` で任意バージョンを復元 |
+| 「コールバックで遷移した？拒否された？」 | 手動で状態比較 | `RichResumeStatus` が5分類で返す |
+| CI で設計ミスを検出 | `build()` の8項目 | `PolicyLintPlugin` がさらに dead data / overwide processor を検出 |
+| 非エンジニアへの説明 | Mermaid だけ | `DiagramBundle` + マークダウンカタログ + BDD シナリオ |
+
+**コアのフロー定義: 変更なし。Processor: 変更なし。プラグイン: 外から重ねるだけ。**
+
+---
+
 *これは volta-auth-proxy で本番稼働中の実際のフローです。OIDC、Passkey、MFA、招待フローを tramli で管理しています。*

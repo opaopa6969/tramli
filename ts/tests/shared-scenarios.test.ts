@@ -13,8 +13,8 @@ import type { FlowContext } from '../src/flow-context.js';
 type TwoStep = 'INIT' | 'DONE' | 'ERROR';
 const twoStepConfig: Record<TwoStep, StateConfig> = {
   INIT: { terminal: false, initial: true },
-  DONE: { terminal: true, initial: false },
-  ERROR: { terminal: true, initial: false },
+  DONE: { terminal: true },
+  ERROR: { terminal: true },
 };
 
 const Input = flowKey<{ value: string }>('Input');
@@ -35,8 +35,8 @@ describe('Shared Scenarios', () => {
     type SubStep = 'S_INIT' | 'S_PROCESS' | 'S_DONE';
     const subConfig: Record<SubStep, StateConfig> = {
       S_INIT: { terminal: false, initial: true },
-      S_PROCESS: { terminal: false, initial: false },
-      S_DONE: { terminal: true, initial: false },
+      S_PROCESS: { terminal: false },
+      S_DONE: { terminal: true },
     };
     const SubOutput = flowKey<{ value: string }>('SubOutput');
 

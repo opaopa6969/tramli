@@ -2,7 +2,7 @@ import type { FlowKey } from './flow-key.js';
 import type { FlowContext } from './flow-context.js';
 
 /** State configuration: terminal and initial flags for each state. */
-export type StateConfig = { terminal: boolean; initial: boolean };
+export type StateConfig = { terminal: boolean; initial?: boolean };
 
 /** Guard output — discriminated union (Java: sealed interface GuardOutput). */
 export type GuardOutput =
