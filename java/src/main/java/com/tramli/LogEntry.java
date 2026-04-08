@@ -18,4 +18,7 @@ public final class LogEntry {
 
     /** Emitted when a processor throws or strictMode detects a produces violation. */
     public record Error(String flowId, String from, String to, String trigger, Throwable cause) {}
+
+    /** Emitted when a guard validates (accepted, rejected, or expired). */
+    public record GuardResult(String flowId, String state, String guardName, String result, String reason) {}
 }

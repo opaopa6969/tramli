@@ -26,6 +26,7 @@ public final class FlowEngine {
     private java.util.function.Consumer<LogEntry.Transition> transitionLogger;
     private java.util.function.Consumer<LogEntry.State> stateLogger;
     private java.util.function.Consumer<LogEntry.Error> errorLogger;
+    private java.util.function.Consumer<LogEntry.GuardResult> guardLogger;
 
     public FlowEngine(FlowStore store) {
         this(store, false);
@@ -51,11 +52,17 @@ public final class FlowEngine {
         this.errorLogger = logger;
     }
 
+    /** Set guard logger. Called when a guard returns Accepted/Rejected/Expired. */
+    public void setGuardLogger(java.util.function.Consumer<LogEntry.GuardResult> logger) {
+        this.guardLogger = logger;
+    }
+
     /** Remove all loggers. */
     public void removeAllLoggers() {
         this.transitionLogger = null;
         this.stateLogger = null;
         this.errorLogger = null;
+        this.guardLogger = null;
     }
 
     public <S extends Enum<S> & FlowState> FlowInstance<S> startFlow(
@@ -117,6 +124,15 @@ public final class FlowEngine {
 
         if (guard != null) {
             TransitionGuard.GuardOutput output = guard.validate(flow.context());
+            if (guardLogger != null) {
+                String result = switch (output) {
+                    case TransitionGuard.GuardOutput.Accepted a -> "accepted";
+                    case TransitionGuard.GuardOutput.Rejected r -> "rejected";
+                    case TransitionGuard.GuardOutput.Expired e -> "expired";
+                };
+                String reason = output instanceof TransitionGuard.GuardOutput.Rejected r ? r.reason() : null;
+                guardLogger.accept(new LogEntry.GuardResult(flow.id(), currentState.name(), guard.name(), result, reason));
+            }
             switch (output) {
                 case TransitionGuard.GuardOutput.Accepted accepted -> {
                     Map<Class<?>, Object> backup = flow.context().snapshot();

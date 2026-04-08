@@ -16,9 +16,7 @@ import java.util.Set;
  *       as keys, not primitives or String.</li>
  * </ul>
  */
-public interface StateProcessor {
-    String name();
-    Set<Class<?>> requires();
-    Set<Class<?>> produces();
-    void process(FlowContext ctx) throws FlowException;
+public interface StateProcessor extends ProcessorContract {
+    // All methods inherited from ProcessorContract.
+    // StateProcessor exists for semantic clarity in FlowDefinition context.
 }

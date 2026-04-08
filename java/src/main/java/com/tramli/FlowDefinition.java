@@ -86,6 +86,50 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
     /** Data-flow graph derived from requires/produces declarations. */
     public DataFlowGraph<S> dataFlowGraph() { return dataFlowGraph; }
 
+    /** Convert to a renderable state diagram view. */
+    public RenderableGraph.StateDiagram toRenderableStateDiagram() {
+        var edges = new java.util.ArrayList<RenderableGraph.StateEdge>();
+        var subFlows = new java.util.ArrayList<RenderableGraph.SubFlowBlock>();
+
+        for (var t : transitions) {
+            if (t.isSubFlow() && t.subFlowDefinition() != null) {
+                // Sub-flow transitions become SubFlowBlocks
+                var subDef = t.subFlowDefinition();
+                var innerEdges = new java.util.ArrayList<RenderableGraph.StateEdge>();
+                for (var st : subDef.transitions()) {
+                    String label = st.processor() != null ? st.processor().name() :
+                            st.guard() != null ? "[" + st.guard().name() + "]" :
+                            st.branch() != null ? st.branch().name() : "";
+                    innerEdges.add(new RenderableGraph.StateEdge(st.from().name(), st.to().name(), label));
+                }
+                var innerTerminals = new java.util.LinkedHashSet<String>();
+                for (var term : subDef.terminalStates()) innerTerminals.add(term.name());
+                var inner = new RenderableGraph.StateDiagram(subDef.name(),
+                        subDef.initialState() != null ? subDef.initialState().name() : null,
+                        innerEdges, innerTerminals, java.util.List.of());
+                subFlows.add(new RenderableGraph.SubFlowBlock(t.from().name(), inner));
+                continue;
+            }
+            String label = t.processor() != null ? t.processor().name() :
+                    t.guard() != null ? "[" + t.guard().name() + "]" :
+                    t.branch() != null ? t.branch().name() : "";
+            edges.add(new RenderableGraph.StateEdge(t.from().name(), t.to().name(), label));
+        }
+        for (var e : errorTransitions.entrySet()) {
+            edges.add(new RenderableGraph.StateEdge(e.getKey().name(), e.getValue().name(), "error"));
+        }
+        var terminals = new java.util.LinkedHashSet<String>();
+        for (var t : terminalStates) terminals.add(t.name());
+        return new RenderableGraph.StateDiagram(name,
+                initialState != null ? initialState.name() : null,
+                edges, terminals, subFlows);
+    }
+
+    /** Render the state diagram using a custom renderer. */
+    public String renderStateDiagram(java.util.function.Function<RenderableGraph.StateDiagram, String> renderer) {
+        return renderer.apply(toRenderableStateDiagram());
+    }
+
     /** Structural warnings detected at build() time (e.g. liveness risks). */
     public List<String> warnings() { return warnings; }
 
@@ -287,6 +331,20 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
                     warnings.add("Dead data detected: " + dead.stream()
                             .map(Class::getSimpleName).sorted().toList() +
                             " — produced but never required by any downstream processor");
+                }
+            }
+            // ExceptionRoute subclass ordering warning
+            for (var entry : exceptionRoutes.entrySet()) {
+                var routes = entry.getValue();
+                for (int i = 0; i < routes.size(); i++) {
+                    for (int j = i + 1; j < routes.size(); j++) {
+                        if (routes.get(i).exceptionType().isAssignableFrom(routes.get(j).exceptionType())) {
+                            warnings.add("onStepError at " + entry.getKey().name() + ": " +
+                                    routes.get(i).exceptionType().getSimpleName() + " (index " + i + ") " +
+                                    "is a superclass of " + routes.get(j).exceptionType().getSimpleName() +
+                                    " (index " + j + ") — the subclass route will never match. Reorder to put specific exceptions first.");
+                        }
+                    }
                 }
             }
             return warnings;
