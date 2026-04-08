@@ -255,7 +255,41 @@ public final class DataFlowGraph<S extends Enum<S> & FlowState> {
         return sb.toString();
     }
 
-    /** Generate Mermaid data-flow diagram. */
+    /** Convert to a renderable view for pluggable renderers. */
+    public RenderableGraph.DataFlow toRenderable() {
+        var edges = new ArrayList<RenderableGraph.Edge>();
+        var typeNodes = new LinkedHashSet<String>();
+        var procNodes = new LinkedHashSet<String>();
+
+        for (var entry : producers.entrySet()) {
+            String typeName = entry.getKey().getSimpleName();
+            typeNodes.add(typeName);
+            for (var node : entry.getValue()) {
+                procNodes.add(node.name());
+                edges.add(new RenderableGraph.Edge(node.name(), typeName, RenderableGraph.EdgeKind.PRODUCES));
+            }
+        }
+        for (var entry : consumers.entrySet()) {
+            String typeName = entry.getKey().getSimpleName();
+            typeNodes.add(typeName);
+            for (var node : entry.getValue()) {
+                procNodes.add(node.name());
+                edges.add(new RenderableGraph.Edge(typeName, node.name(), RenderableGraph.EdgeKind.REQUIRES));
+            }
+        }
+
+        var deadNames = new LinkedHashSet<String>();
+        for (var d : deadData()) deadNames.add(d.getSimpleName());
+
+        return new RenderableGraph.DataFlow("", edges, typeNodes, procNodes, deadNames);
+    }
+
+    /** Render the data-flow graph using a custom renderer. */
+    public String renderDataFlow(java.util.function.Function<RenderableGraph.DataFlow, String> renderer) {
+        return renderer.apply(toRenderable());
+    }
+
+    /** Generate Mermaid data-flow diagram (shortcut for renderDataFlow(MermaidGenerator::dataFlow)). */
     public String toMermaid() {
         var sb = new StringBuilder();
         sb.append("flowchart LR\n");

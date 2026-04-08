@@ -104,6 +104,47 @@ public final class MermaidGenerator {
         return definition.dataFlowGraph().toMermaid();
     }
 
+    /**
+     * Render a RenderableGraph.DataFlow as Mermaid flowchart.
+     * Can be used as a method reference: {@code graph.renderDataFlow(MermaidGenerator::dataFlow)}
+     */
+    public static String dataFlow(RenderableGraph.DataFlow graph) {
+        var sb = new StringBuilder("flowchart LR\n");
+        var seen = new LinkedHashSet<String>();
+        for (var edge : graph.edges()) {
+            String line = edge.from() + " -->|" + edge.kind().name().toLowerCase() + "| " + edge.to();
+            if (seen.add(line)) sb.append("    ").append(line).append('\n');
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Render a RenderableGraph.StateDiagram as Mermaid stateDiagram-v2.
+     * Can be used as a method reference: {@code def.renderStateDiagram(MermaidGenerator::stateDiagram)}
+     */
+    public static String stateDiagram(RenderableGraph.StateDiagram diagram) {
+        var sb = new StringBuilder("stateDiagram-v2\n");
+        if (diagram.initialState() != null)
+            sb.append("    [*] --> ").append(diagram.initialState()).append('\n');
+        for (var t : diagram.transitions()) {
+            sb.append("    ").append(t.from()).append(" --> ").append(t.to());
+            if (t.label() != null && !t.label().isEmpty()) sb.append(" : ").append(t.label());
+            sb.append('\n');
+        }
+        for (var sub : diagram.subFlows()) {
+            sb.append("    state ").append(sub.parentState()).append(" {\n");
+            // Recursive: render inner diagram indented
+            String inner = stateDiagram(sub.inner());
+            for (String line : inner.split("\n")) {
+                if (!line.startsWith("stateDiagram")) sb.append("    ").append(line).append('\n');
+            }
+            sb.append("    }\n");
+        }
+        for (var t : diagram.terminalStates())
+            sb.append("    ").append(t).append(" --> [*]\n");
+        return sb.toString();
+    }
+
     public static <S extends Enum<S> & FlowState> String writeToFile(
             FlowDefinition<S> definition, Path outputDir) throws IOException {
         Files.createDirectories(outputDir);
