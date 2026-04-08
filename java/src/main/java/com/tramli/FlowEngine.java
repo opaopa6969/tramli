@@ -3,6 +3,7 @@ package com.tramli;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -129,12 +130,25 @@ public final class FlowEngine {
         }
 
         S currentState = flow.currentState();
-        var externalOpt = definition.externalFrom(currentState);
-        if (externalOpt.isEmpty()) {
+
+        // Multi-external: select guard by requires matching
+        var externals = definition.externalsFrom(currentState);
+        if (externals.isEmpty()) {
             throw FlowException.invalidTransition(currentState, currentState);
         }
 
-        Transition<S> transition = externalOpt.get();
+        Transition<S> transition = null;
+        Set<Class<?>> dataTypes = externalData.keySet();
+        for (var ext : externals) {
+            if (ext.guard() != null && dataTypes.containsAll(ext.guard().requires())) {
+                transition = ext;
+                break;
+            }
+        }
+        if (transition == null) {
+            // Fallback: single external with no guard or first external
+            transition = externals.get(0);
+        }
 
         // Per-state timeout check
         if (transition.timeout() != null && flow.stateEnteredAt() != null) {
@@ -170,7 +184,9 @@ public final class FlowEngine {
                             transition.processor().process(flow.context());
                         }
                         S from = flow.currentState();
+                        fireExit(flow, from);
                         flow.transitionTo(transition.to());
+                        fireEnter(flow, transition.to());
                         store.recordTransition(flow.id(), from, transition.to(), guard.name(), flow.context());
                     } catch (Exception e) {
                         flow.context().restoreFrom(backup);
@@ -195,7 +211,9 @@ public final class FlowEngine {
             }
         } else {
             S from = flow.currentState();
+            fireExit(flow, from);
             flow.transitionTo(transition.to());
+            fireEnter(flow, transition.to());
             store.recordTransition(flow.id(), from, transition.to(), "external", flow.context());
         }
 
@@ -253,7 +271,9 @@ public final class FlowEngine {
             verifyProduces(t.processor(), flow.context());
         }
         S from = flow.currentState();
+        fireExit(flow, from);
         flow.transitionTo(t.to());
+        fireEnter(flow, t.to());
         store.recordTransition(flow.id(), from, t.to(),
                 t.processor() != null ? t.processor().name() : "auto", flow.context());
         logTransition(flow.id(), flow.definition().name(), from, t.to(), t.processor() != null ? t.processor().name() : "auto");
@@ -428,6 +448,16 @@ public final class FlowEngine {
         } else {
             flow.complete("TERMINAL_ERROR");
         }
+    }
+
+    private <S extends Enum<S> & FlowState> void fireEnter(FlowInstance<S> flow, S state) {
+        var action = flow.definition().enterAction(state);
+        if (action != null) action.accept(flow.context());
+    }
+
+    private <S extends Enum<S> & FlowState> void fireExit(FlowInstance<S> flow, S state) {
+        var action = flow.definition().exitAction(state);
+        if (action != null) action.accept(flow.context());
     }
 
     private void verifyProduces(StateProcessor processor, FlowContext ctx) {

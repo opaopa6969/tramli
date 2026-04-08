@@ -34,11 +34,15 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
     private final Set<S> terminalStates;
     private final DataFlowGraph<S> dataFlowGraph;
     private final List<String> warnings;
+    private final Map<S, java.util.function.Consumer<FlowContext>> enterActions;
+    private final Map<S, java.util.function.Consumer<FlowContext>> exitActions;
 
     private FlowDefinition(String name, Class<S> stateClass, Duration ttl, int maxGuardRetries,
                            List<Transition<S>> transitions, Map<S, S> errorTransitions,
                            Map<S, List<ExceptionRoute<S>>> exceptionRoutes,
-                           DataFlowGraph<S> dataFlowGraph, List<String> warnings) {
+                           DataFlowGraph<S> dataFlowGraph, List<String> warnings,
+                           Map<S, java.util.function.Consumer<FlowContext>> enterActions,
+                           Map<S, java.util.function.Consumer<FlowContext>> exitActions) {
         this.name = name;
         this.stateClass = stateClass;
         this.ttl = ttl;
@@ -57,6 +61,8 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
         this.terminalStates = Collections.unmodifiableSet(terminals);
         this.dataFlowGraph = dataFlowGraph;
         this.warnings = warnings != null ? List.copyOf(warnings) : List.of();
+        this.enterActions = enterActions != null ? Map.copyOf(enterActions) : Map.of();
+        this.exitActions = exitActions != null ? Map.copyOf(exitActions) : Map.of();
     }
 
     public String name() { return name; }
@@ -77,6 +83,13 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
         return transitions.stream()
                 .filter(t -> t.from() == state && t.isExternal())
                 .findFirst();
+    }
+
+    /** All external transitions from a state (for multi-external). */
+    public List<Transition<S>> externalsFrom(S state) {
+        return transitions.stream()
+                .filter(t -> t.from() == state && t.isExternal())
+                .toList();
     }
 
     public Set<S> allStates() {
@@ -133,6 +146,11 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
     /** Structural warnings detected at build() time (e.g. liveness risks). */
     public List<String> warnings() { return warnings; }
 
+    /** Get enter action for a state (or null). */
+    public java.util.function.Consumer<FlowContext> enterAction(S state) { return enterActions.get(state); }
+    /** Get exit action for a state (or null). */
+    public java.util.function.Consumer<FlowContext> exitAction(S state) { return exitActions.get(state); }
+
     /**
      * Create a new FlowDefinition with a sub-flow inserted before a specific transition.
      * The original transition A→B becomes: A→subFlow→(onExit "DONE")→B.
@@ -163,7 +181,7 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
         // Reuse parent's data-flow graph (plugin insertion preserves data contracts)
         return new FlowDefinition<>(name + "+plugin:" + pluginFlow.name(), stateClass, ttl,
                 maxGuardRetries, newTransitions, new LinkedHashMap<>(errorTransitions), this.exceptionRoutes,
-                this.dataFlowGraph, this.warnings);
+                this.dataFlowGraph, this.warnings, this.enterActions, this.exitActions);
     }
 
     // ─── Builder ─────────────────────────────────────────────
@@ -181,6 +199,8 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
         private final Map<S, S> errorTransitions = new LinkedHashMap<>();
         private final Map<S, List<ExceptionRoute<S>>> exceptionRoutes = new LinkedHashMap<>();
         private final Set<Class<?>> initiallyAvailable = new HashSet<>();
+        private final Map<S, java.util.function.Consumer<FlowContext>> enterActions = new LinkedHashMap<>();
+        private final Map<S, java.util.function.Consumer<FlowContext>> exitActions = new LinkedHashMap<>();
 
         private Builder(String name, Class<S> stateClass) {
             this.name = name;
@@ -216,6 +236,18 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
         public Builder<S> onStepError(S from, Class<? extends Exception> exceptionType, S to) {
             exceptionRoutes.computeIfAbsent(from, k -> new ArrayList<>())
                     .add(new ExceptionRoute<>(exceptionType, to));
+            return this;
+        }
+
+        /** Callback when entering a state (pure data/metrics, no I/O). */
+        public Builder<S> onStateEnter(S state, java.util.function.Consumer<FlowContext> action) {
+            enterActions.put(state, action);
+            return this;
+        }
+
+        /** Callback when exiting a state (pure data/metrics, no I/O). */
+        public Builder<S> onStateExit(S state, java.util.function.Consumer<FlowContext> action) {
+            exitActions.put(state, action);
             return this;
         }
 
@@ -319,11 +351,11 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
         }
 
         public FlowDefinition<S> build() {
-            var def = new FlowDefinition<>(name, stateClass, ttl, maxGuardRetries, transitions, errorTransitions, exceptionRoutes, null, null);
+            var def = new FlowDefinition<>(name, stateClass, ttl, maxGuardRetries, transitions, errorTransitions, exceptionRoutes, null, null, null, null);
             validate(def);
             var graph = DataFlowGraph.build(def, initiallyAvailable);
             var warnings = buildWarnings(def);
-            return new FlowDefinition<>(name, stateClass, ttl, maxGuardRetries, transitions, errorTransitions, exceptionRoutes, graph, warnings);
+            return new FlowDefinition<>(name, stateClass, ttl, maxGuardRetries, transitions, errorTransitions, exceptionRoutes, graph, warnings, enterActions, exitActions);
         }
 
         private List<String> buildWarnings(FlowDefinition<S> def) {
@@ -368,7 +400,7 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
             checkReachability(def, errors);
             checkPathToTerminal(def, errors);
             checkDag(def, errors);
-            checkExternalUniqueness(def, errors);
+            // checkExternalUniqueness removed (DD-020: multi-external allowed)
             checkBranchCompleteness(def, errors);
             checkRequiresProduces(def, errors);
             checkAutoExternalConflict(def, errors);

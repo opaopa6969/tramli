@@ -11,7 +11,8 @@ public final class FlowInstance<S extends Enum<S> & FlowState> {
     private final FlowDefinition<S> definition;
     private final FlowContext context;
     private S currentState;
-    private int guardFailureCount;
+    private int guardFailureCount; // legacy — kept for backward compat
+    private final java.util.Map<String, Integer> guardFailureCounts = new java.util.LinkedHashMap<>();
     private int version;
     private final Instant createdAt;
     private final Instant expiresAt;
@@ -63,6 +64,10 @@ public final class FlowInstance<S extends Enum<S> & FlowState> {
     public FlowContext context() { return context; }
     public S currentState() { return currentState; }
     public int guardFailureCount() { return guardFailureCount; }
+    /** Guard failure count for a specific guard (by name). */
+    public int guardFailureCount(String guardName) {
+        return guardFailureCounts.getOrDefault(guardName, 0);
+    }
     public int version() { return version; }
     public Instant createdAt() { return createdAt; }
     public Instant expiresAt() { return expiresAt; }
@@ -139,8 +144,20 @@ public final class FlowInstance<S extends Enum<S> & FlowState> {
         return copy;
     }
 
-    void transitionTo(S newState) { this.currentState = newState; this.stateEnteredAt = Instant.now(); }
+    void transitionTo(S newState) {
+        boolean stateChanged = this.currentState != newState;
+        this.currentState = newState;
+        this.stateEnteredAt = Instant.now();
+        if (stateChanged) {
+            this.guardFailureCount = 0;
+            this.guardFailureCounts.clear();
+        }
+    }
     void incrementGuardFailure() { this.guardFailureCount++; }
+    void incrementGuardFailure(String guardName) {
+        this.guardFailureCount++;
+        guardFailureCounts.merge(guardName, 1, Integer::sum);
+    }
     void complete(String exitState) { this.exitState = exitState; }
     void setVersion(int version) { this.version = version; }
     void setActiveSubFlow(FlowInstance<?> sub) { this.activeSubFlow = sub; }
