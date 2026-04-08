@@ -9,7 +9,9 @@
 > **tramli** = tramline（路面電車の軌道）。コードはレールの上を走る — 敷かれた軌道以外には行けない。
 
 **読む**: [なぜ tramli は効くのか — アテンション・バジェット](docs/why-tramli-works-attention-budget-ja.md) | [English](docs/why-tramli-works.md)
+
 **実践例**: [OIDC 認証フロー（9 ステート、5 プロセッサ）](docs/example-oidc-auth-flow-ja.md) | [English](docs/example-oidc-auth-flow.md)
+
 **クックブック**: [API クックブック — 全メソッドの使用例](docs/api-cookbook-ja.md) | [English](docs/api-cookbook.md)
 
 ---
