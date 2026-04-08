@@ -10,6 +10,7 @@ State machines where **invalid transitions cannot exist** — enforced at build 
 
 **Read**: [Why tramli Works — The Attention Budget](docs/why-tramli-works.md) | [日本語版](docs/why-tramli-works-attention-budget-ja.md)
 **Example**: [Real-World OIDC Auth Flow (9 states, 5 processors)](docs/example-oidc-auth-flow.md) | [日本語版](docs/example-oidc-auth-flow-ja.md)
+**Cookbook**: [API Cookbook — every method with examples](docs/api-cookbook.md) | [日本語版](docs/api-cookbook-ja.md)
 
 ---
 

@@ -1,3 +1,4 @@
+
 ## DGE — Dialogue-driven Gap Extraction
 
 When the user says "DGE", "run DGE", "DGE して", "壁打ち", "find gaps", "brainstorm":

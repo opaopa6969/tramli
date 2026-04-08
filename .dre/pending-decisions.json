@@ -1,0 +1,40 @@
+{
+  "pending": [
+    {
+      "timestamp": "2026-04-08T08:39:10Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/docs/api-cookbook-ja.md",
+      "line": 185,
+      "text": "graph.pruningHints();                             // 各状態で不要になった型"
+    },
+    {
+      "timestamp": "2026-04-08T08:39:46Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 95,
+      "text": "OrderRequest req = ctx.get(OrderRequest.class);  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T08:39:46Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 116,
+      "text": "上から下に読めば — これ**がフロー**。構造を理解するのに他のファイルは不要。"
+    },
+    {
+      "timestamp": "2026-04-08T08:39:46Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 253,
+      "text": "2. **キャスト不要** — 戻り値型が推論される"
+    },
+    {
+      "timestamp": "2026-04-08T08:39:46Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 254,
+      "text": "3. **検証可能** — [requires/produces](#requires--produces-契約) 宣言が同じクラスを使うので [ビルド時検証](#8項目-build-検証) が可能"
+    },
+    {
+      "timestamp": "2026-04-08T08:39:46Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 479,
+      "text": "| `pruningHints()` | `Map<S, Set<Class<?>>>` | 各状態で不要になった型 |"
+    }
+  ]
+}

@@ -1,14 +1,79 @@
 {
   "version": "1.0.0",
-  "generated_at": "2026-04-07T04:12:59.282Z",
+  "generated_at": "2026-04-08T02:42:18.253Z",
   "stats": {
-    "sessions": 12,
+    "sessions": 24,
     "gaps": 9,
-    "decisions": 14,
+    "decisions": 19,
     "annotations": 0,
     "specs": 9
   },
   "nodes": [
+    {
+      "type": "session",
+      "id": "2026-04-07-paper-tribunal",
+      "data": {
+        "id": "2026-04-07-paper-tribunal",
+        "date": "2026-04-07",
+        "theme": "paper-tribunal",
+        "flow": "quick",
+        "structure": "roundtable",
+        "characters": [],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-paper-tribunal.md",
+        "content": "# DGE 査読劇: tramli 論文 (Round 1 + Round 2)\n\n- **日時**: 2026-04-07\n- **テーマ**: tramli: Definition-Time Validated Constrained Flow Engine with Data-Flow Contracts\n- **評価者**: 🔬 ハレル教授, 👤 今泉, 😈 Red Team, 🎩 千石\n- **反論者**: 🤝 後輩 + 著者\n- **判定**: Major Revision（4人全員一致）→ v2 修正完了\n\n## Gap 一覧\n\n| # | Gap | Severity | Status |\n|---|-----|----------|--------|\n| G1 | 「build-time」→「definition-time」に用語変更 | 🔴 Critical | ✅ v2 反映 |\n| G2 | 定量的評価セクションの欠如 | 🔴 Critical | ✅ v2 反映（§5 追加） |\n| G3 | Statecharts/EFSM との理論的位置づけ | 🟠 High | ✅ v2 反映（§2.1 追記） |\n| G4 | 形式検証 vs well-formedness check の明示 | 🟠 High | ✅ v2 反映（§3.4, §3.5, §6.1） |\n| G5 | 競合比較のフレーミング — trade-off として記述 | 🟠 High | ✅ v2 反映（§5.3 書き直し） |\n| G6 | Rust typestate との正直な比較 | 🟠 High | ✅ v2 反映（§2.1, §5.3, §6.1） |\n| G7 | 計算量分析の追記 | 🟡 Medium | ✅ v2 反映（§3.5 O(V+E)） |\n| G8 | Feature Matrix を主要3競合に絞る | 🟡 Medium | ✅ v2 反映 |\n| G9 | Temporal を positioning map から分離 | 🟡 Medium | ✅ v2 反映（§2.3 別セクション化） |\n| G10 | build() パフォーマンスベンチマーク | 🟡 Medium | ✅ v2 反映（§4.2） |\n| G11 | Threats to Validity サブセクション | 🟡 Medium | ✅ v2 反映（§5.4） |\n| G12 | Mermaid 図の挿入 | 🟢 Low | ✅ v2 反映（Fig.1, Fig.2） |\n| G13 | XState v5 typegen との詳細比較 | 🟡 Medium | 🔲 未着手（追加調査必要） |\n| G14 | Sub-flow context 共有の明記 | 🟢 Low | ✅ v2 反映（§3.7） |\n\n## v2 での主な変更\n\n1. **タイトル変更**: \"Build-Time\" → \"Definition-Time\"\n2. **§1.3 追加**: Scope and Non-Goals — Statecharts でも形式検証でもないことを明示\n3. **§2.1 書き直し**: Harel Statecharts, EFSM, Typestate との理論的位置づけ\n4. **§2.3 分離**: Workflow Engines を別セクションに（Temporal との不適切な同軸比較を解消）\n5. **§3.4 追記**: requires/produces の限界（宣言を検証、実装は検証しない）\n6. **§3.5 追記**: 各チェックの計算量 O(|V|+|E|)、soundness の議論\n7. **§5 新設**: Evaluation セクション（実績、検出エラー事例、競合比較、Threats to Validity）\n8. **§5.3 書き直し**: 競合比較を trade-off フレーミングに。3競合に絞り込み\n9. **§6.1 新設**: Definition-Time vs Compile-Time vs Runtime の3レベル比較\n10. **Fig.1, Fig.2 追加**: OIDC flow diagram, Data-flow graph\n\n---\n\n## Round 2 (v2 → v3)\n\n- **評価者**: ☕ ヤン, 🧩 マンガー, 🔬 ハレル教授（留任）\n- **判定**: Minor Revision（ヤン）/ Minor Revision（マンガー）/ Accept with Minor Revision（ハレル）\n\n### Round 2 Gap 一覧\n\n| # | Gap | Severity | Status |\n|---|-----|----------|--------|\n| G15 | 対象読者の明記 | 🟡 Medium | ✅ v3 反映 |\n| G16 | 8 項目の選定基準と動機 | 🟡 Medium | ✅ v3 反映（§3.5） |\n| G17 | コンパイラ理論との analogies テーブル | 🟡 Medium | ✅ v3 反映（§3 冒頭） |\n| G18 | Soundness 性質の可視化 | 🟡 Medium | ✅ v3 反映（§3.4 Property box） |\n| G19 | Future Work 優先度 | 🟢 Low | ✅ v3 反映（§7） |\n| G20 | 「コミットメントデバイス」の一文 | 🟢 Low | ✅ v3 反映（§6.4） |\n| G21 | 3言語 = 仕様/実装分離のフレーミング | 🟢 Low | ✅ v3 反映（§4.1） |\n\n### v3 での主な変更\n\n1. **対象読者を明記**: タイトル下に target audience 追記\n2. **§3 冒頭にコンパイラ analogies テーブル追加**: requires/produces = 型チェック、DataFlowGraph = reaching definitions 等\n3. **§3.4 に Soundness Property box 追加**: sound but not complete を明示\n4. **§3.5 に選定基準追記**: 「≥2 プロジェクトで観測されたバグパターン」\n5. **§4.1 に仕様/実装分離のフレーミング追加**: JDBC analogy\n6. **§6.4 新設**: Constraints as Commitment Device（Rust borrow checker, SQL FK, Git DAG との analogies）\n7. **§7 Future Work に優先度追記**: High/Medium/Low\n\n### 未着手 Gap\n\n| # | Gap | Status |\n|---|-----|--------|\n| G13 | XState v5 typegen との詳細比較 | ✅ v3 反映（§5.4 Deep Dive 追加） |\n"
+      },
+      "confidence": 0.6,
+      "warnings": [
+        "No gap markers found"
+      ]
+    },
+    {
+      "type": "dialogue",
+      "id": "2026-04-07-paper-tribunal#dialogue",
+      "data": {
+        "session_id": "2026-04-07-paper-tribunal",
+        "has_content": true,
+        "scene_count": 0,
+        "char_count": 4
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "session",
+      "id": "2026-04-07-tramli-dataflow-brainstorm",
+      "data": {
+        "id": "2026-04-07-tramli-dataflow-brainstorm",
+        "date": "2026-04-07",
+        "theme": "tramli-dataflow-brainstorm",
+        "flow": "💡 ブレスト",
+        "structure": "🗣 座談会",
+        "characters": [
+          "☕ ヤン",
+          "👤 今泉",
+          "🎭 ソクラテス",
+          "🤝 後輩"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-dataflow-brainstorm.md",
+        "content": "# DGE Session: data-flow 導出の新たな価値\n\n- **Date**: 2026-04-07\n- **Flow**: 💡 ブレスト\n- **Structure**: 🗣 座談会\n- **Characters**: ☕ ヤン, 👤 今泉, 🎭 ソクラテス, 🤝 後輩\n- **Input**: DD-014, requires/produces API (Java/TS/Rust), MermaidGenerator\n- **Rounds**: 7\n\n---\n\n## Round 1: そもそも data-flow 図に何の意味がある？\n\n先輩: tramli には状態遷移図がある。A → B → C。で、DD-014 で「requires/produces から data-flow を導出して Mermaid で可視化する」と決めた。`OrderRequest → [OrderInit] → PaymentIntent → [PaymentGuard] → PaymentResult` みたいなやつだ。今日は、この data-flow 導出が「図を出す」以上に何ができるかを考えたい。\n\n☕ ヤン: *紅茶を注ぎながら* 状態遷移図だけで十分じゃないですか。そもそも data-flow 図を見る人は誰なんです？ 開発者はコードを読めば requires/produces が分かる。\n\n👤 今泉: そもそも、状態遷移図と data-flow 図って、見る人が違うんですか？ 同じ開発者が見るなら、なんで 2 つ要るんです？\n\n🎭 ソクラテス: 面白い問いだ。では聞こう——状態遷移図を見て「この状態に到達したとき、どのデータが使えるか」即座に答えられるか？\n\n☕ ヤン: ……それは遷移図からは読めないですね。\n\n🎭 ソクラテス: つまり、2 つの図は同じ対象を別の射影で見ている。遷移図は**制御の流れ**、data-flow 図は**データの流れ**。もし逆だったら？ data-flow 図しかなかったら、どの状態からどの状態に行けるか分かるか？\n\n🤝 後輩: 先輩、つまりこういうことですよね。状態遷移図は「何が起きるか」、data-flow 図は「何が流れるか」。どちらか片方では全体像が見えない。\n\n→ アイデア: **Dual View** — 状態遷移図と data-flow 図をペアで生成し、同じノード（processor/guard）をハイライトで対応付ける\n\n### Scene 2: 可視化以外の活用\n\n先輩: 図を出すのは DD-014 の通り。問題は「図を出す以外に何に使えるか」だ。\n\n👤 今泉: 要するに、requires/produces のグラフを持ってるってことは、「どの型がどこで生まれてどこで消費されるか」のマップがあるってことですよね。他にないの？ そのマップの使い道。\n\n☕ ヤン: *カップを置いて* ……ありますね。**影響分析**。ある型の定義を変えたとき、どの processor と guard に影響するかが一発で分かる。今は grep するしかない。\n\n🎭 ソクラテス: もし `PaymentIntent` のフィールドを変えたとしよう。data-flow グラフがあれば、それを produces する `OrderInit` と、requires する `PaymentGuard` の両方が即座に特定できる。だが聞こう——それは IDE の「参照を検索」と何が違う？\n\n☕ ヤン: IDE は型の使用箇所を出す。data-flow は**フロー文脈での依存**を出す。同じ型を別のフローで使ってても、このフローに関係ないものは出ない。\n\n→ アイデア: **Impact Analysis API** — `dataFlow.impactOf(PaymentIntent.class)` で、そのフロー定義内で影響を受ける processor/guard の一覧を返す\n\n👤 今泉: 前もそうだったっけ……Java の `checkRequiresProduces` はビルド時に「足りない」を検出するけど、「余ってる」は検出しないですよね？ produces したのに誰も requires しない型があったら？\n\n🤝 後輩: あ、それは大事です。*身を乗り出す* 未使用の produced データはデッドコードと同じで、メンテコストだけかかります。\n\n→ アイデア: **Dead Data Detection** — produces されたが下流で一度も requires されない型を警告する（build 時バリデーションに追加）\n\n🎭 ソクラテス: ではもう一歩進めよう。「もし data-flow が**実行時にも**使えたら？」 ビルド時だけでなく、実行中のフローインスタンスで「今この状態で利用可能なデータ一覧」を取得できたら？\n\n☕ ヤン: デバッグに使えますね。フローが途中で止まったとき、「この状態で expects されてるデータのうち、何が足りないか」が分かる。\n\n→ アイデア: **Runtime Data Introspection** — `flowInstance.availableData()` で現在の状態での利用可能データ型一覧、`flowInstance.missingFor(nextState)` で次の遷移に不足しているデータを返す\n\n### Scene 3: 言語横断で何が見えるか\n\n先輩: tramli は Java / TypeScript / Rust の 3 言語。data-flow を 3 言語で共通にする意味はあるか。\n\n👤 今泉: そもそも、3 つの言語で同じフロー定義を書くことってあるんですか？\n\n☕ ヤン: 直接は書かない。でも……*考え込む* 例えば「このフロー定義は Java 版と TS 版で等価か？」を検証したい場面はあり得る。data-flow のグラフが共通フォーマットなら、diff が取れる。\n\n🎭 ソクラテス: それは 5 番（根拠なき一般論）ではないか？「あり得る」というが、実際にそのユースケースが存在したか？\n\n☕ ヤン: *苦笑い* ないです。まだ。\n\n🤝 後輩: 先輩、一旦まとめましょう。言語横断の diff は現時点では YAGNI。ただし、共通の出力フォーマット（JSON）は将来の拡張性のために悪くない。Mermaid テキストが共通出力なら、それ自体が diff 可能です。\n\n→ アイデア: **共通 Mermaid 出力** — 3 言語で同一の Mermaid テキストフォーマットを出力。フォーマットが同じなら自然に diff 可能。JSON 中間表現は不要（YAGNI）\n\n👤 今泉: あの、誰が困るの？ って聞きたいんですけど。data-flow 図を一番喜ぶのは誰ですか？ 開発者本人？ コードレビュアー？ 新しくチームに入る人？\n\n🎭 ソクラテス: 良い問いだ。もし私がこのコードベースに初めて触るとしよう。状態遷移図は「フローの構造」を教えてくれる。data-flow 図は「各状態で何のデータを触れるか」を教えてくれる。後者がなければ、processor のコードを一つずつ読むしかない。\n\n→ アイデア: **Onboarding Aid** — `generate(def, { mode: 'data-flow' })` で、新メンバーが「どのデータがどこで生まれてどこで使われるか」を一目で把握できる図を出す。README に貼れる形式で\n\n### Scene 4: 攻め——まだ見えてない価値\n\n🎭 ソクラテス: では最後に聞こう。data-flow グラフは**型の依存グラフ**でもある。依存グラフからは何が導出できる？\n\n☕ ヤン: *目が光る* ……**並列化のヒント**。requires が重ならない processor 同士は理論上並列実行できる。data-flow グラフがあれば自動判定できる。\n\n👤 今泉: そもそも tramli は sync じゃないですか。並列化って要るんです？\n\n☕ ヤン: 今は要らない。けど volta-gateway でフロー数が増えたとき、「この 2 つの auto 遷移は独立してる」が分かるのは価値がある。……でもまあ、今やることではないですね。 *紅茶をすする*\n\n🤝 後輩: あの……一つだけいいですか。*控えめに手を挙げる* data-flow グラフがあると、**テスト生成**にも使えませんか？ 各 processor の requires が分かれば、テストのセットアップで「この型のダミーデータが必要」が自動で分かります。\n\n→ アイデア: **Test Scaffold Generation** — data-flow から各 processor のテストに必要な最小コンテキスト（requires の型一覧）を導出し、テストのボイラープレートを生成\n\n→ アイデア: **Parallelism Hint** (将来) — data-flow の独立性分析から、並列実行可能な遷移ペアを検出\n\n### Round 1 アイデア一覧\n\n| # | アイデア | 分類 | 実現可能性 |\n|---|---------|------|-----------|\n| 1 | **Dual View** — 状態遷移図 + data-flow 図のペア生成 | 新機能 | ◎ 高い（MermaidGenerator に mode 追加） |\n| 2 | **Impact Analysis API** — 型変更の影響範囲特定 | 新機能 | ◎ 高い（グラフ探索） |\n| 3 | **Dead Data Detection** — 未消費 produces の警告 | 改善 | ◎ 高い（build 時バリデーション追加） |\n| 4 | **Runtime Data Introspection** — 実行時のデータ可視化 | 新機能 | ○ 中（API 追加、engine 変更小） |\n| 5 | **共通 Mermaid 出力** — 3 言語で同一フォーマット | 改善 | ◎ 高い |\n| 6 | **Onboarding Aid** — README 向け data-flow 図 | 改善 | ◎ 高い（#1 の副産物） |\n| 7 | **Test Scaffold Generation** — テストボイラープレート生成 | 新機能 | ○ 中 |\n| 8 | **Parallelism Hint** — 並列実行可能ペア検出 | 突飛 | △ 将来 |\n\n---\n\n## Round 2: 角度を変える——data-flow を「主」にしたら？\n\n先輩: 1 回目は「状態遷移図の補助としての data-flow」を議論した。2 回目は逆から攻める。data-flow を主役にしたら何が変わるか。\n\n### Scene 1: 定義の仕方が変わる？\n\n🎭 ソクラテス: 先ほどの議論を蒸し返そう（12 番を意図的に使用）。DD-014 は「data-flow は導出であり定義ではない」と言った。だが本当にそうか？ もし data-flow を**先に書いて**、そこから状態遷移を導出したらどうなる？\n\n☕ ヤン: *紅茶が止まる* ……逆転の発想ですね。つまり「OrderRequest が来たら PaymentIntent を作る。PaymentIntent が来たら PaymentResult を作る」というデータの変換パイプラインを先に定義して、状態はそこから自動的に生まれると。\n\n👤 今泉: そもそも、ユーザーが本当に考えてるのはどっちなんです？ 「Created → PaymentPending → Confirmed」って状態の名前？ それとも「注文データ → 決済データ → 出荷データ」ってデータの変換？\n\n🤝 後輩: 先輩、これは深い問いです。ドメインによって違いそうです。EC のような業務フローは状態中心で考える人が多い。データパイプライン、ETL は data-flow 中心で考える。\n\n🎭 ソクラテス: ほら、種明かしだ。tramli は「constrained **flow** engine」と名乗っている。flow は状態の流れか？ データの流れか？ 両方か？ 答えを決めつけていないか確認したかっただけだ。\n\n→ アイデア: **Data-Flow-First Builder** — `Builder.fromDataFlow()` で、データ変換の連鎖からフロー定義を自動生成する代替 API。状態名を省略可能にする（自動採番 or processor 名から導出）\n\n### Scene 2: エラーパスのデータはどうなる？\n\n👤 今泉: 前もそうだったっけ。Happy path の data-flow は綺麗に書けるけど、エラーのときデータはどう流れるんです？ `OrderInit` が失敗したら `PaymentIntent` は produces されない。でもエラー状態の processor が `OrderRequest` を requires してエラーログに書きたいかもしれない。\n\n☕ ヤン: あー、確かに。エラー遷移の data-flow は今の図には出てこない。`checkRequiresProduces` もエラーパスは検証してないはず。\n\n🎭 ソクラテス: もし processor が失敗したあと、context にはそれまでに produces された型だけが残る。エラー遷移先の processor が「失敗した processor が produces するはずだった型」を requires していたら？\n\n🤝 後輩: *メモを取りながら* それはビルド時に検出できるはずです。エラーパスを含めた data-flow 解析をすれば。\n\n→ アイデア: **Error Path Data-Flow Analysis** — エラー遷移を含めた data-flow 解析。「processor X が失敗した場合、エラー状態 Y で利用可能なデータは何か」をビルド時に検証\n\n→ アイデア: **FlowError に context snapshot** — processor 失敗時に「何が produces 済みで何が未生成か」を FlowError に付加。デバッグ時に「どこまでデータが作られたか」が分かる\n\n### Scene 3: ドキュメントとしての data-flow\n\n先輩: Mermaid 図は開発者向け。もっと広い読者に向けたドキュメントとしての可能性は？\n\n👤 今泉: 誰が困るのって話で、API ドキュメントを読む外部開発者は困ってません？ 「このエンドポイントを叩いたあと、次に何のデータを送ればいいか」が分からないとき。\n\n☕ ヤン: data-flow 図があれば、External 遷移のところで「ここでクライアントが PaymentResult を送る」が図に出る。API ドキュメントと連動できる。\n\n🎭 ソクラテス: もっと言えば、data-flow は**契約**だ。processor の requires/produces は入出力の契約。それを図示するということは、サービス間の契約を可視化するのと同じではないか？\n\n☕ ヤン: *目を細めて* ……OpenAPI の生成。External 遷移の guard.requires() と guard.produces() から、API のリクエスト/レスポンス型が導出できる。DD-007 で HTTP API は v0.2.0 に先送りしたけど、data-flow からスキーマだけ先に生成するのはアリかもしれない。\n\n🤝 後輩: 先輩、ちょっと飛びすぎてません？ *苦笑い* OpenAPI 生成は大きすぎます。でも「External 遷移のデータ要件をドキュメント化する」のは data-flow 図の自然な拡張ですね。\n\n→ アイデア: **External Contract View** — data-flow 図の External 遷移部分を強調した図。「クライアントが送るべきデータ」と「受け取れるデータ」を明示。API ドキュメント向け\n\n### Scene 4: data-flow × 監視\n\n☕ ヤン: *急に真顔になる* ……一つ思いついた。data-flow のグラフがあれば、**実行時のボトルネック特定**ができる。各 processor の実行時間を計測して、data-flow グラフの上にオーバーレイする。どのデータ変換が遅いか一目瞭然。\n\n👤 今泉: 要するに、data-flow 図 + メトリクスで、フローのパフォーマンスプロファイルが作れると？\n\n🎭 ソクラテス: だが待て。tramli のエンジン処理は 2μs だと言っていなかったか？ ボトルネックは External 遷移の外部 I/O であって、processor の中ではない。\n\n☕ ヤン: ……あ、そうですね。 *紅茶を飲む* processor 単体はマイクロ秒。ボトルネックは Engine の外。じゃあ要らないか。\n\n🤝 後輩: いえ、あの……一つだけ。*手を挙げる* processor 自体は速くても、「フロー全体でどのデータが何回 clone されてるか」は data-flow から推定できます。Rust 版の clone 問題みたいに、context サイズがパフォーマンスに効くケースでは有用では？\n\n→ アイデア: **Context Size Estimator** — data-flow の累積 produces 数から、各状態での context サイズ（型の数）を推定。「この状態では N 個の型が context に載ってる」を図に注釈\n\n### Round 2 アイデア追加\n\n| # | アイデア | 分類 | 実現可能性 |\n|---|---------|------|-----------|\n| 9 | **Data-Flow-First Builder** — データ変換パイプラインからフロー定義を生成 | 方向転換 | △ 要設計 |\n| 10 | **Error Path Data-Flow Analysis** — エラー遷移含む data-flow 検証 | 改善 | ◎ 高い |\n| 11 | **FlowError に context snapshot** — 失敗時の produces 済み/未生成データ付加 | 改善 | ◎ 高い |\n| 12 | **External Contract View** — External 遷移のデータ要件ドキュメント化 | 新機能 | ○ 中 |\n| 13 | **Context Size Estimator** — 状態ごとの context サイズ推定・注釈 | 改善 | ◎ 高い |\n\n---\n\n## Round 3: 外の世界——他のエコシステムから何を学べるか\n\n先輩: 2 回転した。今度は tramli の外を見る。Temporal、AWS Step Functions、Apache Airflow——ワークフローエンジンの先達が data-flow をどう扱ってるか、そこから tramli に持ち帰れるものはないか。\n\n### Scene 1: Airflow の DAG から盗む\n\n🎭 ソクラテス: まず問おう。Airflow はタスクの DAG を定義する。各タスクは XCom で データを渡す。これは tramli の requires/produces と何が同じで何が違う？\n\n☕ ヤン: Airflow の XCom は動的——実行時に何でも渡せる。tramli は静的——ビルド時に requires/produces が宣言されている。つまり tramli の方が**コンパイル時保証が強い**。\n\n👤 今泉: そもそも、Airflow ユーザーが一番困ってることって何なんです？\n\n☕ ヤン: XCom のデバッグですよ。「upstream タスクが何を渡したか分からない」「型が合わない」「暗黙の依存が壊れる」。全部、静的な data-flow 宣言があれば解決する問題。\n\n🎭 ソクラテス: ならば tramli の data-flow 導出は、Airflow が**できなかったこと**を実現しているわけだ。それを自覚して語るべきではないか？\n\n→ アイデア: **ポジショニング：静的 data-flow 保証** — 「Airflow/Temporal にできないビルド時 data-flow 検証」を tramli の差別化ポイントとして README / ドキュメントで明示\n\n### Scene 2: フロー合成と data-flow\n\n先輩: 一つのアプリで複数の FlowDefinition を持つケースがある。例えば OrderFlow と RefundFlow。あるフローの output が別のフローの input になることもある。\n\n👤 今泉: 他にないの？ 単一フロー内の data-flow じゃなくて、**フロー間の data-flow** って考えたことあります？\n\n☕ ヤン: ……ないですね。今の data-flow はフロー定義内で閉じている。\n\n🎭 ソクラテス: もし `OrderFlow` が `ShipmentInfo` を produces して完了し、`RefundFlow` が `ShipmentInfo` を requires するなら、2 つのフロー間にデータ依存がある。これは静的に検出可能か？\n\n🤝 後輩: 先輩、できますよ。両方の FlowDefinition の data-flow グラフを結合して、cross-flow の依存を出せばいい。\n\n☕ ヤン: ただ、それは**実行時のデータ受け渡し**をどう設計するかという別の問題も含む。今は先走りすぎか。 *紅茶をすする* でもグラフの結合だけなら、可視化のレイヤーで十分やれる。\n\n→ アイデア: **Cross-Flow Data-Flow Map** — 複数の FlowDefinition を入力し、フロー間のデータ依存（produces → requires の型一致）を検出・可視化\n\n### Scene 3: IDE との統合\n\n先輩: Mermaid 図はファイルに出す。でも開発者が一番長く見てるのは IDE の画面だ。\n\n👤 今泉: 誰が困るのって話で……processor を書いてるとき「このコンテキストに何が入ってるか」知りたいの、エディタ上でじゃないですか？\n\n🎭 ソクラテス: 良い指摘だ。data-flow グラフがあれば、ある processor の `process()` メソッド上で**利用可能な context の型一覧**をツールチップで出せるのではないか？\n\n☕ ヤン: LSP は重すぎる。けど……型の一覧を JSON で出す API があれば、VSCode 拡張で読める。`MermaidGenerator.dataFlow(def)` が Mermaid テキストだけじゃなく構造化 JSON も返せたら。\n\n🤝 後輩: 先輩、それって `generate` が 2 つのフォーマットを返すということですか？\n\n☕ ヤン: いや、メソッドを分ける。`generateMermaid()` と `analyzeDataFlow()` で。`analyzeDataFlow()` は構造化データを返す。Mermaid はそのデータから生成する。**データが先、可視化が後**。\n\n→ アイデア: **DataFlowAnalyzer API** — `DataFlowAnalyzer.analyze(def)` で構造化データ（型名、producer、consumer、各状態での available set）を返す。MermaidGenerator はこの結果を消費するだけ\n\n→ アイデア: **IDE 向け JSON 出力** — DataFlowAnalyzer の結果を JSON で出力。VSCode 拡張等で processor 編集時に「available context types」をツールチップ表示\n\n### Scene 4: セキュリティとコンプライアンス\n\n🎭 ソクラテス: では最後に全く別の角度から。data-flow グラフは「どのデータがどこを通るか」の地図だ。もしそのデータに PII（個人情報）が含まれていたら？\n\n☕ ヤン: ……。 *紅茶を止める*\n\n👤 今泉: そもそも、「この型は PII を含む」って宣言する仕組み、ありましたっけ？\n\n☕ ヤン: ない。\n\n🎭 ソクラテス: data-flow グラフに型のアノテーション（`@PII`、`@Secret`）を追加できれば、「PII がどの processor を通過するか」のデータリネージが自動生成できる。GDPR の「データの流れの説明」要件に使える。\n\n🤝 後輩: *メモを走らせる* つまり data-flow + 型アノテーション = データリネージ。コンプライアンスツールになると。ただ、これは tramli 本体に入れるべきかは別の議論ですね。\n\n☕ ヤン: ……まあ、アノテーションの仕組みだけ入れて、解釈はユーザー側に任せるのが tramli らしいですかね。 *紅茶を飲み直す*\n\n→ アイデア: **Type Annotation（メタデータ）** — requires/produces の型に任意のアノテーション（PII, Secret, Immutable 等）を付加可能にし、data-flow 図にタグとして表示\n\n→ アイデア: **Data Lineage Export** — アノテーション付き data-flow を CSV/JSON でエクスポート。コンプライアンス監査ツールに入力可能\n\n### Round 3 アイデア追加\n\n| # | アイデア | 分類 | 実現可能性 |\n|---|---------|------|-----------|\n| 14 | **静的 data-flow 保証のポジショニング** | 改善 | ◎ ドキュメントだけ |\n| 15 | **Cross-Flow Data-Flow Map** | 新機能 | ○ 中 |\n| 16 | **DataFlowAnalyzer API（構造化データ）** | 新機能 | ◎ 高い |\n| 17 | **IDE 向け JSON 出力** | 新機能 | ○ 中（#16 の上） |\n| 18 | **Type Annotation** | 新機能 | ○ 中 |\n| 19 | **Data Lineage Export** | 突飛 | △ 将来 |\n\n---\n\n## Round 4: ユーザーの手触り——API デザインと「使われ方」\n\n先輩: 3 回転でアイデアは出た。4 回目は視点を変えて「実際に使う開発者がどう触るか」に焦点を当てる。API の手触り、学習曲線、使って気持ちいいかどうか。\n\n### Scene 1: requires/produces は面倒くさくないか？\n\n☕ ヤン: *あくびしながら* そもそもの話をしていいですか。requires/produces を毎回手書きするの、だるくないですか。\n\n👤 今泉: そもそも、開発者は requires/produces を**正しく書く**んですか？ `process()` の中で `ctx.get::<D>()` してるのに requires に D を書き忘れたら？\n\n🎭 ソクラテス: 良い問いだ。現状は「書き忘れたらビルド時にエラー」だが、逆に聞こう。`process()` の実装から requires/produces を**推論**できないのか？\n\n☕ ヤン: Java はリフレクションで無理。TypeScript も無理。でも……Rust ならマクロでワンチャンある。`ctx.get::<D>()` の呼び出しを proc macro で解析して requires を自動生成。\n\n🤝 後輩: 先輩、Java と TypeScript でも、`process()` 内の `ctx.get()` / `ctx.put()` の呼び出しをテスト時に記録して、宣言と突き合わせるのはできますよね。\n\n→ アイデア: **Requires/Produces 自動検証** — テスト実行時に processor の実際の get/put を記録し、宣言された requires/produces と一致するか検証する。宣言漏れ・過剰宣言を検出\n\n→ アイデア: **Rust proc macro `#[derive(Processor)]`** — `ctx.get::<T>()` / `ctx.put(v)` から requires/produces を自動導出するマクロ（将来）\n\n### Scene 2: data-flow 図のインタラクティブ性\n\n先輩: Mermaid は静的な図だ。GitHub の README に貼れる。でもそれだけで十分か？\n\n🎭 ソクラテス: 問おう。静的な図を「眺める」のと、図を「触って理解する」のは同じ体験か？\n\n👤 今泉: 要するに、クリックしたら詳細が出るとか、そういう話ですか？\n\n☕ ヤン: Mermaid はインタラクティブにならない。ただ……`DataFlowAnalyzer` が構造化 JSON を返すなら、その JSON を食わせて HTML で描画するビューアーは作れる。\n\n🤝 後輩: あの、tramli にはもう `dve`（Design Visualization Engine）がありますよね？ *全員の方を見る* `dve/dist/graph.json` が変更されてた。dve に data-flow モードを足すのが一番自然では？\n\n☕ ヤン: *目が覚める* ……あー、そうだ。dve を忘れてた。dve が既にセッションや DD のグラフを可視化してる。data-flow もそこに載せるのが筋ですね。\n\n🎭 ソクラテス: ほら。道具は既にある。新しいものを作る前に既にあるものを使え、というのは私ではなくヤンの信条ではなかったか？\n\n☕ ヤン: *苦笑い* おっしゃる通り。\n\n→ アイデア: **dve に data-flow ビュー追加** — DataFlowAnalyzer の JSON を dve のグラフに統合。インタラクティブに「この processor をクリック → requires/produces が見える」\n\n→ アイデア: **Mermaid はエクスポート専用** — メイン可視化は dve、Mermaid は README 貼り付け用の静的エクスポートと割り切る\n\n### Scene 3: 学習の順序\n\n👤 今泉: 誰が困るのって改めて聞きたいんですけど。tramli を初めて使う人は、何から理解すべきなんです？ FlowState → Builder → Engine の順？ それとも data-flow から？\n\n🎭 ソクラテス: もし私が初めて tramli を学ぶなら、「注文が来て、決済して、出荷する」という**データの変換**で説明してくれた方が直感的だ。状態名は後からでいい。\n\n☕ ヤン: つまり**チュートリアルの順番**が変わる。「まずデータを定義 → processor を書く → Builder でフローにする → data-flow 図で確認」。今のチュートリアルは状態から入ってる。\n\n🤝 後輩: 先輩、これは面白いです。data-flow 図があることで、**学習のゴール**が見える化できる。「この図の通りにデータが流れたら完成」という視覚的なゴール。\n\n→ アイデア: **Data-Flow-First チュートリアル** — 「まずデータ型を定義し、data-flow 図を見て、その通りになるように processor を実装する」という学習パス。図がテストの代わりになる\n\n### Scene 4: data-flow がテストになる\n\n🎭 ソクラテス: 今の発言を突き詰めよう。「図がテストの代わり」——これは比喩か？ それとも文字通りか？\n\n☕ ヤン: *身を乗り出す* ……文字通りにできる。data-flow グラフは「状態 X に到達したとき、型 A, B, C が context にあるべき」という**不変条件**を表現している。これをアサーションとして自動生成できる。\n\n👤 今泉: そもそも、ユーザーが手で書いてる integration test って、大半が「この状態でこのデータがある」の確認じゃないですか？\n\n☕ ヤン: そう。で、data-flow グラフから自動生成できるアサーションは:\n- 状態 X に到達 → `context.has::<A>()` が true\n- processor Y 通過後 → `context.has::<B>()` が true\n- terminal 状態 → 全 produces 済み型が context にある\n\n🤝 後輩: 先輩、#7（Test Scaffold）の進化版ですね。スキャフォールドじゃなくて、**テスト自体の自動生成**。\n\n🎭 ソクラテス: 種明かしだ。data-flow グラフは仕様であり、仕様からテストが生成できる。これはプロパティベーステストの思想に近い。「このフロー定義は、data-flow グラフが表現する不変条件を満たす」——これ自体が一つのプロパティだ。\n\n→ アイデア: **Data-Flow Invariant Test Generator** — data-flow グラフから「各状態での context 不変条件」を自動生成し、テストコードとして出力。手書きの integration test を大幅削減\n\n→ アイデア: **`assertDataFlow(def, instance)`** — フローインスタンスが data-flow グラフの不変条件を満たしているか一発検証する API。テストで `assertDataFlow(def, engine.store.get(flowId))` と書くだけ\n\n### Round 4 アイデア追加\n\n| # | アイデア | 分類 | 実現可能性 |\n|---|---------|------|-----------|\n| 20 | **Requires/Produces 自動検証**（実行時記録 vs 宣言） | 改善 | ◎ 高い |\n| 21 | Rust proc macro `#[derive(Processor)]` | 突飛 | △ 将来 |\n| 22 | **dve に data-flow ビュー追加** | 新機能 | ○ 中 |\n| 23 | Mermaid はエクスポート専用と割り切る | 改善 | ◎（設計方針） |\n| 24 | Data-Flow-First チュートリアル | 改善 | ◎（ドキュメント） |\n| 25 | **Data-Flow Invariant Test Generator** | 新機能 | ○ 中 |\n| 26 | **`assertDataFlow()` API** | 新機能 | ◎ 高い |\n\n---\n\n## Round 5: 時間軸——data-flow は「変化」をどう捉えるか\n\n先輩: 4 回転で 26 個のアイデアが出た。これまでは「今のフロー」のスナップショットを見ていた。5 回目は**時間**を入れる。フローは進化する。data-flow はその進化をどう助けるか。\n\n### Scene 1: フロー定義のバージョン間 diff\n\n☕ ヤン: *紅茶を淹れ直しながら* ある日 `OrderFlow` に新しい状態 `FraudCheck` を差し込むとする。状態遷移図の diff は分かりやすい。ノードが増える、エッジが変わる。でも data-flow の diff は？\n\n🎭 ソクラテス: 良い問いだ。新しい processor が新しい型を requires するとき、その型は誰が produces する？ 既存の processor か？ 新しい processor か？ この「データ依存の変化」は状態遷移図からは読み取れない。\n\n👤 今泉: そもそも、フロー定義を変更したとき「何が壊れるか」って、今はどうやって確認してるんですか？\n\n☕ ヤン: `checkRequiresProduces` でビルドが落ちるのを待つ。事後検出。\n\n🎭 ソクラテス: もし data-flow グラフの v1 と v2 を diff できたら、**ビルドする前に**「この変更で PaymentGuard の requires が満たせなくなる」と分かるのではないか？\n\n🤝 後輩: 先輩、つまり PR のレビュー時に「data-flow diff」が見えると。状態遷移図の diff と並べて。\n\n→ アイデア: **Data-Flow Diff** — 2 つの FlowDefinition の data-flow グラフを比較し、追加・削除・変更されたデータ依存を一覧化。PR レビュー向け\n\n### Scene 2: 後方互換性の検証\n\n👤 今泉: 前もそうだったっけ。フロー定義を変えたとき、**実行中のフローインスタンス**はどうなるんです？ 古い定義で途中まで進んだフローが、新しい定義で再開されたら？\n\n☕ ヤン: *カップを置く* ……あー。それは怖い話ですね。\n\n🎭 ソクラテス: 具体的に言おう。v1 では状態 B で `PaymentIntent` だけが context にある。v2 では状態 B の次の processor が `FraudScore` も requires する。v1 で状態 B まで進んだインスタンスが v2 で再開されたら——\n\n☕ ヤン: `FraudScore` がない。processor が落ちる。\n\n🤝 後輩: data-flow グラフがあれば、「v1 の状態 X での available set」と「v2 の状態 X での requires set」を突き合わせて、**互換性を静的に検証**できますね。\n\n☕ ヤン: これは地味に強い。マイグレーションガイドが自動で出る。「v2 にアップグレードするとき、状態 B で停止中のインスタンスには FraudScore を inject してから再開してください」って。\n\n→ アイデア: **Version Compatibility Check** — FlowDefinition の v1/v2 間で、各状態の available data set を比較し、実行中インスタンスの互換性を検証。非互換の場合はマイグレーション手順を提示\n\n→ アイデア: **Migration Guide Generator** — 非互換が検出された場合、「状態 X のインスタンスには型 T を inject してから再開」等のマイグレーション手順を自動生成\n\n### Scene 3: data-flow の「負の空間」\n\n🎭 ソクラテス: ここで全く違う角度から。data-flow グラフは「何が流れるか」を示す。だが**流れないもの**にも情報がある。もし `OrderRequest` が最初に produces されて、terminal 状態まで一度も requires されなかったら？\n\n☕ ヤン: ……デッドデータ。#3 で出ましたね。\n\n🎭 ソクラテス: 違う。#3 は「produces されたのに requires されない」だった。私が言っているのはもっと広い。**データのライフサイクル**だ。生まれる、使われる、最後に使われる。最後に使われた後も context に残り続ける。それは**メモリリーク**と同じ構造ではないか？\n\n👤 今泉: そもそも、context って状態が進むにつれて膨らみ続けるんですか？ 一度 put されたら消えない？\n\n☕ ヤン: 消えない。DD-014 のポリシー——processors は破壊的変更をしない——だから、context は単調増加。\n\n🎭 ソクラテス: ならば data-flow グラフから「型 T は状態 X 以降 requires されない」が分かれば、**context の枝刈り**のヒントになる。\n\n🤝 後輩: 先輩、これは #13（Context Size Estimator）の発展ですね。サイズを推定するだけでなく、**不要になった型を特定**する。\n\n→ アイデア: **Data Lifetime Analysis** — 各型の「最初に produces される状態」「最後に requires される状態」を導出。最後の requires 以降は理論上 context から除去可能\n\n→ アイデア: **Context Pruning Hint** — data lifetime 分析から「状態 X 通過後、型 T は不要」を報告。メモリ最適化の手がかり（Rust の volta-gateway で特に有用）\n\n### Scene 4: AI に食わせる\n\n先輩: 最後にもう一つ角度を変える。data-flow グラフを人間ではなく**AI に食わせたら**。\n\n🤝 後輩: あの……一つだけいいですか。*控えめに* 今この DGE セッション自体が、tramli の設計ドキュメントを AI（Claude）に食わせて議論してますよね。data-flow 図があったら、この議論の質は変わりましたか？\n\n🎭 ソクラテス: *沈黙。腕を組む。*\n\n☕ ヤン: ……変わりますね。状態遷移図だけだと「構造」しか見えない。data-flow があれば「この状態で何のデータが使えるか」が一目で分かるから、AI が processor の実装を提案できる。\n\n👤 今泉: 要するに、data-flow 図 + 型定義があれば、AI が processor の中身を書けるってことですか？\n\n☕ ヤン: そう。requires が `[OrderRequest]`、produces が `[PaymentIntent]` なら、AI は「OrderRequest を受け取って PaymentIntent を生成する processor」のスケルトンを書ける。型のフィールド定義があれば中身も。\n\n🎭 ソクラテス: つまり data-flow グラフは**コード生成のスペック**になる。仕様が先、実装が後。DD-014 の「定義ではなく導出」に対して、ここでは導出された data-flow が**新たな定義として**使われる。面白い反転だ。\n\n→ アイデア: **AI-Assisted Processor Generation** — data-flow グラフ + 型定義を LLM に渡し、processor のスケルトンまたは実装を自動生成。`tramli generate processor --from-dataflow`\n\n→ アイデア: **Data-Flow as Context for AI Review** — DGE セッションや AI コードレビュー時に、data-flow 図を自動で context に含める。AI がフローのデータ依存を理解した上でレビュー\n\n### Round 5 アイデア追加\n\n| # | アイデア | 分類 | 実現可能性 |\n|---|---------|------|-----------|\n| 27 | **Data-Flow Diff** | 新機能 | ○ 中 |\n| 28 | **Version Compatibility Check** | 新機能 | ○ 中 |\n| 29 | Migration Guide Generator | 新機能 | △ 将来（#28 の上） |\n| 30 | **Data Lifetime Analysis** | 新機能 | ◎ 高い（グラフ解析） |\n| 31 | **Context Pruning Hint** | 改善 | ◎ 高い（#30 の上） |\n| 32 | AI-Assisted Processor Generation | 突飛 | ○ 中 |\n| 33 | Data-Flow as Context for AI Review | 改善 | ◎ 高い |\n\n---\n\n## Round 6: メタ——data-flow はどこに住むべきか\n\n先輩: 5 回転で 33 個。量は十分。6 回目は抽象度を上げる。data-flow 分析は「tramli の機能」なのか「tramli の上に乗る別ツール」なのか。それによって設計が根本的に変わる。\n\n### Scene 1: コアか、付属品か\n\n🎭 ソクラテス: 根本的な問いから始めよう。`checkRequiresProduces` はビルド時バリデーションとして FlowDefinition の中にある。これは**コア**だ。では `DataFlowAnalyzer` は？ MermaidGenerator と同じ「あると便利」な付属品か？\n\n☕ ヤン: MermaidGenerator は完全に付属品。なくてもフローは動く。DataFlowAnalyzer は……\n\n👤 今泉: そもそも、#3（Dead Data Detection）とか #10（Error Path Analysis）って、ビルド時バリデーションの強化ですよね？ それはコアでは？\n\n☕ ヤン: そうなんですよ。ここが厄介。data-flow **分析**は付属品だけど、分析**結果をバリデーションに使う**となるとコアに食い込む。\n\n🎭 ソクラテス: では切り分けよう。「data-flow グラフの構築」と「グラフの利用」は分離できるか？\n\n🤝 後輩: 先輩、できます。`DataFlowGraph` を FlowDefinition の `build()` 時に**常に構築**して、内部に保持する。バリデーションはそれを使う。外部ツール（Mermaid、dve、AI）もそれを使う。グラフ構築がコア、利用が付属品。\n\n☕ ヤン: *頷く* いいですね。FlowDefinition が `dataFlowGraph()` を公開 API として持つ。build 済みの定義には常にグラフがある。追加コストはほぼゼロ——既に `checkRequiresProduces` で同じ走査をしてるから。\n\n→ アイデア: **DataFlowGraph をコアに埋め込む** — `FlowDefinition.build()` 時に data-flow グラフを構築・保持。`def.dataFlowGraph()` で取得。MermaidGenerator 等は消費するだけ\n\n### Scene 2: グラフの構造\n\n先輩: DataFlowGraph の中身。何を持つべきか。\n\n☕ ヤン: 最小限を考えましょう。 *指を折りながら*\n\n🎭 ソクラテス: ではソクラテス式で。DataFlowGraph に「状態 X で利用可能な型の集合」を聞いたら答えられるか？\n\n☕ ヤン: はい。各状態に `availableTypes: Set<TypeId>` を持てばいい。\n\n🎭 ソクラテス: 「型 T を produces する processor はどれか」を聞いたら？\n\n☕ ヤン: `producers: Map<TypeId, List<ProducerInfo>>` で。ProducerInfo は processor 名と状態のペア。\n\n🎭 ソクラテス: 「型 T を requires する processor はどれか」は？\n\n☕ ヤン: `consumers: Map<TypeId, List<ConsumerInfo>>`。\n\n🎭 ソクラテス: 「型 T の寿命は？」\n\n☕ ヤン: producers と consumers から `firstProduced` と `lastConsumed` を導出。\n\n👤 今泉: 要するに、ノードが「型」と「processor/guard」の二部グラフですよね。型 → processor の requires エッジと、processor → 型の produces エッジ。\n\n🤝 後輩: *ホワイトボードに描く*\n\n```\n[OrderRequest] --requires--> (OrderInit) --produces--> [PaymentIntent]\n[PaymentIntent] --requires--> (PaymentGuard) --produces--> [PaymentResult]\n[PaymentResult] --requires--> (ShipProcessor) --produces--> [ShipmentInfo]\n```\n\n二部グラフですね。型ノードと処理ノードが交互に並ぶ。\n\n→ アイデア: **二部グラフ表現** — DataFlowGraph は型ノード（TypeId）と処理ノード（Processor/Guard 名）の二部グラフ。requires エッジと produces エッジの 2 種。全クエリはこのグラフ上の探索\n\n### Scene 3: ドメインモデルとの接点\n\n👤 今泉: 前もそうだったっけ。tramli の context に入れる型って、結局ドメインモデルそのものですよね。`OrderRequest`, `PaymentIntent`——これは DDD でいう Value Object やドメインイベントに近い。\n\n🎭 ソクラテス: 面白い。data-flow グラフは**ドメインイベントの因果関係**を表しているとも言える。OrderRequest が「起きた」から PaymentIntent が「生まれた」。\n\n☕ ヤン: Event Sourcing の文脈で言うと、各 processor は「コマンドを受けてイベントを発行する」アグリゲートに近い。data-flow グラフはイベントの因果チェーン。\n\n👤 今泉: じゃあ、data-flow 図って**ドメインの語彙の地図**になりませんか？ 新しいチームメンバーが「この業務ドメインにどんなデータ概念があるか」を一目で理解できる。\n\n🤝 後輩: 先輩、#6（Onboarding Aid）と #24（Data-Flow-First チュートリアル）がここに繋がりますね。data-flow 図 = ドメインの語彙カタログ。\n\n→ アイデア: **Domain Vocabulary Map** — data-flow 図の型ノードにドキュメント文字列を付加可能にする。型名だけでなく「これは何を表すか」が図上で見える。ユビキタス言語の可視化\n\n### Scene 4: processor の交換可能性\n\n🎭 ソクラテス: 最後にもう一つ。二部グラフの性質から自然に導かれる帰結がある。同じ requires/produces シグネチャを持つ 2 つの processor は、data-flow 的に**交換可能**だ。\n\n☕ ヤン: ……プラグイン。processor をインターフェースとして、実装を差し替えられる。data-flow 的互換性が「差し替えても壊れない」保証になる。\n\n👤 今泉: そもそも、それって今もできるんじゃないですか？ 同じ trait/interface を実装すれば。\n\n☕ ヤン: 型シグネチャが同じなら差し替えられる。でも今はそれを**機械的に検証**できない。data-flow グラフがあれば「この processor を X から Y に替えても data-flow が壊れない」を自動検証できる。\n\n🤝 後輩: テスト戦略にも影響しますね。*考え込む* processor の単体テストは processor の中身を検証する。data-flow の互換性テストは processor の「外形」——requires/produces のシグネチャ——を検証する。両方あって初めて安全に差し替えられる。\n\n→ アイデア: **Processor Compatibility Check** — 2 つの processor が data-flow 的に交換可能か検証。`DataFlowGraph.isCompatible(processorA, processorB)` → requires/produces が一致または包含関係か\n\n→ アイデア: **Processor Registry Pattern** — 同じ data-flow シグネチャの processor をレジストリで管理し、環境（dev/staging/prod）や設定で差し替え。Strategy パターンの data-flow 版\n\n### Round 6 アイデア追加\n\n| # | アイデア | 分類 | 実現可能性 |\n|---|---------|------|-----------|\n| 34 | **DataFlowGraph をコアに埋め込む** | 方向転換 | ◎ 高い |\n| 35 | **二部グラフ表現** | 設計方針 | ◎（#34 の内部構造） |\n| 36 | Domain Vocabulary Map（型にドキュメント付加） | 新機能 | ○ 中 |\n| 37 | **Processor Compatibility Check** | 新機能 | ◎ 高い |\n| 38 | Processor Registry Pattern | 突飛 | △ 将来 |\n\n---\n\n## Round 7: 刈り込み——38 個のうち何を捨てるか\n\n先輩: 6 回転で 38 個。発散は十分。7 回目は**収束**。ヤンの出番だ。何を捨てるか。\n\n### Scene 1: 38 個は多すぎる\n\n☕ ヤン: *紅茶を置いて立ち上がる* はっきり言います。38 個のうち半分以上は v0.2.0 に要らない。tramli は v0.1.0 を出したばかりのライブラリです。ユーザーがまだゼロ人のところに 38 機能を計画するのは妄想です。\n\n👤 今泉: そもそも、crates.io に publish したばかりで、Java も TS もあるけど、誰が使ってるんですか？\n\n☕ ヤン: 自分だけ。volta-gateway 向け。\n\n🎭 ソクラテス: ならば問おう。volta-gateway の開発者——つまり自分自身——が**今日必要としている**のは 38 個のうちどれだ？\n\n☕ ヤン: *座り直す* ……正直に言うと、Mermaid の data-flow 図があれば十分。README に貼って、フローの構造を説明できればいい。\n\n👤 今泉: 要するに、#1（Dual View）と #5（共通 Mermaid 出力）だけ？\n\n☕ ヤン: と、#3（Dead Data Detection）。これはバリデーションの強化だからビルドが安全になる。3 個。\n\n🤝 後輩: 先輩、ちょっと待ってください。#34（DataFlowGraph をコアに）は設計方針です。これを先に決めないと、#1 も #3 も実装方針がブレます。\n\n☕ ヤン: ……それは認めます。じゃあ 4 個。\n\n→ アイデア: **v0.2.0 スコープを 4 個に絞る** — #34（DataFlowGraph コア）、#1（Dual View Mermaid）、#3（Dead Data Detection）、#5（共通フォーマット）\n\n### Scene 2: 捨てるものを名指しする\n\n🎭 ソクラテス: 絞るなら、逆に「これは絶対やらない」を名指しで言え。曖昧な「将来」は捨てたのと同じだ。\n\n☕ ヤン: いいですよ。*指を折る*\n\n**捨てる（YAGNI）:**\n- #9 Data-Flow-First Builder——フロー定義の書き方を根本から変えるのは破壊的。ユーザーゼロの段階でやる意味がない\n- #18 Type Annotation（PII 等）——コンプライアンスは tramli のスコープ外\n- #19 Data Lineage Export——同上\n- #21 Rust proc macro——マクロの保守コストが高すぎる\n- #38 Processor Registry Pattern——Strategy パターンはユーザーが自分でやればいい\n- #29 Migration Guide Generator——v0.2.0 時点でマイグレーションが必要なユーザーがいない\n\n👤 今泉: #32（AI Processor Generation）は？\n\n☕ ヤン: 面白いけど、tramli がやることじゃない。AI ツール側が data-flow 図を読めばいいだけ。tramli は**データを出す側**に徹する。\n\n🎭 ソクラテス: 16 番（勝利宣言）の匂いがする。「AI 側がやればいい」は本当か？ ……いや、今回は正しい。tramli は小さなライブラリだ。AI 統合は外部の仕事だ。種明かし不要。\n\n→ アイデア: **明示的 NOT-DOING リスト** — DD として「やらないこと」を記録。#9, #18, #19, #21, #29, #32, #38 は tramli のスコープ外\n\n### Scene 3: 残ったものの優先順位\n\n🤝 後輩: 先輩、捨てるものは決まりました。残りを整理させてください。\n\n**v0.2.0（今やる）:**\n\n| 優先度 | # | アイデア | 理由 |\n|--------|---|---------|------|\n| P0 | 34 | DataFlowGraph コア | 全ての土台 |\n| P0 | 35 | 二部グラフ表現 | #34 の内部設計 |\n| P1 | 1 | Dual View Mermaid | ユーザーが見るもの |\n| P1 | 5 | 共通 Mermaid 出力 | 3 言語統一 |\n| P1 | 3 | Dead Data Detection | ビルド安全性 |\n\n☕ ヤン: 5 個。これ以上は入れない。\n\n👤 今泉: #10（Error Path Analysis）は？ #3 とセットでやれそうですけど。\n\n☕ ヤン: ……やれるけど、v0.2.0 のスコープが膨らむ。\n\n🎭 ソクラテス: 問おう。#10 を入れないと何が起きる？ エラーパスの data-flow が未検証のまま残る。それは「既知のリスク」として許容できるか？\n\n☕ ヤン: 今も許容してる。`checkRequiresProduces` はエラーパスを見てない。v0.1.0 と同じリスク。\n\n🤝 後輩: なら v0.2.0 では許容して、v0.3.0 で #10 ですね。\n\n**v0.3.0（次にやる）:**\n\n| # | アイデア |\n|---|---------|\n| 10 | Error Path Data-Flow Analysis |\n| 30 | Data Lifetime Analysis |\n| 31 | Context Pruning Hint |\n| 11 | FlowError に context snapshot |\n| 20 | Requires/Produces 自動検証 |\n| 26 | `assertDataFlow()` API |\n| 37 | Processor Compatibility Check |\n\n**v0.4.0+（需要が見えてから）:**\n\n| # | アイデア |\n|---|---------|\n| 2 | Impact Analysis API |\n| 4 | Runtime Data Introspection |\n| 7 | Test Scaffold Generation |\n| 12 | External Contract View |\n| 13 | Context Size Estimator |\n| 15 | Cross-Flow Data-Flow Map |\n| 17 | IDE 向け JSON 出力 |\n| 22 | dve data-flow ビュー |\n| 25 | Data-Flow Invariant Test Generator |\n| 27 | Data-Flow Diff |\n| 28 | Version Compatibility Check |\n| 36 | Domain Vocabulary Map |\n\n### Scene 4: 本当にそれでいいか\n\n🎭 ソクラテス: *全員を見回す* 最後に一つ。v0.2.0 を 5 個に絞った。だが本当に聞きたいのはこれだ——data-flow を**出さなかったら**何が困る？ v0.2.0 を data-flow ではなく別の機能に使う選択肢は検討したか？\n\n☕ ヤン: *長い沈黙。紅茶を飲む。*\n\n👤 今泉: そもそも、v0.2.0 で一番求められてるのは data-flow なんですか？ DD-007 で先送りした HTTP API とか、他にもあるのでは。\n\n☕ ヤン: HTTP API は DD-007 で「監視レイヤー」として先送りした。今 volta-gateway を書き始めたら必要になるかもしれないけど、まだ書き始めてない。data-flow は……\n\n🤝 後輩: 先輩、data-flow は「あると設計が安全になる」けど「ないと動かない」わけではない。でも Rust 版を publish した今、README に data-flow 図があると**使ってみたい人**が増えるのでは。\n\n☕ ヤン: ……そうですね。ライブラリの魅力が上がる。DX の問題。5 個なら工数も小さい。やりましょう。\n\n🎭 ソクラテス: よろしい。合意は本物だ。\n\n### Round 7 アイデア追加\n\n| # | アイデア | 分類 | 実現可能性 |\n|---|---------|------|-----------|\n| 39 | **v0.2.0 スコープ = 5 個に絞る** | 方針 | ◎ |\n| 40 | **明示的 NOT-DOING リスト** | 方針 | ◎ |\n\n---\n\n## 最終構造\n\n```\nv0.2.0  ← data-flow 導出\n├── #34  DataFlowGraph をコアに（二部グラフ #35）\n├── #1   Dual View Mermaid\n├── #5   共通 Mermaid 出力（3 言語統一）\n└── #3   Dead Data Detection\n\nv0.3.0  ← data-flow 活用\n├── #10  Error Path Analysis\n├── #30  Data Lifetime Analysis + #31 Pruning Hint\n├── #11  FlowError context snapshot\n├── #20  Requires/Produces 自動検証\n├── #26  assertDataFlow() API\n└── #37  Processor Compatibility Check\n\nNOT-DOING（スコープ外）:\n  #9, #18, #19, #21, #29, #32, #38\n\nドキュメント（随時）:\n  #14 ポジショニング, #23 Mermaid方針, #24 チュートリアル, #33 AI context\n```\n\n---\n\n## 📝 セッションフィードバック（任意・30 秒）:\n1. キャラ構成は適切だった？ → はい / 変えたい（誰を追加/削除？）\n2. 「これは気づかなかった」というアイデアはあった？ → はい / いいえ\n3. 一言あれば:\n"
+      },
+      "confidence": 0.6,
+      "warnings": [
+        "No gap markers found"
+      ]
+    },
+    {
+      "type": "dialogue",
+      "id": "2026-04-07-tramli-dataflow-brainstorm#dialogue",
+      "data": {
+        "session_id": "2026-04-07-tramli-dataflow-brainstorm",
+        "has_content": true,
+        "scene_count": 27,
+        "char_count": 99
+      },
+      "confidence": 1,
+      "warnings": []
+    },
     {
       "type": "session",
       "id": "2026-04-07-tramli-design-review-r2",
@@ -315,6 +380,41 @@
     },
     {
       "type": "session",
+      "id": "2026-04-07-tramli-flowstore-portability",
+      "data": {
+        "id": "2026-04-07-tramli-flowstore-portability",
+        "date": "2026-04-07",
+        "theme": "tramli-flowstore-portability",
+        "flow": "🔍 design-review",
+        "structure": "🗣 座談会",
+        "characters": [
+          "☕ ヤン",
+          "👤 今泉",
+          "🦅 鷲津",
+          "⚔ リヴァイ"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-flowstore-portability.md",
+        "content": "# DGE Session: FlowStore サービス化 + I/O 分離パターン\n\n- **Date**: 2026-04-07\n- **Flow**: 🔍 design-review\n- **Structure**: 🗣 座談会\n- **Characters**: ☕ ヤン, 👤 今泉, 🦅 鷲津, ⚔ リヴァイ\n- **Input**: docs/proposal-cross-language-portability.md（提案 4, 5）\n\n## 結論\n\n- FlowStore サービス化: **やらない**（ROI 不足。書き直し 1 日 vs サービス化 1 ヶ月+運用）\n- I/O 分離: **設計ガイドで提供**（API 変更なし）\n- FlowContext エイリアス: **やる**（Java/Rust にエイリアス登録 API 追加）\n- DB スキーマ: **推奨スキーマをドキュメント化**\n\n## やること\n\n1. `docs/patterns/io-separation.md` — I/O 分離 3 パターン + 推奨度 + サンプル\n2. `docs/patterns/flowstore-schema.md` — 推奨 DB スキーマ + シリアライズ仕様\n3. FlowContext エイリアス API（Java/Rust）\n\n## やらないこと\n\n- FlowStore サービス化（gRPC/HTTP）\n- wire protocol 定義\n- tramli-json 等のシリアライズパッケージ（将来需要次第）\n- Processor API への変更\n"
+      },
+      "confidence": 0.6,
+      "warnings": [
+        "No gap markers found"
+      ]
+    },
+    {
+      "type": "dialogue",
+      "id": "2026-04-07-tramli-flowstore-portability#dialogue",
+      "data": {
+        "session_id": "2026-04-07-tramli-flowstore-portability",
+        "has_content": true,
+        "scene_count": 0,
+        "char_count": 3
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "session",
       "id": "2026-04-07-tramli-multilang-r2",
       "data": {
         "id": "2026-04-07-tramli-multilang-r2",
@@ -602,6 +702,322 @@
       "warnings": []
     },
     {
+      "type": "session",
+      "id": "2026-04-07-tramli-state-tree",
+      "data": {
+        "id": "2026-04-07-tramli-state-tree",
+        "date": "2026-04-07",
+        "theme": "tramli-state-tree",
+        "flow": "🔍 design-review",
+        "structure": "🗣 座談会",
+        "characters": [
+          "☕ ヤン",
+          "👤 今泉",
+          "⚔ リヴァイ",
+          "🎩 千石"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-state-tree.md",
+        "content": "# DGE Session: State Tree — 階層的状態の設計\n\n- **Date**: 2026-04-07\n- **Flow**: 🔍 design-review\n- **Structure**: 🗣 座談会\n- **Characters**: ☕ ヤン, 👤 今泉, ⚔ リヴァイ, 🎩 千石\n- **Input**: 現行の flat state 設計, ユーザーモチベーション（大規模システム, プラグイン）\n\n## 結論\n\n3 案を検討した結果、**案 C: Flow Composition（サブフロー）** を採用。\n\n- 案 A (Harel Statechart): 却下 — 機能過多、tramli の哲学と矛盾\n- 案 B (ドット記法): 不要 — 案 C + Mermaid 側のグルーピングで代替\n- 案 C (Flow Composition): 採用 — enum を閉じたまま拡張可能、data-flow 検証が自然に統合\n\n## API イメージ\n\n```java\n// メインフロー\n.from(PAYMENT).subFlow(paymentSubFlow)\n    .onExit(\"DONE\", PAYMENT_DONE)\n    .onExit(\"CANCELLED\", CANCELLED)\n\n// プラグイン (v1.3.0)\nvar extended = main.withPlugin(\"CONFIRMED\", \"SHIPPED\", giftWrapFlow);\n```\n\n## Gap 一覧\n\n| # | Gap | Category | Severity |\n|---|-----|----------|----------|\n| G1 | flat state では状態グルーピングが構造的に表現できない | Missing logic | High |\n| G2 | enum 安全 vs string 拡張の二項対立 | Spec-impl mismatch | High |\n| G3 | Harel Statechart は機能過多 | Integration gap | Medium |\n| G4 | 親レベル遷移の意味論が未定義 | Missing logic | Medium |\n\n## アイデア一覧\n\n| # | アイデア | 分類 |\n|---|---------|------|\n| A1 | Flow Composition — サブ FlowDefinition 埋め込み | 設計方針 |\n| A2 | onExit mapping — terminal → parent state | API 設計 |\n| A3 | withPlugin — 遷移間にサブフロー挿入 | API 設計 |\n| A4 | 表示グルーピングは Mermaid 側（コア変更なし） | 方針 |\n\n## ロードマップ\n\n- v1.2.0: SubFlowTransition, onExit, data-flow 結合検証, Mermaid subgraph\n- v1.3.0: withPlugin API, プラグイン data-flow 検証\n\n## Round 2: 実行モデル詳細\n\n### 決定事項\n- Context: 完全共有（同じ FlowContext）\n- エラー: 3 層（サブ内解決 → error terminal → 親バブリング）\n- FlowInstance: activeSubFlow フィールド追加。外部 currentState は親の状態\n- Engine: auto-chain 再帰実行、depth 全体合算（max 10）、resume はアクティブサブフローに委譲\n- ビルド検証: onExit 網羅性 / data-flow 結合 / onExit 先 valid\n- Mermaid: subgraph ネスト描画\n\n### 追加アイデア\n| # | アイデア |\n|---|---------|\n| A5 | Context 完全共有 |\n| A6 | エラー 3 層（サブ内 → terminal → 親バブリング） |\n| A7 | FlowInstance.activeSubFlow |\n| A8 | auto-chain 再帰 + depth 合算 + resume 委譲 |\n| A9 | SubFlow ビルド検証 3 項目 |\n| A10 | Mermaid subgraph ネスト |\n\n## Round 3: 境界条件と実運用\n\n### 決定事項\n- 永続化: statePath `[\"PAYMENT\", \"CONFIRM\"]` で状態パスを保存。restore 時に再構築\n- ネスト制限: max nesting depth = 3（ビルド時検証）\n- TTL: 親が支配。サブフローの ttl は埋め込み時に無視\n- TransitionRecord: subFlow フィールド追加（null = メイン）\n- テスト: 3 層（サブフロー単体 / 結合 / data-flow 検証）\n- 既存 API: 影響ゼロ（全て additive）\n\n### 実装順序\n1. SubFlowTransition 型 + Builder .subFlow().onExit()\n2. ビルド検証（onExit 網羅 / nesting depth / data-flow 結合）\n3. FlowInstance.activeSubFlow + statePath\n4. FlowEngine auto-chain 再帰 + resume 委譲\n5. TransitionRecord.subFlow フィールド\n6. MermaidGenerator subgraph\n7. テスト（3 層）\n\n### 追加アイデア\n| # | アイデア |\n|---|---------|\n| A11 | statePath 永続化 |\n| A12 | max nesting depth = 3 |\n| A13 | TTL は親が支配 |\n| A14 | TransitionRecord.subFlow フィールド |\n| A15 | 3 層テスト戦略 |\n| A16 | 既存 API 影響ゼロ確認 |\n\n## Round 4: 死角の発見\n\n### 決定事項\n- FlowInstance.waitingFor(): 待機中 external の requires を返す API 追加\n- 型パラメータ: Java 型消去 / Rust trait object (SubFlow trait) / TS 自然対応\n- 条件付きサブフローは branch + subFlow の組み合わせ（専用 API 不要）\n- DataFlowGraph: 内部フラット化で分析、subFlowGraph(name) で部分取得\n- サブフロー re-entry: 毎回 fresh start (initial state から)\n- TS async: 自然に共存\n\n### 追加アイデア\n| # | アイデア |\n|---|---------|\n| A17 | FlowInstance.waitingFor() |\n| A18 | Rust SubFlow trait |\n| A19 | 条件付き subFlow は branch + subFlow |\n| A20 | DataFlowGraph 内部フラット化 + subFlowGraph(name) |\n| A21 | サブフロー re-entry は fresh start |\n| A22 | TS async は自然に共存 |\n\n## Round 5: API 利用者視点\n\n### 決定事項\n- FlowStore: restore() にオーバーロード追加（statePath 付き）。既存シグネチャは維持\n- サブフロー定義は親 FlowDefinition に内包。resumeAndExecute のシグネチャ変更なし\n- guardFailureCount: サブフローの FlowInstance に帰属。maxGuardRetries はサブフローの定義に従う\n- 設定の支配ルール: フローレベル（TTL, flowId）= 親、遷移レベル（maxGuardRetries, error transitions）= 各定義\n- circular reference: ビルド時にオブジェクト identity で循環検出\n- statePath() を公開 API に + statePathString() = \"PAYMENT/CONFIRM\"\n- サブフローは親を知らない（情報は context 経由で明示的に渡す）\n\n### 追加アイデア\n| # | アイデア |\n|---|---------|\n| A23 | FlowInstance.restore() オーバーロード |\n| A24 | サブフロー定義は親 FlowDefinition に内包 |\n| A25 | 設定支配ルール（フロー=親, 遷移=各定義）|\n| A26 | circular reference 検出（ビルド時）|\n| A27 | statePath() + statePathString() 公開 API |\n| A28 | サブフローは親を知らない |\n\n## Round 6: エッジケースと Plugin 先取り\n\n### 決定事項\n- キャンセルは専用 API 不要（サブフロー内 terminal + onExit で対応）\n- 同一サブフロー定義の複数箇所利用 OK（onExit はマッピングが箇所ごと）\n- withPlugin = 既存遷移に subFlow を前置挿入（状態追加不要、enum 変更なし）\n- Plugin data-flow 検証は既存 checkRequiresProduces でカバー\n- 共有テスト 9 ケース定義済み\n\n### Plugin API (v1.3.0) 設計\n```java\nvar extended = mainDef.withPlugin(\"CONFIRMED\", \"SHIPPED\", giftWrapFlow);\n// 内部: CONFIRMED→SHIPPED の auto 遷移の processor の前に giftWrapFlow を挿入\n// enum 変更なし。新しい FlowDefinition を返す（元は不変）\n```\n\n### 共有テスト 9 ケース\n1. Basic subFlow (auto-chain → sub → terminal → 返る)\n2. SubFlow with external (sub 内 external 停止 → resume)\n3. SubFlow error bubble (sub 内エラー → 親の error)\n4. SubFlow error internal (sub 内 error terminal → onExit)\n5. SubFlow re-entry (fresh start)\n6. Nested subFlow (2 段)\n7. Build validation - onExit missing\n8. Build validation - data-flow\n9. waitingFor() in subFlow\n\n### 追加アイデア\n| # | アイデア |\n|---|---------|\n| A29 | キャンセル専用 API 不要 |\n| A30 | 同一 subFlow 複数箇所利用 OK |\n| A31 | withPlugin = 前置挿入（状態追加なし）|\n| A32 | Plugin data-flow は既存検証でカバー |\n| A33 | 共有テスト 9 ケース |\n\n## Round 7: 刈り込みと MVP\n\n### v1.2.0-MVP（最小で動くサブフロー）\n1. SubFlowTransition + Builder .subFlow().onExit()\n2. onExit 網羅性検証（ビルド時）\n3. FlowInstance.activeSubFlow\n4. Engine auto-chain 再帰 + resume 委譲\n5. テスト: Basic subFlow + SubFlow with external\n\n### 段階リリース計画\n```\nv1.2.0: MVP（上記 5 項目）\nv1.2.1: エラーバブリング + data-flow 結合検証 + circular ref + nesting depth\nv1.2.2: statePath 永続化 + restore + TransitionRecord + waitingFor + statePathString\nv1.2.3: Mermaid subgraph + DataFlowGraph フラット化\nv1.3.0: withPlugin + Plugin data-flow 検証\n```\n\n### 競合比較\ntramli の差別化: 3 行 subFlow / ビルド時 data-flow 検証 / 独立テスト可能 / 3 言語統一\n\n### 見積もり\nMVP ~650 行（3 言語合計）。テストシナリオ先行。\n\n## Round 8: Red Team — 最終検証\n\n### 確認事項\n- 「アプリ層直列」は代替案だが data-flow 検証が分断 → Flow Composition 確定\n- Plugin の制限: terminal 後の拡張不可（明文化）\n- サブフロー別ファイル分割を推奨パターンとして記載\n- withPlugin は future に格下げ（YAGNI）。需要が確認されるまで作らない\n\n### 最終ロードマップ（修正）\n```\nv1.2.0: SubFlow MVP (6 項目)\nv1.2.1: エラーバブリング + data-flow 結合検証 + circular ref + nesting depth\nv1.2.2: statePath 永続化 + restore + TransitionRecord + waitingFor + statePathString\nv1.2.3: Mermaid subgraph + DataFlowGraph フラット化\n(withPlugin は future — 需要確認まで作らない)\n```\n\n### 全ラウンド統計\n- 8 ラウンド / 41 アイデア / 9 Gap\n- 設計原則 6 個確立\n- MVP 6 項目 + 段階リリース 4 ステップ\n"
+      },
+      "confidence": 0.6,
+      "warnings": [
+        "No gap markers found"
+      ]
+    },
+    {
+      "type": "dialogue",
+      "id": "2026-04-07-tramli-state-tree#dialogue",
+      "data": {
+        "session_id": "2026-04-07-tramli-state-tree",
+        "has_content": true,
+        "scene_count": 0,
+        "char_count": 4
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "session",
+      "id": "2026-04-07-tramli-v1-readiness",
+      "data": {
+        "id": "2026-04-07-tramli-v1-readiness",
+        "date": "2026-04-07",
+        "theme": "tramli-v1-readiness",
+        "flow": "💡 ブレスト",
+        "structure": "🗣 座談会",
+        "characters": [
+          "☕ ヤン",
+          "👤 今泉",
+          "🦅 鷲津",
+          "🤝 後輩"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-v1-readiness.md",
+        "content": "# DGE Session: tramli v1.0.0 — いつ出すか\n\n- **Date**: 2026-04-07\n- **Flow**: 💡 ブレスト\n- **Structure**: 🗣 座談会\n- **Characters**: ☕ ヤン, 👤 今泉, 🦅 鷲津, 🤝 後輩\n- **Input**: DD-015 v0.2.0/v0.3.0 スコープ, 現在の publish 状況\n\n## 結論\n\n- コア API は v0.1.0 から安定。v0.2.0 も additive のみ。技術的障壁ゼロ\n- ユーザーゼロの今が v1.0.0 最適タイミング（0.x→1.0 移行の混乱なし）\n- 案 A 推奨: **v1.0.0 = v0.2.0 そのまま**（バージョン番号のみ変更）\n- 追加機能（#10 Error Path, #20, #26 等）は v1.1.0+\n- 安定性保証は「コア API」のみ。分析・可視化系は v1.x で段階追加可能\n- v1.x 維持期間は最低 1 年\n\n## v1.0.0 の安定性約束\n\n1. コア API（FlowEngine, Builder, processors, FlowContext）は壊さない\n2. DataFlowGraph の query API は壊さない\n3. MermaidGenerator の出力フォーマットは壊さない\n4. 3 言語で同じ**コア API**（分析系は言語ごとに先行/後追い可）\n\n## アイデア一覧\n\n| # | アイデア | 分類 |\n|---|---------|------|\n| 1 | v1.0.0 = API 安定性の約束。今の API で 2 年間戦えるか確認 | 判断基準 |\n| 2 | コア API は v0.1.0 から安定。技術的障壁ゼロ | 事実確認 |\n| 3 | ユーザーゼロの今が v1.0.0 最適タイミング | 戦略 |\n| 4 | 案 A: v1.0.0 = v0.2.0 そのまま（最速） | 方針 |\n| 5 | 案 B: v1.0.0 = v0.2.0 + #10（Error Path） | 方針 |\n| 6 | 安定性保証は「コア API」のみ、分析系は v1.x で段階追加 | 方針 |\n| 7 | v1.x 維持期間は最低 1 年 | 約束 |\n"
+      },
+      "confidence": 0.6,
+      "warnings": [
+        "No gap markers found"
+      ]
+    },
+    {
+      "type": "dialogue",
+      "id": "2026-04-07-tramli-v1-readiness#dialogue",
+      "data": {
+        "session_id": "2026-04-07-tramli-v1-readiness",
+        "has_content": true,
+        "scene_count": 0,
+        "char_count": 2
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "session",
+      "id": "2026-04-08-tramli-coverage-vision",
+      "data": {
+        "id": "2026-04-08-tramli-coverage-vision",
+        "date": "2026-04-08",
+        "theme": "tramli-coverage-vision",
+        "flow": "💡 ブレスト",
+        "structure": "roundtable",
+        "characters": [
+          "☕ ヤン",
+          "👤 今泉",
+          "🎭 ソクラテス",
+          "🤝 後輩"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-08-tramli-coverage-vision.md",
+        "content": "# DGE Session: define + pipeline + sub で全コードカバーできるか\n\n- **Date**: 2026-04-08\n- **Flow**: 💡 ブレスト\n- **Characters**: ☕ ヤン, 👤 今泉, 🎭 ソクラテス, 🤝 後輩\n\n## 結論\n\n- Sub-Pipeline は不要。asStep() で完全カバー\n- ビジネスロジックの 90% を tramli (define + pipeline) でカバー可能\n- 残りは I/O、設定、フレームワーク連携、テスト（構造的に外）\n- 初期化コード、リクエスト処理パイプラインも Pipeline で書ける\n\n## tramli = 骨格、I/O = 肉\n\ntramli でカバーされる部分が Mermaid で可視化される。\n非エンジニアに見せるのは骨格（ビジネスフロー）であって I/O の詳細ではない。\n\n## カバレッジ見積もり (volta-auth-proxy)\n\n| 領域 | 行数 | tramli | 可視化 |\n|------|------|--------|--------|\n| FlowDefinition + Processors | 500 | ✅ define | Mermaid |\n| リクエスト処理 | 300 | ✅ pipeline | Mermaid |\n| 初期化 | 100 | ✅ pipeline | Mermaid |\n| FlowStore (PostgreSQL) | 90 | ❌ I/O | — |\n| ルーティング | 50 | ❌ glue | — |\n| 設定/DI | 80 | ❌ glue | — |\n| I/O 実装 | 400 | ❌ | — |\n| テンプレート | 300 | ❌ | — |\n\nビジネスロジック: 90% tramli → 100% Mermaid 可視化\n"
+      },
+      "confidence": 0.6,
+      "warnings": [
+        "No gap markers found"
+      ]
+    },
+    {
+      "type": "dialogue",
+      "id": "2026-04-08-tramli-coverage-vision#dialogue",
+      "data": {
+        "session_id": "2026-04-08-tramli-coverage-vision",
+        "has_content": true,
+        "scene_count": 0,
+        "char_count": 2
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "session",
+      "id": "2026-04-08-tramli-graph-renderer",
+      "data": {
+        "id": "2026-04-08-tramli-graph-renderer",
+        "date": "2026-04-08",
+        "theme": "tramli-graph-renderer",
+        "flow": "🔍 design-review",
+        "structure": "roundtable",
+        "characters": [
+          "☕ ヤン",
+          "👤 今泉",
+          "🎩 千石",
+          "⚔ リヴァイ"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-08-tramli-graph-renderer.md",
+        "content": "# DGE Session: GraphRenderer — ラムダ注入によるレンダリング汎用化\n\n- **Date**: 2026-04-08\n- **Flow**: 🔍 design-review\n- **Characters**: ☕ ヤン, 👤 今泉, 🎩 千石, ⚔ リヴァイ\n\n## 結論\n\n- RenderableDataFlow + RenderableStateDiagram の read-only ビュー record\n- renderDataFlow(Function) で汎用レンダリング。toMermaid() は残す（ショートカット）\n- MermaidGenerator に static レンダラーメソッド追加（メソッドリファレンスで使える）\n- Pipeline にも同じ renderDataFlow()\n- 3 言語同一パターン\n\n## API\n\n```java\n// 汎用\ngraph.renderDataFlow(MermaidGenerator::dataFlow);\ngraph.renderDataFlow(myDotRenderer);\n\n// ショートカット（後方互換）\ngraph.toMermaid();  // = renderDataFlow(MermaidGenerator::dataFlow)\n```\n"
+      },
+      "confidence": 0.6,
+      "warnings": [
+        "No gap markers found"
+      ]
+    },
+    {
+      "type": "dialogue",
+      "id": "2026-04-08-tramli-graph-renderer#dialogue",
+      "data": {
+        "session_id": "2026-04-08-tramli-graph-renderer",
+        "has_content": true,
+        "scene_count": 0,
+        "char_count": 4
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "session",
+      "id": "2026-04-08-tramli-io-coverage",
+      "data": {
+        "id": "2026-04-08-tramli-io-coverage",
+        "date": "2026-04-08",
+        "theme": "tramli-io-coverage",
+        "flow": "💡 ブレスト",
+        "structure": "roundtable",
+        "characters": [
+          "☕ ヤン",
+          "👤 今泉",
+          "🎭 ソクラテス",
+          "🤝 後輩"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-08-tramli-io-coverage.md",
+        "content": "# DGE Session: I/O にも tramli のメリットを\n\n- **Date**: 2026-04-08\n- **Flow**: 💡 ブレスト\n- **Characters**: ☕ ヤン, 👤 今泉, 🎭 ソクラテス, 🤝 後輩\n\n## 結論\n\n- I/O Port = PipelineStep。既存 API で書ける。新概念不要\n- 失敗モード宣言は不要（PipelineException + Logger で実行時観測が十分）\n- テスト支援は既存 API (testScaffold + verifyProcessor) で十分\n- sub-project は今は不要 (YAGNI)\n\n## Future\n- 例外型ベースのエラー遷移マッピング: .onStepError(ExceptionClass, targetState)\n- tramli-ports (言語横断 I/O 契約共有) — 需要が出たら\n"
+      },
+      "confidence": 0.6,
+      "warnings": [
+        "No gap markers found"
+      ]
+    },
+    {
+      "type": "dialogue",
+      "id": "2026-04-08-tramli-io-coverage#dialogue",
+      "data": {
+        "session_id": "2026-04-08-tramli-io-coverage",
+        "has_content": true,
+        "scene_count": 0,
+        "char_count": 2
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "session",
+      "id": "2026-04-08-tramli-liveness-response",
+      "data": {
+        "id": "2026-04-08-tramli-liveness-response",
+        "date": "2026-04-08",
+        "theme": "tramli-liveness-response",
+        "flow": "🔍 design-review",
+        "structure": "roundtable",
+        "characters": [
+          "☕ ヤン",
+          "👤 今泉",
+          "🎩 千石",
+          "🔬 ハレル教授"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-08-tramli-liveness-response.md",
+        "content": "# DGE Session: 偉人の指摘を受けて — 設計チームの応答\n\n- **Date**: 2026-04-08\n- **Flow**: 🔍 design-review\n- **Characters**: ☕ ヤン, 👤 今泉, 🎩 千石, 🔬 ハレル教授\n\n## 結論\n\n### やる\n1. FlowDefinition.warnings() — build 時の構造的警告（perpetual + External = liveness リスク）\n2. 論文に系譜年表 + liveness 議論 + 検証しないことの正当化を追加\n\n### やらない\n- 並列実行（検証できないものは入れない原則）\n- BuildResult API 変更（v1.x 互換）\n- per-state timeout（将来検討、DD-002 踏襲）\n\n### 設計原則の確認\n「検証できないものは入れない」——並行性、liveness の完全検証は tramli のスコープ外。\nwarnings で情報提供し、判断はユーザーに委ねる。\n"
+      },
+      "confidence": 0.6,
+      "warnings": [
+        "No gap markers found"
+      ]
+    },
+    {
+      "type": "dialogue",
+      "id": "2026-04-08-tramli-liveness-response#dialogue",
+      "data": {
+        "session_id": "2026-04-08-tramli-liveness-response",
+        "has_content": true,
+        "scene_count": 0,
+        "char_count": 3
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "session",
+      "id": "2026-04-08-tramli-logger-api",
+      "data": {
+        "id": "2026-04-08-tramli-logger-api",
+        "date": "2026-04-08",
+        "theme": "tramli-logger-api",
+        "flow": "🔍 design-review",
+        "structure": "roundtable",
+        "characters": [
+          "☕ ヤン",
+          "👤 今泉",
+          "⚔ リヴァイ",
+          "🎩 千石"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-08-tramli-logger-api.md",
+        "content": "# DGE Session: Logger API 設計\n\n- **Date**: 2026-04-08\n- **Flow**: 🔍 design-review\n- **Characters**: ☕ ヤン, 👤 今泉, ⚔ リヴァイ, 🎩 千石\n\n## 結論\n\n- set（上書き）方式。add（スタック）は不要 — 合成はユーザーのラムダ内で\n- removeAllLoggers() 1 つだけ。個別 remove は不要（set(null) で代用可）\n- ErrorLogger を簡素化: (from, to, trigger, throwable)。context の key/value は StateLogger の仕事\n- StateLogger はオプト・イン（context.put の hook）\n\n## Round 2: Class<?> vs String\n\n### 結論\n- Class<?> と String の両取り: entry record に Class<?> type + String typeName() を提供\n- 全 Logger を entry record 方式に変更（将来フィールド追加時に後方互換）\n- Rust は TypeId + type_name(&str)、TS は FlowKey(String)\n\n## 最終 API\n\n```java\n// Entry records\npublic record TransitionLogEntry(String from, String to, String trigger) {}\npublic record StateLogEntry(String state, Class<?> type, Object value) {\n    public String typeName() { return type.getSimpleName(); }\n}\npublic record ErrorLogEntry(String from, String to, String trigger, Throwable cause) {}\n\n// Setters\nengine.setTransitionLogger(entry -> log.info(\"{} → {}\", entry.from(), entry.to()));\nengine.setStateLogger(entry -> log.debug(\"put {} = {}\", entry.typeName(), entry.value()));\nengine.setErrorLogger(entry -> log.error(\"error: {}\", entry.cause().getMessage()));\nengine.removeAllLoggers();\n```\n"
+      },
+      "confidence": 0.6,
+      "warnings": [
+        "No gap markers found"
+      ]
+    },
+    {
+      "type": "dialogue",
+      "id": "2026-04-08-tramli-logger-api#dialogue",
+      "data": {
+        "session_id": "2026-04-08-tramli-logger-api",
+        "has_content": true,
+        "scene_count": 0,
+        "char_count": 4
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "session",
+      "id": "2026-04-08-tramli-mathematical-genealogy",
+      "data": {
+        "id": "2026-04-08-tramli-mathematical-genealogy",
+        "date": "2026-04-08",
+        "theme": "tramli-mathematical-genealogy",
+        "flow": "🏥 症例検討",
+        "structure": "roundtable",
+        "characters": [
+          "🔬 David Harel",
+          "📊 Frances Allen",
+          "🔧 Rob Strom",
+          "🧮 Robin Milner",
+          "☕ ヤン"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-08-tramli-mathematical-genealogy.md",
+        "content": "# DGE Session: tramli の数学的系譜 — 偉人に聞く\n\n- **Date**: 2026-04-08\n- **Flow**: 🏥 症例検討\n- **Characters**: 🔬 David Harel, 📊 Frances Allen, 🔧 Rob Strom, 🧮 Robin Milner, ☕ ヤン\n\n## tramli の位置づけ\n\ntramli = 4 つの既知の理論構造の「build 時検証」における交差点。\n\n| 理論 | 年代 | tramli との関係 |\n|------|------|----------------|\n| Data-flow analysis (reaching definitions) | 1960s | checkRequiresProduces は reaching definitions の型レベル特殊化 |\n| Statecharts | 1987 | SubFlow = composite state の実用的部分集合。Safety 検証のみ |\n| Typestate | 1986 | FlowContext = typestate のフロー版。build 時検証（動的ロードのため） |\n| π-calculus | 1999 | External = チャネル入力。並行性排除は検証のためのトレードオフ |\n\n## 核心の洞察\n\nrequires/produces は、4 つの理論に共通する不変量。\n各理論はこの不変量の異なる射影を研究していた。\ntramli はその不変量を直接実装した。\n\n## 見落とし\n\n- Liveness: External で永遠にブロックするフローは build() で検出できない\n- 並行性: 排除は意図的だが、parallelismHints は独立並行合成の検出に繋がる可能性\n\n## 年表\n\n1960s Allen/Cocke → 1986 Typestate → 1987 Statecharts → 1999 π-calculus → 2026 tramli\n"
+      },
+      "confidence": 0.6,
+      "warnings": [
+        "No gap markers found"
+      ]
+    },
+    {
+      "type": "dialogue",
+      "id": "2026-04-08-tramli-mathematical-genealogy#dialogue",
+      "data": {
+        "session_id": "2026-04-08-tramli-mathematical-genealogy",
+        "has_content": true,
+        "scene_count": 0,
+        "char_count": 3
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
+      "type": "session",
+      "id": "2026-04-08-tramli-pipeline-vision",
+      "data": {
+        "id": "2026-04-08-tramli-pipeline-vision",
+        "date": "2026-04-08",
+        "theme": "tramli-pipeline-vision",
+        "flow": "💡 ブレスト",
+        "structure": "roundtable",
+        "characters": [
+          "☕ ヤン",
+          "👤 今泉",
+          "🎭 ソクラテス",
+          "🤝 後輩"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-08-tramli-pipeline-vision.md",
+        "content": "# DGE Session: tramli の感覚を全コードに — Pipeline Vision\n\n- **Date**: 2026-04-08\n- **Flow**: 💡 ブレスト\n- **Characters**: ☕ ヤン, 👤 今泉, 🎭 ソクラテス, 🤝 後輩\n\n## 核心の洞察\n\ntramli の本質は「状態遷移エンジン」ではなく「requires/produces 契約 + build 時データフロー検証」。\n状態遷移はこの上に乗るアプリケーションの1つ。\n\n## ユーザーのモチベーション\n\ntramli を使った部分と使ってない部分の落差が激しい。全コードで「読まなくていい量が95%減る」感覚を得たい。\n\n## 結論\n\n**案 A: Tramli.pipeline() DSL を tramli に追加**\n- 内部: 全 Auto の FlowDefinition を自動生成\n- 既存の build() 検証 / DataFlowGraph / Mermaid がそのまま使える\n- Pipeline = External なし、分岐なしの tramli\n\n## 将来ビジョン\n\n全関数に requires/produces を付けてコンパイラが検証する = 言語レベルの Effect System。\n理想として持ちつつ、現実は Tramli.pipeline() で 80% カバー。\n\n## Round 2: Pipeline API 具体設計\n\n### 確定事項\n- PipelineStep: StateProcessor の非ジェネリック版（name, requires, produces, process）\n- execute(): FlowContext を返す。エラーは FlowException throw\n- 軽量検証: FlowDefinition を使わず直列の requires/produces を直接走査（20行）\n- PipelineDataFlow: toMermaid + deadData（DataFlowGraph の軽量版）\n- Logger API: FlowEngine と同じ LogEntry を再利用\n- strictMode: produces 検証\n\n### API イメージ\n```java\nvar pipeline = Tramli.pipeline(\"etl\")\n    .initiallyAvailable(RawInput.class)\n    .step(parse).step(validate).step(save)\n    .build();  // ← requires/produces チェーン検証\nFlowContext result = pipeline.execute(Map.of(RawInput.class, data));\n```\n\n## Round 3: エラーハンドリング / 条件スキップ / ネスト\n\n### 確定事項\n- エラー: 即停止 + PipelineException (completedSteps, failedStep, context, cause)\n- 条件スキップ: process() 内で if return。produces 空にする。find() で optional 取得\n- 補償: Pipeline の外。context で情報提供のみ（DD-002 踏襲）\n- ネスト: Pipeline.asStep() で Pipeline を PipelineStep に変換\n- async: TS のみ（DD-013 踏襲）\n- Railway パターン: 不採用（FlowDefinition の仕事）\n\n## Round 4: 刈り込みと MVP\n\n### 確定事項\n- tramli のアイデンティティ「Constrained flow engine」は維持。Pipeline は flow のバリエーション\n- Pipeline は tramli 本体に 1 ファイル追加（別ライブラリにしない）\n- 永続化しない。「1 リクエスト内で終わる直列処理」に限定\n- FlowContext/FlowError/LogEntry を共有。FlowDefinition/FlowEngine/FlowStore は共有しない\n\n### MVP\nPipelineStep + Builder(.step().build()) + execute→FlowContext + build検証 + PipelineDataFlow(toMermaid+deadData) + PipelineException(completedSteps/failedStep/context/cause) + TransitionLogger + ErrorLogger\n\n### 入れない（将来）\nasStep(), strictMode, StateLogger\n\n### テスト 6 ケース\n1. Happy path  2. requires 不足  3. step 失敗  4. deadData  5. Mermaid  6. 空パイプライン\n\n### 見積もり\n~180 行 × 3 言語 = ~540 行\n\n## Round 5: 全機能確定（MVP 後回し分も含む）\n\n### 追加確定事項\n- asStep(): Pipeline.execute() のラッパー。requires=initiallyAvailable, produces=全stepのproducesの和\n- strictMode: step 実行後に produces 検証。PipelineException で報告\n- StateLogger: step 前後の context key diff。FlowContext 変更なし\n\n### 最終実装スコープ（一気に全部やる）\nPipelineStep + Builder + execute + build検証 + PipelineDataFlow + PipelineException + 3 Logger + strictMode + asStep\n\n### テスト（追加）\n7. strictMode produces 違反\n8. asStep ネスト\n9. StateLogger が put を検出\n\n## Round 6: Red Team\n\n### 発見\n- Pipeline は 5+ step で価値。2-4 step は関数合成で十分\n- Pipeline の真の価値 = accumulator（FlowContext）+ build 時検証\n- volta-gateway リクエスト処理パイプラインが理想的なユースケース\n- Pipeline = tramli の on-ramp（入門パス → FlowDefinition へアップグレード）\n\n### 使い分けガイド\n```\n直列 2-4 step → 関数合成\n直列 5+ step、データ蓄積 → Tramli.pipeline()\n分岐 / 外部イベント → Tramli.define()\n分散 / 長時間 → Airflow / Temporal\n```\n\n## Round 7: 命名 + 最終矛盾チェック\n\n### 確定事項\n- 名前: `Tramli.pipeline()`, `PipelineStep`, `PipelineException`, `PipelineDataFlow`\n- PipelineException extends FlowException (completedSteps, failedStep, context)\n- PipelineDataFlow: deadData(), toMermaid(), stepOrder(), availableAfter(stepName)\n- TransitionLogger の from/to = step 名（最初は \"initial\"）\n- 全ラウンドの決定に矛盾なし\n\n## 全体統計\n- 7 ラウンド / 34 アイデア\n- 設計原則 5 個確立\n- 全機能: PipelineStep + Builder + execute + 検証 + PipelineDataFlow + PipelineException + 3 Logger + strictMode + asStep\n- テスト 9 ケース\n"
+      },
+      "confidence": 0.6,
+      "warnings": [
+        "No gap markers found"
+      ]
+    },
+    {
+      "type": "dialogue",
+      "id": "2026-04-08-tramli-pipeline-vision#dialogue",
+      "data": {
+        "session_id": "2026-04-08-tramli-pipeline-vision",
+        "has_content": true,
+        "scene_count": 0,
+        "char_count": 2
+      },
+      "confidence": 1,
+      "warnings": []
+    },
+    {
       "type": "decision",
       "id": "DD-001",
       "data": {
@@ -883,16 +1299,16 @@
       "id": "DD-013",
       "data": {
         "id": "DD-013",
-        "title": "全言語 sync コアに統一（DD-006 撤回検討）",
+        "title": "全言語 sync コア互換 — async は optional",
         "date": "",
-        "rationale": "全言語の FlowEngine / StateProcessor / TransitionGuard / BranchProcessor を sync に統一する。 - **Java**: 変更なし（元々 sync） - **TypeScript**: DD-006 を Supersede し、async → sync に変更 - **Rust**: DD-012 の通り sync async I/O は全言語で `async-integration.md` パターンを適用: ``` SM start() (sync, μs) → async I/O (外部) → SM resume() (sync, μs) ``` ### 現状の API 不一致 | 言語 | processor.process() | engine.startFlow() | |------|--------------------|--------------------| | Java | `void` (sync) | sync | | TypeScript | `Promise<void>` (async) | `Promise<FlowInstance>` (async) | | Rust | `Result<(), FlowError>` (sync) | sync | 3 言語間で API が割れている。共有テストスイート（TECH-009）で振る舞い一致を保証する前提なのに、呼び出しパターンが言語ごとに異なる。 ### sync 統一の根拠 1. `async-integration.md`: 「tramli is intentionally synchronous. It makes judgments in microseconds」 2. Rust 版の stack overflow 診断で、async の不要性が技術的に確認された 3. 3 言語の API 一貫性は共有テストスイートの前提条件 4. sync は全言語で最もシンプル、テストしやすい、ポータブル ### TypeScript での影響 ```typescript // Before (async) const flow = await engine.startFlow(def, sessionId, data); const resumed = await engine.resumeAndExecute(flowId, def); // After (sync) const flow = engine.startFlow(def, sessionId, data); const resumed = engine.resumeAndExecute(flowId, def); // async I/O は外部 const authResult = await checkAuth(request);  // ← async はここ engine.resumeAndExecute(flowId, def, new Map([...]));  // ← sync ``` TS の async overhead は小さいが、sync に揃えることで: - API が Java/Rust と完全一致 - テストから async ボイラープレートが消える - `async-integration.md` のパターンが全言語で統一 ### async が将来必要になった場合 全言語で feature flag / optional module として提供: - Java: `tramli-async` モジュール（`CompletableFuture` 版） - TypeScript: `@unlaxer/tramli-async`（または export path `tramli/async`） - Rust: `features = [\"async\"]`",
+        "rationale": "全言語の sync コア API は互換性を維持する。async は言語ごとの optional 拡張として許容し、互換性の対象外とする。 - **Java**: sync のみ（変更なし） - **TypeScript**: sync + optional async（processor.process() が `Promise<void> | void` を返せる現行仕様を維持） - **Rust**: sync のみ（DD-012 の通り）",
         "status": "active",
         "supersedes": [],
         "superseded_by": [],
         "gap_refs": [],
         "session_refs": [],
         "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-013-all-languages-sync-core.md",
-        "content": "# DD-013: 全言語 sync コアに統一（DD-006 撤回検討）\n\n**Date:** 2026-04-07\n**Session:** tramli-rust async 診断後の議論\n**Status:** draft — レビュー待ち\n\n## Decision (案)\n\n全言語の FlowEngine / StateProcessor / TransitionGuard / BranchProcessor を sync に統一する。\n\n- **Java**: 変更なし（元々 sync）\n- **TypeScript**: DD-006 を Supersede し、async → sync に変更\n- **Rust**: DD-012 の通り sync\n\nasync I/O は全言語で `async-integration.md` パターンを適用:\n```\nSM start() (sync, μs) → async I/O (外部) → SM resume() (sync, μs)\n```\n\n## Rationale\n\n### 現状の API 不一致\n\n| 言語 | processor.process() | engine.startFlow() |\n|------|--------------------|--------------------|\n| Java | `void` (sync) | sync |\n| TypeScript | `Promise<void>` (async) | `Promise<FlowInstance>` (async) |\n| Rust | `Result<(), FlowError>` (sync) | sync |\n\n3 言語間で API が割れている。共有テストスイート（TECH-009）で振る舞い一致を保証する前提なのに、呼び出しパターンが言語ごとに異なる。\n\n### sync 統一の根拠\n\n1. `async-integration.md`: 「tramli is intentionally synchronous. It makes judgments in microseconds」\n2. Rust 版の stack overflow 診断で、async の不要性が技術的に確認された\n3. 3 言語の API 一貫性は共有テストスイートの前提条件\n4. sync は全言語で最もシンプル、テストしやすい、ポータブル\n\n### TypeScript での影響\n\n```typescript\n// Before (async)\nconst flow = await engine.startFlow(def, sessionId, data);\nconst resumed = await engine.resumeAndExecute(flowId, def);\n\n// After (sync)\nconst flow = engine.startFlow(def, sessionId, data);\nconst resumed = engine.resumeAndExecute(flowId, def);\n\n// async I/O は外部\nconst authResult = await checkAuth(request);  // ← async はここ\nengine.resumeAndExecute(flowId, def, new Map([...]));  // ← sync\n```\n\nTS の async overhead は小さいが、sync に揃えることで:\n- API が Java/Rust と完全一致\n- テストから async ボイラープレートが消える\n- `async-integration.md` のパターンが全言語で統一\n\n### async が将来必要になった場合\n\n全言語で feature flag / optional module として提供:\n- Java: `tramli-async` モジュール（`CompletableFuture` 版）\n- TypeScript: `@unlaxer/tramli-async`（または export path `tramli/async`）\n- Rust: `features = [\"async\"]`\n\n## Open Questions（レビューで確認したい）\n\n1. TS 版を sync に変更すると `@unlaxer/tramli@0.1.0` との後方互換性が壊れる。`0.2.0` でリリースするか？\n2. TS の Node.js エコシステムで sync API は受け入れられるか？（DB アクセス等は async が標準）\n3. processor 内で軽い async I/O（メトリクス送信等）をしたいユースケースをどう扱うか？\n"
+        "content": "# DD-013: 全言語 sync コア互換 — async は optional\n\n**Date:** 2026-04-07\n**Status:** accepted\n\n## Decision\n\n全言語の sync コア API は互換性を維持する。async は言語ごとの optional 拡張として許容し、互換性の対象外とする。\n\n- **Java**: sync のみ（変更なし）\n- **TypeScript**: sync + optional async（processor.process() が `Promise<void> | void` を返せる現行仕様を維持）\n- **Rust**: sync のみ（DD-012 の通り）\n\n## 互換性の範囲\n\n**sync コア（3 言語で互換）:**\n- FlowDefinition Builder DSL\n- FlowState interface (isTerminal, isInitial)\n- StateProcessor / TransitionGuard / BranchProcessor の requires/produces 宣言\n- DataFlowGraph API\n- MermaidGenerator 出力フォーマット\n- 8-item build validation\n\n**言語固有（互換性対象外）:**\n- TypeScript の async engine / async processor\n- 各言語の FlowStore 実装\n- エラー型の詳細\n\n## Rationale\n\n- `async-integration.md`: 「tramli is intentionally synchronous. It makes judgments in microseconds」\n- sync コアは全言語で最もシンプル、テストしやすい、ポータブル\n- TS の async はエコシステム上自然であり、撤回する必要はない\n- DD-006 (TS async) は撤回せず維持。ただし async は optional 拡張の位置づけ\n\nSupersedes: なし（DD-006 は維持、スコープ明確化のみ）\n"
       },
       "confidence": 0.7,
       "warnings": [
@@ -914,12 +1330,127 @@
         "gap_refs": [],
         "session_refs": [],
         "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-014-data-flow-derived-not-defined.md",
-        "content": "---\nstatus: draft\n---\n\n# DD-014: data-flow は定義するのではなく導出する\n\n**Date:** 2026-04-07\n\n## Decision\n\ndata-flow を別途定義する仕組みは作らない。processor の `requires()/produces()` から自動導出する。可視化が必要なら MermaidGenerator に data-flow モードを追加して自動生成する。\n\n## Rationale\n\n- `checkRequiresProduces` がビルド時に data-flow 整合性を検証済み。明示定義なしで正しさは保証されている\n- 明示的 data-flow 定義を入れると requires/produces と同じ情報を2箇所で書くことになる（DRY 違反）\n- 「定義から自動生成」が tramli の哲学（MermaidGenerator と同じアプローチ）\n\n## 将来の検討\n\nMermaidGenerator に data-flow 可視化モードを追加:\n```\nOrderRequest → [OrderInit] → PaymentIntent → [PaymentGuard] → PaymentResult → [ShipProcessor] → ShipmentInfo\n```\n状態遷移図とは別に、データの流れを図示する。\n"
+        "content": "---\nstatus: accepted\n---\n\n# DD-014: data-flow は定義するのではなく導出する\n\n**Date:** 2026-04-07\n\n## Decision\n\ndata-flow を別途定義する仕組みは作らない。processor の `requires()/produces()` から自動導出する。可視化が必要なら MermaidGenerator に data-flow モードを追加して自動生成する。\n\n## Rationale\n\n- `checkRequiresProduces` がビルド時に data-flow 整合性を検証済み。明示定義なしで正しさは保証されている\n- 明示的 data-flow 定義を入れると requires/produces と同じ情報を2箇所で書くことになる（DRY 違反）\n- 「定義から自動生成」が tramli の哲学（MermaidGenerator と同じアプローチ）\n\n## 将来の検討\n\nMermaidGenerator に data-flow 可視化モードを追加:\n```\nOrderRequest → [OrderInit] → PaymentIntent → [PaymentGuard] → PaymentResult → [ShipProcessor] → ShipmentInfo\n```\n状態遷移図とは別に、データの流れを図示する。\n"
       },
       "confidence": 0.7,
       "warnings": [
         "date not found",
         "no session references found"
+      ]
+    },
+    {
+      "type": "decision",
+      "id": "DD-015",
+      "data": {
+        "id": "DD-015",
+        "title": "DataFlowGraph をコアに埋め込み、v0.2.0 で data-flow 導出を実装する",
+        "date": "",
+        "rationale": "1. `FlowDefinition.build()` 時に DataFlowGraph（二部グラフ）を構築し、FlowDefinition 内に保持する 2. `def.dataFlowGraph()` で公開 API として取得可能にする 3. MermaidGenerator に data-flow モードを追加（Dual View: 状態遷移図 + data-flow 図） 4. 3 言語（Java/TS/Rust）で共通の Mermaid 出力フォーマット 5. Dead Data Detection をビルド時バリデーションに追加",
+        "status": "active",
+        "supersedes": [],
+        "superseded_by": [],
+        "gap_refs": [],
+        "session_refs": [
+          "2026-04-07-tramli-dataflow-brainstorm"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-015-dataflow-graph-core.md",
+        "content": "---\nstatus: accepted\n---\n\n# DD-015: DataFlowGraph をコアに埋め込み、v0.2.0 で data-flow 導出を実装する\n\n**Date:** 2026-04-07\n**Session:** [dataflow-brainstorm](../sessions/2026-04-07-tramli-dataflow-brainstorm.md)\n\n## Decision\n\n1. `FlowDefinition.build()` 時に DataFlowGraph（二部グラフ）を構築し、FlowDefinition 内に保持する\n2. `def.dataFlowGraph()` で公開 API として取得可能にする\n3. MermaidGenerator に data-flow モードを追加（Dual View: 状態遷移図 + data-flow 図）\n4. 3 言語（Java/TS/Rust）で共通の Mermaid 出力フォーマット\n5. Dead Data Detection をビルド時バリデーションに追加\n\n## v0.2.0 スコープ（5 個のみ）\n\n| # | アイデア | 性質 |\n|---|---------|------|\n| 34 | DataFlowGraph をコアに（二部グラフ） | 土台 |\n| 35 | 二部グラフ表現 | #34 の内部設計 |\n| 1 | Dual View Mermaid | 可視化 |\n| 5 | 共通 Mermaid 出力 | 3 言語統一 |\n| 3 | Dead Data Detection | ビルド検証 |\n\n## DataFlowGraph 構造\n\n二部グラフ: 型ノード（TypeId/Class/FlowKey）と処理ノード（Processor/Guard 名）\n\n```\n[OrderRequest] --requires--> (OrderInit) --produces--> [PaymentIntent]\n[PaymentIntent] --requires--> (PaymentGuard) --produces--> [PaymentResult]\n[PaymentResult] --requires--> (ShipProcessor) --produces--> [ShipmentInfo]\n```\n\n### 公開 API\n\n```\ndef.dataFlowGraph()\n  .availableAt(state) → Set<TypeId>\n  .producersOf(typeId) → List<ProducerInfo>\n  .consumersOf(typeId) → List<ConsumerInfo>\n  .deadData() → List<TypeId>\n  .toMermaid() → String\n```\n\n## NOT-DOING（スコープ外）\n\n- #9 Data-Flow-First Builder — 破壊的変更、ユーザーゼロで不要\n- #18 Type Annotation（PII 等）— コンプライアンスは tramli のスコープ外\n- #19 Data Lineage Export — 同上\n- #21 Rust proc macro — 保守コスト過大\n- #29 Migration Guide Generator — マイグレーション需要なし\n- #32 AI Processor Generation — AI ツール側の責務\n- #38 Processor Registry Pattern — ユーザーが自力で実装可能\n\n## v0.3.0 候補\n\n#10 Error Path Analysis, #30 Data Lifetime Analysis, #31 Context Pruning Hint, #11 FlowError context snapshot, #20 Requires/Produces 自動検証, #26 assertDataFlow() API, #37 Processor Compatibility Check\n\n## Rationale\n\n- `checkRequiresProduces` が既に data-flow グラフと同等の走査をしている。グラフを明示的に構築してもコスト増はほぼゼロ\n- 状態遷移図は「制御の流れ」、data-flow 図は「データの流れ」。両方あって初めて全体像が見える\n- Dead Data Detection は「produces されたが requires されない型」の検出。デッドコードと同じ問題\n- 3 言語で共通の Mermaid フォーマットにすれば、言語間で自然に diff 可能\n- Airflow/Temporal にない「ビルド時 data-flow 検証」が tramli の差別化ポイント\n"
+      },
+      "confidence": 0.7,
+      "warnings": [
+        "date not found"
+      ]
+    },
+    {
+      "type": "decision",
+      "id": "DD-016",
+      "data": {
+        "id": "DD-016",
+        "title": "tramli v1.0.0 リリース",
+        "date": "",
+        "rationale": "tramli v1.0.0 をリリースする。v0.2.0 + Error Path Data-Flow Analysis (#10) = v1.0.0。",
+        "status": "active",
+        "supersedes": [],
+        "superseded_by": [],
+        "gap_refs": [],
+        "session_refs": [
+          "2026-04-07-tramli-v1-readiness"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-016-v1-release.md",
+        "content": "---\nstatus: accepted\n---\n\n# DD-016: tramli v1.0.0 リリース\n\n**Date:** 2026-04-07\n**Session:** [v1-readiness](../sessions/2026-04-07-tramli-v1-readiness.md)\n\n## Decision\n\ntramli v1.0.0 をリリースする。v0.2.0 + Error Path Data-Flow Analysis (#10) = v1.0.0。\n\n## v1.0.0 の安定性約束\n\n1. コア API（FlowEngine, Builder, processors, FlowContext）は壊さない\n2. DataFlowGraph の query API は壊さない\n3. MermaidGenerator の出力フォーマットは壊さない\n4. 3 言語で同じ**コア API**（分析系は言語ごとに先行/後追い可）\n5. v1.x 維持期間は最低 1 年\n\n## Rationale\n\n- コア API は v0.1.0 から安定しており、v0.2.0 も additive のみ\n- ユーザーゼロの今が v1.0.0 最適タイミング（0.x→1.0 移行の混乱なし）\n- v1.0.0 = 「プロダクションに入れていい」シグナル\n- Error Path Analysis を入れることで「ビルド時検証は完全」と言い切れる\n\n## v1.1.0+ 候補\n\n- #30 Data Lifetime Analysis + #31 Context Pruning Hint\n- #11 FlowError context snapshot\n- #20 Requires/Produces 自動検証\n- #26 assertDataFlow() API\n- #37 Processor Compatibility Check\n"
+      },
+      "confidence": 0.7,
+      "warnings": [
+        "date not found"
+      ]
+    },
+    {
+      "type": "decision",
+      "id": "DD-017",
+      "data": {
+        "id": "DD-017",
+        "title": "Flow Composition（サブフロー）による階層的状態の実現",
+        "date": "",
+        "rationale": "状態のネスト（Harel Statechart）ではなく、**FlowDefinition の中に別の FlowDefinition を埋め込む Flow Composition** で階層的状態を実現する。enum は閉じたまま。 ### 却下した案 - **案 A (Harel Statechart)**: 機能過多（entry/exit actions, history state, orthogonal regions）。tramli の「シンプルさ」と矛盾 - **案 B (ドット記法)**: 案 C があれば不要。表示グルーピングは Mermaid 側で対応",
+        "status": "active",
+        "supersedes": [],
+        "superseded_by": [],
+        "gap_refs": [],
+        "session_refs": [
+          "2026-04-07-tramli-state-tree"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-017-flow-composition-subflow.md",
+        "content": "---\nstatus: accepted\n---\n\n# DD-017: Flow Composition（サブフロー）による階層的状態の実現\n\n**Date:** 2026-04-07\n**Session:** [state-tree](../sessions/2026-04-07-tramli-state-tree.md)\n\n## Decision\n\n状態のネスト（Harel Statechart）ではなく、**FlowDefinition の中に別の FlowDefinition を埋め込む Flow Composition** で階層的状態を実現する。enum は閉じたまま。\n\n### 却下した案\n\n- **案 A (Harel Statechart)**: 機能過多（entry/exit actions, history state, orthogonal regions）。tramli の「シンプルさ」と矛盾\n- **案 B (ドット記法)**: 案 C があれば不要。表示グルーピングは Mermaid 側で対応\n\n## API\n\n```java\n// サブフロー定義（独立した FlowDefinition）\nvar paymentSub = Tramli.define(\"payment-detail\", PaymentStep.class)\n    .from(INIT).auto(VALIDATE, validateProc)\n    .from(VALIDATE).external(CONFIRM, confirmGuard)\n    .from(CONFIRM).auto(DONE, finalizeProc)\n    .build();\n\n// メインフロー\n.from(PAYMENT).subFlow(paymentSub)\n    .onExit(\"DONE\", PAYMENT_DONE)\n    .onExit(\"CANCELLED\", CANCELLED)\n```\n\n## 実行モデル\n\n- **Context**: 完全共有（同じ FlowContext）\n- **TTL**: 親が支配。サブフローの ttl は埋め込み時に無視\n- **auto-chain**: 再帰実行。depth は全体合算（max 10）\n- **resume**: activeSubFlow に委譲\n- **エラー**: 3 層（サブフロー内解決 → error terminal → 親バブリング）\n- **guardFailureCount**: サブフローの FlowInstance に帰属\n- **re-entry**: 毎回 fresh start（initial state から）\n\n## 設計原則\n\n1. **サブフローは親を知らない** — 親の情報は context 経由で明示的に渡す\n2. **設定の支配ルール** — フローレベル（TTL, flowId）= 親、遷移レベル（maxGuardRetries, error transitions）= 各定義\n3. **キャンセルは専用 API 不要** — サブフロー内 terminal + onExit で対応\n4. **条件付きサブフローは branch + subFlow** — 専用 API は作らない\n5. **同一サブフロー定義の複数箇所利用 OK**\n6. **サブフロー別ファイル分割推奨**\n\n## ビルド検証\n\n- onExit 網羅性（サブフローの全 terminal に対応する onExit が必要）\n- data-flow 結合（親の available set ⊇ サブフローの requires）\n- circular reference 検出（オブジェクト identity）\n- max nesting depth = 3\n\n## 型パラメータ\n\n- Java: 型消去（`FlowDefinition<?>`）\n- TypeScript: 自然対応（`S extends string`）\n- Rust: trait object（`Box<dyn SubFlow>`）\n\n## 永続化\n\nstatePath: `[\"PAYMENT\", \"CONFIRM\"]` で保存。restore 時に再構築。\n\n## 制限事項\n\n- terminal 状態の後に状態追加はできない（Plugin でも不可）\n- max nesting depth = 3\n\n## v1.2.0 MVP\n\n1. SubFlowTransition + Builder `.subFlow().onExit()`\n2. onExit 網羅性検証（ビルド時）\n3. FlowInstance.activeSubFlow\n4. Engine auto-chain 再帰 + resume 委譲\n5. テスト: Basic subFlow + SubFlow with external\n\n## 段階リリース\n\n```\nv1.2.0: MVP（上記 5 項目）\nv1.2.1: エラーバブリング + data-flow 結合検証 + circular ref + nesting depth\nv1.2.2: statePath + restore + TransitionRecord.subFlow + waitingFor() + statePathString()\nv1.2.3: Mermaid subgraph + DataFlowGraph フラット化\n(withPlugin は future — 需要確認まで)\n```\n\n## NOT-DOING\n\n- Harel Statechart（entry/exit, history, orthogonal）\n- withPlugin（future — YAGNI）\n- サブフローのスコープ分離（完全共有で十分）\n- サブフロー専用の TTL\n"
+      },
+      "confidence": 0.7,
+      "warnings": [
+        "date not found"
+      ]
+    },
+    {
+      "type": "decision",
+      "id": "DD-018",
+      "data": {
+        "id": "DD-018",
+        "title": "FlowStore サービス化は行わない。ドキュメント + エイリアス API で対応",
+        "date": "",
+        "rationale": "1. FlowStore サービス化（gRPC/HTTP）は**行わない** 2. I/O 分離は**設計ガイド**として提供（`docs/patterns/io-separation.md`） 3. 推奨 DB スキーマ + FlowContext シリアライズ仕様を**ドキュメント化** 4. FlowContext に**エイリアス登録 API** を追加（Java/Rust。TS は FlowKey が既に文字列） - FlowStore 書き直しは 1 日。サービス化は 1 ヶ月+運用コスト。ROI が合わない - tramli の 2μs がネットワーク越しの 5ms になるレイテンシ劣化 - 各言語の FlowStore 実装が同じ DB スキーマを使えばデータは共有可能 - I/O 分離は既存の DI / External transition パターンで実現可能。API 変更不要 - tramli 本体のゼロ依存ポリシーを維持",
+        "status": "active",
+        "supersedes": [],
+        "superseded_by": [],
+        "gap_refs": [],
+        "session_refs": [
+          "2026-04-07-tramli-flowstore-portability"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-018-portability-no-flowstore-service.md",
+        "content": "---\nstatus: accepted\n---\n\n# DD-018: FlowStore サービス化は行わない。ドキュメント + エイリアス API で対応\n\n**Date:** 2026-04-07\n**Session:** [flowstore-portability](../sessions/2026-04-07-tramli-flowstore-portability.md)\n\n## Decision\n\n1. FlowStore サービス化（gRPC/HTTP）は**行わない**\n2. I/O 分離は**設計ガイド**として提供（`docs/patterns/io-separation.md`）\n3. 推奨 DB スキーマ + FlowContext シリアライズ仕様を**ドキュメント化**\n4. FlowContext に**エイリアス登録 API** を追加（Java/Rust。TS は FlowKey が既に文字列）\n\n## Rationale\n\n- FlowStore 書き直しは 1 日。サービス化は 1 ヶ月+運用コスト。ROI が合わない\n- tramli の 2μs がネットワーク越しの 5ms になるレイテンシ劣化\n- 各言語の FlowStore 実装が同じ DB スキーマを使えばデータは共有可能\n- I/O 分離は既存の DI / External transition パターンで実現可能。API 変更不要\n- tramli 本体のゼロ依存ポリシーを維持\n\n## NOT-DOING\n\n- FlowStore gRPC/HTTP サービス\n- wire protocol 定義\n- tramli-json 等のシリアライズパッケージ（将来需要次第）\n"
+      },
+      "confidence": 0.7,
+      "warnings": [
+        "date not found"
+      ]
+    },
+    {
+      "type": "decision",
+      "id": "DD-019",
+      "data": {
+        "id": "DD-019",
+        "title": "Tramli.pipeline() — build 時検証付き直列パイプライン",
+        "date": "",
+        "rationale": "tramli に `Tramli.pipeline()` DSL を追加。状態遷移なしの直列処理チェーンに、 requires/produces の build 時データフロー検証を適用する。",
+        "status": "active",
+        "supersedes": [],
+        "superseded_by": [],
+        "gap_refs": [],
+        "session_refs": [
+          "2026-04-08-tramli-pipeline-vision"
+        ],
+        "file_path": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-019-pipeline.md",
+        "content": "---\nstatus: accepted\n---\n\n# DD-019: Tramli.pipeline() — build 時検証付き直列パイプライン\n\n**Date:** 2026-04-08\n**Session:** [pipeline-vision](../sessions/2026-04-08-tramli-pipeline-vision.md) (7 rounds)\n\n## Decision\n\ntramli に `Tramli.pipeline()` DSL を追加。状態遷移なしの直列処理チェーンに、\nrequires/produces の build 時データフロー検証を適用する。\n\n## 核心の洞察\n\ntramli の本質は「状態遷移エンジン」ではなく「requires/produces 契約 + build 時検証」。\nPipeline はこの本質を状態遷移なしで提供する。\n\n## API\n\n```java\nvar pipeline = Tramli.pipeline(\"etl\")\n    .initiallyAvailable(RawInput.class)\n    .step(parse).step(validate).step(save)\n    .build();  // requires/produces チェーン検証\n\nFlowContext result = pipeline.execute(Map.of(RawInput.class, data));\n```\n\n## 設計\n\n- PipelineStep: StateProcessor の非ジェネリック版 (name, requires, produces, process)\n- execute(): FlowContext を返す。エラーは PipelineException throw\n- PipelineException extends FlowException (completedSteps, failedStep, context, cause)\n- PipelineDataFlow: deadData(), toMermaid(), stepOrder(), availableAfter(stepName)\n- Logger: LogEntry.Transition/State/Error を再利用。from/to = step 名\n- strictMode: step 実行後に produces 検証\n- asStep(): Pipeline を PipelineStep に変換（ネスト）\n- StateLogger: step 前後の context key diff\n- 永続化しない（1 リクエスト内で終わる処理）\n\n## 使い分け\n\n```\n直列 2-4 step → 関数合成\n直列 5+ step、データ蓄積 → Tramli.pipeline()\n分岐 / 外部イベント → Tramli.define()\n分散 / 長時間 → Airflow / Temporal\n```\n\n## ポジショニング\n\nPipeline = tramli の on-ramp。Pipeline → FlowDefinition へのアップグレードパスが明確。\n"
+      },
+      "confidence": 0.7,
+      "warnings": [
+        "date not found"
       ]
     },
     {
@@ -1067,6 +1598,18 @@
   ],
   "edges": [
     {
+      "source": "2026-04-07-paper-tribunal",
+      "target": "2026-04-07-paper-tribunal#dialogue",
+      "type": "contains",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-07-tramli-dataflow-brainstorm",
+      "target": "2026-04-07-tramli-dataflow-brainstorm#dialogue",
+      "type": "contains",
+      "confidence": "explicit"
+    },
+    {
       "source": "2026-04-07-tramli-design-review-r2",
       "target": "2026-04-07-tramli-design-review-r2#dialogue",
       "type": "contains",
@@ -1145,6 +1688,12 @@
       "confidence": "explicit"
     },
     {
+      "source": "2026-04-07-tramli-flowstore-portability",
+      "target": "2026-04-07-tramli-flowstore-portability#dialogue",
+      "type": "contains",
+      "confidence": "explicit"
+    },
+    {
       "source": "2026-04-07-tramli-multilang-r2",
       "target": "2026-04-07-tramli-multilang-r2#dialogue",
       "type": "contains",
@@ -1189,6 +1738,60 @@
     {
       "source": "2026-04-07-tramli-rust-r3-integration",
       "target": "2026-04-07-tramli-rust-r3-integration#dialogue",
+      "type": "contains",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-07-tramli-state-tree",
+      "target": "2026-04-07-tramli-state-tree#dialogue",
+      "type": "contains",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-07-tramli-v1-readiness",
+      "target": "2026-04-07-tramli-v1-readiness#dialogue",
+      "type": "contains",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-08-tramli-coverage-vision",
+      "target": "2026-04-08-tramli-coverage-vision#dialogue",
+      "type": "contains",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-08-tramli-graph-renderer",
+      "target": "2026-04-08-tramli-graph-renderer#dialogue",
+      "type": "contains",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-08-tramli-io-coverage",
+      "target": "2026-04-08-tramli-io-coverage#dialogue",
+      "type": "contains",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-08-tramli-liveness-response",
+      "target": "2026-04-08-tramli-liveness-response#dialogue",
+      "type": "contains",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-08-tramli-logger-api",
+      "target": "2026-04-08-tramli-logger-api#dialogue",
+      "type": "contains",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-08-tramli-mathematical-genealogy",
+      "target": "2026-04-08-tramli-mathematical-genealogy#dialogue",
+      "type": "contains",
+      "confidence": "explicit"
+    },
+    {
+      "source": "2026-04-08-tramli-pipeline-vision",
+      "target": "2026-04-08-tramli-pipeline-vision#dialogue",
       "type": "contains",
       "confidence": "explicit"
     },
@@ -1284,6 +1887,41 @@
       "evidence": "DD references session without specific gap numbers"
     },
     {
+      "source": "2026-04-07-tramli-dataflow-brainstorm",
+      "target": "DD-015",
+      "type": "resolves",
+      "confidence": "inferred",
+      "evidence": "DD references session without specific gap numbers"
+    },
+    {
+      "source": "2026-04-07-tramli-v1-readiness",
+      "target": "DD-016",
+      "type": "resolves",
+      "confidence": "inferred",
+      "evidence": "DD references session without specific gap numbers"
+    },
+    {
+      "source": "2026-04-07-tramli-state-tree",
+      "target": "DD-017",
+      "type": "resolves",
+      "confidence": "inferred",
+      "evidence": "DD references session without specific gap numbers"
+    },
+    {
+      "source": "2026-04-07-tramli-flowstore-portability",
+      "target": "DD-018",
+      "type": "resolves",
+      "confidence": "inferred",
+      "evidence": "DD references session without specific gap numbers"
+    },
+    {
+      "source": "2026-04-08-tramli-pipeline-vision",
+      "target": "DD-019",
+      "type": "resolves",
+      "confidence": "inferred",
+      "evidence": "DD references session without specific gap numbers"
+    },
+    {
       "source": "DD-001",
       "target": "TECH-007-javadoc-contracts",
       "type": "produces",
@@ -1320,6 +1958,14 @@
     }
   ],
   "warnings": [
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-paper-tribunal.md",
+      "message": "No gap markers found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-dataflow-brainstorm.md",
+      "message": "No gap markers found"
+    },
     {
       "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-design-review-r2.md",
       "message": "No gap markers found"
@@ -1369,6 +2015,10 @@
       "message": "2026-04-07-tramli-design-review#G-009: severity not found (no gap table or pre-v3 format)"
     },
     {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-flowstore-portability.md",
+      "message": "No gap markers found"
+    },
+    {
       "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-multilang-r2.md",
       "message": "No gap markers found"
     },
@@ -1398,6 +2048,42 @@
     },
     {
       "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-rust-r3-integration.md",
+      "message": "No gap markers found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-state-tree.md",
+      "message": "No gap markers found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-07-tramli-v1-readiness.md",
+      "message": "No gap markers found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-08-tramli-coverage-vision.md",
+      "message": "No gap markers found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-08-tramli-graph-renderer.md",
+      "message": "No gap markers found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-08-tramli-io-coverage.md",
+      "message": "No gap markers found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-08-tramli-liveness-response.md",
+      "message": "No gap markers found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-08-tramli-logger-api.md",
+      "message": "No gap markers found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-08-tramli-mathematical-genealogy.md",
+      "message": "No gap markers found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/sessions/2026-04-08-tramli-pipeline-vision.md",
       "message": "No gap markers found"
     },
     {
@@ -1463,6 +2149,26 @@
     {
       "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-014-data-flow-derived-not-defined.md",
       "message": "DD-014: no session references found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-015-dataflow-graph-core.md",
+      "message": "DD-015: date not found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-016-v1-release.md",
+      "message": "DD-016: date not found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-017-flow-composition-subflow.md",
+      "message": "DD-017: date not found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-018-portability-no-flowstore-service.md",
+      "message": "DD-018: date not found"
+    },
+    {
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-019-pipeline.md",
+      "message": "DD-019: date not found"
     }
   ],
   "glossary": [
@@ -1579,13 +2285,38 @@
     },
     {
       "term": "DD-013",
-      "definition": "全言語 sync コアに統一（DD-006 撤回検討）",
+      "definition": "全言語 sync コア互換 — async は optional",
       "source": "DD-013"
     },
     {
       "term": "DD-014",
       "definition": "data-flow は定義するのではなく導出する",
       "source": "DD-014"
+    },
+    {
+      "term": "DD-015",
+      "definition": "DataFlowGraph をコアに埋め込み、v0.2.0 で data-flow 導出を実装する",
+      "source": "DD-015"
+    },
+    {
+      "term": "DD-016",
+      "definition": "tramli v1.0.0 リリース",
+      "source": "DD-016"
+    },
+    {
+      "term": "DD-017",
+      "definition": "Flow Composition（サブフロー）による階層的状態の実現",
+      "source": "DD-017"
+    },
+    {
+      "term": "DD-018",
+      "definition": "FlowStore サービス化は行わない。ドキュメント + エイリアス API で対応",
+      "source": "DD-018"
+    },
+    {
+      "term": "DD-019",
+      "definition": "Tramli.pipeline() — build 時検証付き直列パイプライン",
+      "source": "DD-019"
     },
     {
       "term": "drift",
