@@ -1581,7 +1581,9 @@ Every flow has a TTL (set via `.ttl()`). If `resumeAndExecute()` is called after
 
 Real-time flow monitoring UI. Watch flow instances traverse your state machine as animated fireballs on a React Flow canvas.
 
-![tramli-viz screenshot](docs/images/viz-screenshot.png)
+![tramli-viz demo](docs/images/viz-demo.gif)
+
+[Full resolution video (webm)](docs/images/viz-demo.webm) | [Screenshot](docs/images/viz-screenshot.png)
 
 ### Features
 

@@ -1708,7 +1708,9 @@ engine.remove_all_loggers();
 
 リアルタイムフロー監視 UI。フローインスタンスが状態マシン上を火の玉アニメーションで移動する様子を React Flow キャンバスで観察できます。
 
-![tramli-viz スクリーンショット](docs/images/viz-screenshot.png)
+![tramli-viz デモ](docs/images/viz-demo.gif)
+
+[高解像度動画 (webm)](docs/images/viz-demo.webm) | [スクリーンショット](docs/images/viz-screenshot.png)
 
 ### 機能
 
