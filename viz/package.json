@@ -1,0 +1,22 @@
+{
+  "name": "@unlaxer/tramli-viz",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -n server,web -c blue,green \"npm run dev:server\" \"npm run dev:web\"",
+    "dev:server": "tsx --watch demo/simulator.ts",
+    "dev:web": "cd web && npx vite --host"
+  },
+  "dependencies": {
+    "@unlaxer/tramli": "file:../ts",
+    "@unlaxer/tramli-plugins": "file:../ts-plugins",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.0",
+    "concurrently": "^9.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.5.0"
+  }
+}

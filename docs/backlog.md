@@ -89,10 +89,12 @@ See [dge/decisions/index.md](../dge/decisions/index.md)
 
 ## Future
 
-| # | Feature | Design |
-|---|---------|--------|
-| F14 | Per-state timeout on External transitions | ✅ complete (v1.15.0) |
-| F16 | tramli-ports (言語横断 I/O 契約共有) | 需要が出たら |
+| # | Feature | Design | 前提 |
+|---|---------|--------|------|
+| F14 | Per-state timeout on External transitions | ✅ complete (v1.15.0) | — |
+| F16 | tramli-ports (言語横断 I/O 契約共有) | 需要が出たら | — |
+| F17 | 3言語実装差異の解消 (P0〜P2 全22項目) | ✅ complete — DD-026 | — |
+| F18 | tramli-viz リアルタイム監視デモ | ✅ complete — DD-027 | — |
 
 ## NOT-DOING (スコープ外)
 
