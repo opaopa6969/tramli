@@ -1,5 +1,6 @@
 import type { FlowDefinition } from '@unlaxer/tramli';
-import type { AnalysisPlugin, PluginDescriptor, PluginReport } from '../api/types.js';
+import type { AnalysisPlugin, PluginDescriptor } from '../api/types.js';
+import { PluginReport } from '../api/types.js';
 import type { FlowPolicy } from './types.js';
 import { allDefaultPolicies } from './default-flow-policies.js';
 
@@ -19,9 +20,11 @@ export class PolicyLintPlugin<S extends string> implements AnalysisPlugin<S> {
   }
   kind() { return 'ANALYSIS' as const; }
 
-  analyze(definition: FlowDefinition<S>, report: PluginReport): void {
+  analyze(definition: FlowDefinition<S>, report?: PluginReport): PluginReport {
+    const r = report ?? new PluginReport();
     for (const policy of this.policies) {
-      policy(definition, report);
+      policy(definition, r);
     }
+    return r;
   }
 }
