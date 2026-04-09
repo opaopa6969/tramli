@@ -25,3 +25,4 @@
 | [DD-021](DD-021-flat-is-correct.md) | Flat Enum は正しい設計（Carta/Tenure 検証） | [Carta](../sessions/dge-session-harel-carta.md), [Carta DataFlow](../sessions/dge-session-carta-dataflow.md), [Tenure](../sessions/dge-session-helland-tenure.md) | 2026-04-09 |
 | [DD-028](DD-028-specs-and-shared-tests.md) | 実装からの Specs 抽出 + 3 言語共通テスト | — | 2026-04-09 |
 | [DD-029](DD-029-issue5-volta-feedback.md) | Issue #5 volta-gateway 採用フィードバック対応 | [Issue #5 DGE](../sessions/2026-04-09-issue5-volta-feedback.md) | 2026-04-09 |
+| [DD-030](DD-030-issue-triage-plugin-maturity.md) | Issue #6-13 トリアージ — plugin pack 成熟方針 | [Triage DGE](../sessions/2026-04-09-issue-triage.md) | 2026-04-09 |
