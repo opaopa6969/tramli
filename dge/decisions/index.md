@@ -26,3 +26,4 @@
 | [DD-028](DD-028-specs-and-shared-tests.md) | 実装からの Specs 抽出 + 3 言語共通テスト | — | 2026-04-09 |
 | [DD-029](DD-029-issue5-volta-feedback.md) | Issue #5 volta-gateway 採用フィードバック対応 | [Issue #5 DGE](../sessions/2026-04-09-issue5-volta-feedback.md) | 2026-04-09 |
 | [DD-030](DD-030-issue-triage-plugin-maturity.md) | Issue #6-13 トリアージ — plugin pack 成熟方針 | [Triage DGE](../sessions/2026-04-09-issue-triage.md) | 2026-04-09 |
+| [DD-031](DD-031-feedback-round2.md) | 4 プロジェクトフィードバック対応 (#14-17) | [Feedback DGE](../sessions/2026-04-09-feedback-round2.md) | 2026-04-09 |
