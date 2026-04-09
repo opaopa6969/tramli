@@ -163,7 +163,7 @@ public final class FlowEngine {
         TransitionGuard guard = transition.guard();
 
         if (guard != null) {
-            long guardStart = guardLogger != null ? System.nanoTime() : 0;
+            long guardStart = System.nanoTime();
             TransitionGuard.GuardOutput output = guard.validate(flow.context());
             if (guardLogger != null) {
                 long guardDurationMicros = (System.nanoTime() - guardStart) / 1000;
@@ -268,7 +268,7 @@ public final class FlowEngine {
     }
 
     private <S extends Enum<S> & FlowState> int dispatchAuto(FlowInstance<S> flow, Transition<S> t) {
-        long start = transitionLogger != null ? System.nanoTime() : 0;
+        long start = System.nanoTime();
         if (t.processor() != null) {
             t.processor().process(flow.context());
             verifyProduces(t.processor(), flow.context());
@@ -285,7 +285,7 @@ public final class FlowEngine {
 
     private <S extends Enum<S> & FlowState> int dispatchBranch(
             FlowInstance<S> flow, Transition<S> t, List<Transition<S>> transitions) {
-        long start = transitionLogger != null ? System.nanoTime() : 0;
+        long start = System.nanoTime();
         BranchProcessor branch = t.branch();
         String label = branch.decide(flow.context());
         S target = t.branchTargets().get(label);
@@ -415,7 +415,7 @@ public final class FlowEngine {
     }
 
     private <S extends Enum<S> & FlowState> void handleError(FlowInstance<S> flow, S fromState, Exception cause) {
-        long errorStart = (transitionLogger != null || errorLogger != null) ? System.nanoTime() : 0;
+        long errorStart = System.nanoTime();
         if (cause != null) {
             flow.setLastError(cause.getClass().getSimpleName() + ": " + cause.getMessage());
             if (cause instanceof FlowException fe) {

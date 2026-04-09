@@ -61,7 +61,7 @@ public final class Pipeline {
         String prev = "initial";
 
         for (var step : steps) {
-            long stepStart = (transitionLogger != null || errorLogger != null) ? System.nanoTime() : 0;
+            long stepStart = System.nanoTime();
 
             // Transition log
             if (transitionLogger != null) {

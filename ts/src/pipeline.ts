@@ -94,7 +94,7 @@ export class Pipeline {
     let prev = 'initial';
 
     for (const step of this.steps) {
-      const stepStart = (this.transitionLogger || this.errorLogger) ? performance.now() : 0;
+      const stepStart = performance.now();
       this.transitionLogger?.({ flowId, flowName: this.name, from: prev, to: step.name, trigger: step.name, durationMicros: 0 });
 
       const keysBefore = this.stateLogger ? new Set(ctx.snapshot().keys()) : null;

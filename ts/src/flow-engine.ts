@@ -118,13 +118,13 @@ export class FlowEngine {
 
     const guard = transition.guard;
     if (guard) {
-      const guardStart = this.guardLogger ? performance.now() : 0;
+      const guardStart = performance.now();
       const output: GuardOutput = await guard.validate(flow.context);
-      const guardDurationMicros = this.guardLogger ? Math.round((performance.now() - guardStart) * 1000) : 0;
+      const guardDurationMicros = Math.round((performance.now() - guardStart) * 1000);
       switch (output.type) {
         case 'accepted': {
           this.logGuard(flow, currentState, guard.name, 'accepted', guardDurationMicros);
-          const transStart = this.transitionLogger ? performance.now() : 0;
+          const transStart = performance.now();
           const backup = flow.context.snapshot();
           if (output.data) {
             for (const [key, value] of output.data) flow.context.put(key as any, value);
@@ -162,7 +162,7 @@ export class FlowEngine {
         }
       }
     } else {
-      const transStart = this.transitionLogger ? performance.now() : 0;
+      const transStart = performance.now();
       const from = flow.currentState;
       this.fireExit(flow, from);
       flow.transitionTo(transition.to);
@@ -200,7 +200,7 @@ export class FlowEngine {
       if (!autoOrBranch) break;
 
       const backup = flow.context.snapshot();
-      const stepStart = this.transitionLogger ? performance.now() : 0;
+      const stepStart = performance.now();
       try {
         if (autoOrBranch.type === 'auto') {
           if (autoOrBranch.processor) {
@@ -261,7 +261,7 @@ export class FlowEngine {
       parentFlow.setActiveSubFlow(null);
       const target = exitMappings.get(subFlow.exitState!);
       if (target) {
-        const sfStart = this.transitionLogger ? performance.now() : 0;
+        const sfStart = performance.now();
         const from = parentFlow.currentState;
         this.fireExit(parentFlow, from);
         parentFlow.transitionTo(target);
@@ -292,14 +292,14 @@ export class FlowEngine {
 
     const guard = transition.guard;
     if (guard) {
-      const guardStart = this.guardLogger ? performance.now() : 0;
+      const guardStart = performance.now();
       const output: GuardOutput = await guard.validate(parentFlow.context);
-      const guardDur = this.guardLogger ? Math.round((performance.now() - guardStart) * 1000) : 0;
+      const guardDur = Math.round((performance.now() - guardStart) * 1000);
       if (output.type === 'accepted') {
         if (output.data) {
           for (const [key, value] of output.data) parentFlow.context.put(key as any, value);
         }
-        const sfStart = this.transitionLogger ? performance.now() : 0;
+        const sfStart = performance.now();
         const sfFrom = subFlow.currentState;
         subFlow.transitionTo(transition.to);
         this.store.recordTransition(parentFlow.id, sfFrom, transition.to, guard.name, parentFlow.context);
@@ -330,7 +330,7 @@ export class FlowEngine {
       if (subFlowT?.exitMappings) {
         const target = subFlowT.exitMappings.get(subFlow.exitState!);
         if (target) {
-          const exitStart = this.transitionLogger ? performance.now() : 0;
+          const exitStart = performance.now();
           const from = parentFlow.currentState;
           this.fireExit(parentFlow, from);
           parentFlow.transitionTo(target);
@@ -386,7 +386,7 @@ export class FlowEngine {
   }
 
   private handleError<S extends string>(flow: FlowInstance<S>, fromState: S, cause?: Error): void {
-    const errorStart = (this.transitionLogger || this.errorLogger) ? performance.now() : 0;
+    const errorStart = performance.now();
     if (cause) {
       flow.setLastError(`${cause.constructor.name}: ${cause.message}`);
       if (cause instanceof FlowError) {
