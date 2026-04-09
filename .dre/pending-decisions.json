@@ -35,6 +35,690 @@
       "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
       "line": 479,
       "text": "| `pruningHints()` | `Map<S, Set<Class<?>>>` | 各状態で不要になった型 |"
+    },
+    {
+      "timestamp": "2026-04-08T23:00:24Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-024-docs-3lang-details-fold.md",
+      "line": 17,
+      "text": "- ユーザー判断: 「あー折りたたむね」→ `<details>` 方式を採用"
+    },
+    {
+      "timestamp": "2026-04-08T23:03:24Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 67,
+      "text": "tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。"
+    },
+    {
+      "timestamp": "2026-04-08T23:03:24Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 75,
+      "text": "階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（ネストではなく合成）を使う。並行する関心事は[別フロー](docs/patterns/long-lived-flows.md)にして `cross"
+    },
+    {
+      "timestamp": "2026-04-08T23:03:24Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 150,
+      "text": "OrderRequest req = ctx.get(OrderRequest.class);  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:03:24Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 171,
+      "text": "上から下に読めば — これ**がフロー**。構造を理解するのに他のファイルは不要。"
+    },
+    {
+      "timestamp": "2026-04-08T23:03:24Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 308,
+      "text": "2. **キャスト不要** — 戻り値型が推論される"
+    },
+    {
+      "timestamp": "2026-04-08T23:03:37Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 67,
+      "text": "tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。"
+    },
+    {
+      "timestamp": "2026-04-08T23:03:37Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 75,
+      "text": "階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（ネストではなく合成）を使う。並行する関心事は[別フロー](docs/patterns/long-lived-flows.md)にして `cross"
+    },
+    {
+      "timestamp": "2026-04-08T23:03:37Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 152,
+      "text": "OrderRequest req = ctx.get(OrderRequest.class);  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:03:37Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 187,
+      "text": "let req = ctx.get::<OrderRequest>()?;  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:03:50Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 67,
+      "text": "tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。"
+    },
+    {
+      "timestamp": "2026-04-08T23:03:50Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 75,
+      "text": "階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（ネストではなく合成）を使う。並行する関心事は[別フロー](docs/patterns/long-lived-flows.md)にして `cross"
+    },
+    {
+      "timestamp": "2026-04-08T23:03:50Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 152,
+      "text": "OrderRequest req = ctx.get(OrderRequest.class);  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:03:50Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 187,
+      "text": "let req = ctx.get::<OrderRequest>()?;  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:04:02Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 67,
+      "text": "tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。"
+    },
+    {
+      "timestamp": "2026-04-08T23:04:02Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 75,
+      "text": "階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（ネストではなく合成）を使う。並行する関心事は[別フロー](docs/patterns/long-lived-flows.md)にして `cross"
+    },
+    {
+      "timestamp": "2026-04-08T23:04:02Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 152,
+      "text": "OrderRequest req = ctx.get(OrderRequest.class);  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:04:02Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 187,
+      "text": "let req = ctx.get::<OrderRequest>()?;  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:04:09Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 67,
+      "text": "tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。"
+    },
+    {
+      "timestamp": "2026-04-08T23:04:09Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 75,
+      "text": "階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（ネストではなく合成）を使う。並行する関心事は[別フロー](docs/patterns/long-lived-flows.md)にして `cross"
+    },
+    {
+      "timestamp": "2026-04-08T23:04:09Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 152,
+      "text": "OrderRequest req = ctx.get(OrderRequest.class);  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:04:09Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 187,
+      "text": "let req = ctx.get::<OrderRequest>()?;  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:04:20Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 67,
+      "text": "tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。"
+    },
+    {
+      "timestamp": "2026-04-08T23:04:20Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 75,
+      "text": "階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（ネストではなく合成）を使う。並行する関心事は[別フロー](docs/patterns/long-lived-flows.md)にして `cross"
+    },
+    {
+      "timestamp": "2026-04-08T23:04:20Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 152,
+      "text": "OrderRequest req = ctx.get(OrderRequest.class);  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:04:20Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 187,
+      "text": "let req = ctx.get::<OrderRequest>()?;  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:04:31Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 67,
+      "text": "tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。"
+    },
+    {
+      "timestamp": "2026-04-08T23:04:31Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 75,
+      "text": "階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（ネストではなく合成）を使う。並行する関心事は[別フロー](docs/patterns/long-lived-flows.md)にして `cross"
+    },
+    {
+      "timestamp": "2026-04-08T23:04:31Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 152,
+      "text": "OrderRequest req = ctx.get(OrderRequest.class);  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:04:31Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 187,
+      "text": "let req = ctx.get::<OrderRequest>()?;  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:04:43Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 67,
+      "text": "tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。"
+    },
+    {
+      "timestamp": "2026-04-08T23:04:43Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 75,
+      "text": "階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（ネストではなく合成）を使う。並行する関心事は[別フロー](docs/patterns/long-lived-flows.md)にして `cross"
+    },
+    {
+      "timestamp": "2026-04-08T23:04:43Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 152,
+      "text": "OrderRequest req = ctx.get(OrderRequest.class);  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:04:43Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 187,
+      "text": "let req = ctx.get::<OrderRequest>()?;  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:04:53Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 67,
+      "text": "tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。"
+    },
+    {
+      "timestamp": "2026-04-08T23:04:53Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 75,
+      "text": "階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（ネストではなく合成）を使う。並行する関心事は[別フロー](docs/patterns/long-lived-flows.md)にして `cross"
+    },
+    {
+      "timestamp": "2026-04-08T23:04:53Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 152,
+      "text": "OrderRequest req = ctx.get(OrderRequest.class);  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:04:53Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 187,
+      "text": "let req = ctx.get::<OrderRequest>()?;  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:05:05Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 67,
+      "text": "tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。"
+    },
+    {
+      "timestamp": "2026-04-08T23:05:05Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 75,
+      "text": "階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（ネストではなく合成）を使う。並行する関心事は[別フロー](docs/patterns/long-lived-flows.md)にして `cross"
+    },
+    {
+      "timestamp": "2026-04-08T23:05:05Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 152,
+      "text": "OrderRequest req = ctx.get(OrderRequest.class);  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:05:05Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 187,
+      "text": "let req = ctx.get::<OrderRequest>()?;  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:05:16Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 67,
+      "text": "tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。"
+    },
+    {
+      "timestamp": "2026-04-08T23:05:16Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 75,
+      "text": "階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（ネストではなく合成）を使う。並行する関心事は[別フロー](docs/patterns/long-lived-flows.md)にして `cross"
+    },
+    {
+      "timestamp": "2026-04-08T23:05:16Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 152,
+      "text": "OrderRequest req = ctx.get(OrderRequest.class);  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:05:16Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 187,
+      "text": "let req = ctx.get::<OrderRequest>()?;  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:05:33Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 67,
+      "text": "tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。"
+    },
+    {
+      "timestamp": "2026-04-08T23:05:33Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 75,
+      "text": "階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（ネストではなく合成）を使う。並行する関心事は[別フロー](docs/patterns/long-lived-flows.md)にして `cross"
+    },
+    {
+      "timestamp": "2026-04-08T23:05:33Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 152,
+      "text": "OrderRequest req = ctx.get(OrderRequest.class);  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:05:33Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 187,
+      "text": "let req = ctx.get::<OrderRequest>()?;  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:05:44Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 67,
+      "text": "tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。"
+    },
+    {
+      "timestamp": "2026-04-08T23:05:44Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 75,
+      "text": "階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（ネストではなく合成）を使う。並行する関心事は[別フロー](docs/patterns/long-lived-flows.md)にして `cross"
+    },
+    {
+      "timestamp": "2026-04-08T23:05:44Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 152,
+      "text": "OrderRequest req = ctx.get(OrderRequest.class);  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:05:44Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 187,
+      "text": "let req = ctx.get::<OrderRequest>()?;  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:05:54Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 67,
+      "text": "tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。"
+    },
+    {
+      "timestamp": "2026-04-08T23:05:54Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 75,
+      "text": "階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（ネストではなく合成）を使う。並行する関心事は[別フロー](docs/patterns/long-lived-flows.md)にして `cross"
+    },
+    {
+      "timestamp": "2026-04-08T23:05:54Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 152,
+      "text": "OrderRequest req = ctx.get(OrderRequest.class);  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:05:54Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 187,
+      "text": "let req = ctx.get::<OrderRequest>()?;  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:05:55Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-024-docs-3lang-details-fold.md",
+      "line": 17,
+      "text": "- ユーザー判断: 「あー折りたたむね」→ `<details>` 方式を採用"
+    },
+    {
+      "timestamp": "2026-04-08T23:06:02Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 67,
+      "text": "tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。"
+    },
+    {
+      "timestamp": "2026-04-08T23:06:02Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 75,
+      "text": "階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（ネストではなく合成）を使う。並行する関心事は[別フロー](docs/patterns/long-lived-flows.md)にして `cross"
+    },
+    {
+      "timestamp": "2026-04-08T23:06:02Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 152,
+      "text": "OrderRequest req = ctx.get(OrderRequest.class);  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:06:02Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 187,
+      "text": "let req = ctx.get::<OrderRequest>()?;  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:06:12Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 67,
+      "text": "tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。"
+    },
+    {
+      "timestamp": "2026-04-08T23:06:12Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 75,
+      "text": "階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（ネストではなく合成）を使う。並行する関心事は[別フロー](docs/patterns/long-lived-flows.md)にして `cross"
+    },
+    {
+      "timestamp": "2026-04-08T23:06:12Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 152,
+      "text": "OrderRequest req = ctx.get(OrderRequest.class);  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:06:12Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 187,
+      "text": "let req = ctx.get::<OrderRequest>()?;  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:06:22Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 67,
+      "text": "tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。"
+    },
+    {
+      "timestamp": "2026-04-08T23:06:22Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 75,
+      "text": "階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（ネストではなく合成）を使う。並行する関心事は[別フロー](docs/patterns/long-lived-flows.md)にして `cross"
+    },
+    {
+      "timestamp": "2026-04-08T23:06:22Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 152,
+      "text": "OrderRequest req = ctx.get(OrderRequest.class);  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:06:22Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 187,
+      "text": "let req = ctx.get::<OrderRequest>()?;  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:06:33Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 67,
+      "text": "tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。"
+    },
+    {
+      "timestamp": "2026-04-08T23:06:33Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 75,
+      "text": "階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（ネストではなく合成）を使う。並行する関心事は[別フロー](docs/patterns/long-lived-flows.md)にして `cross"
+    },
+    {
+      "timestamp": "2026-04-08T23:06:33Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 152,
+      "text": "OrderRequest req = ctx.get(OrderRequest.class);  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:06:33Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 187,
+      "text": "let req = ctx.get::<OrderRequest>()?;  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:06:42Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 67,
+      "text": "tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。"
+    },
+    {
+      "timestamp": "2026-04-08T23:06:42Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 75,
+      "text": "階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（ネストではなく合成）を使う。並行する関心事は[別フロー](docs/patterns/long-lived-flows.md)にして `cross"
+    },
+    {
+      "timestamp": "2026-04-08T23:06:42Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 152,
+      "text": "OrderRequest req = ctx.get(OrderRequest.class);  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:06:42Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 187,
+      "text": "let req = ctx.get::<OrderRequest>()?;  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:11:26Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 69,
+      "text": "tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。"
+    },
+    {
+      "timestamp": "2026-04-08T23:11:26Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 77,
+      "text": "階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（ネストではなく合成）を使う。並行する関心事は[別フロー](docs/patterns/long-lived-flows.md)にして `cross"
+    },
+    {
+      "timestamp": "2026-04-08T23:11:26Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 154,
+      "text": "OrderRequest req = ctx.get(OrderRequest.class);  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:11:26Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 189,
+      "text": "let req = ctx.get::<OrderRequest>()?;  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:14:39Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 69,
+      "text": "tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。"
+    },
+    {
+      "timestamp": "2026-04-08T23:14:39Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 77,
+      "text": "階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（ネストではなく合成）を使う。並行する関心事は[別フロー](docs/patterns/long-lived-flows.md)にして `cross"
+    },
+    {
+      "timestamp": "2026-04-08T23:14:39Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 154,
+      "text": "OrderRequest req = ctx.get(OrderRequest.class);  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:14:39Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 189,
+      "text": "let req = ctx.get::<OrderRequest>()?;  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:17:58Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 69,
+      "text": "tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。"
+    },
+    {
+      "timestamp": "2026-04-08T23:17:58Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 77,
+      "text": "階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（ネストではなく合成）を使う。並行する関心事は[別フロー](docs/patterns/long-lived-flows.md)にして `cross"
+    },
+    {
+      "timestamp": "2026-04-08T23:17:58Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 155,
+      "text": "OrderRequest req = ctx.get(OrderRequest.class);  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:17:58Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 190,
+      "text": "let req = ctx.get::<OrderRequest>()?;  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:18:01Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 69,
+      "text": "tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。"
+    },
+    {
+      "timestamp": "2026-04-08T23:18:01Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 77,
+      "text": "階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（ネストではなく合成）を使う。並行する関心事は[別フロー](docs/patterns/long-lived-flows.md)にして `cross"
+    },
+    {
+      "timestamp": "2026-04-08T23:18:01Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 155,
+      "text": "OrderRequest req = ctx.get(OrderRequest.class);  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:18:01Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 190,
+      "text": "let req = ctx.get::<OrderRequest>()?;  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-08T23:18:45Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/specs/TECH-008-tramli-ts-core.md",
+      "line": 6,
+      "text": "**Decision:** [DD-003](../decisions/DD-003-native-over-http.md), [DD-004](../decisions/DD-004-typescript-only-v010.md), [DD-005](../decisions/DD-005-flowkey-branded-string.md), [DD-006](../decisions/D"
+    },
+    {
+      "timestamp": "2026-04-09T00:04:38Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/docs/session-handoff-2026-04-09.md",
+      "line": 61,
+      "text": "- `FlowEngine.resumeAndExecute` で external data の型と guard.requires() をマッチして guard を選択"
+    },
+    {
+      "timestamp": "2026-04-09T00:53:37Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 69,
+      "text": "tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。"
+    },
+    {
+      "timestamp": "2026-04-09T00:53:37Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 77,
+      "text": "階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（ネストではなく合成）を使う。並行する関心事は[別フロー](docs/patterns/long-lived-flows-ja.md)にして `cr"
+    },
+    {
+      "timestamp": "2026-04-09T00:53:37Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 155,
+      "text": "OrderRequest req = ctx.get(OrderRequest.class);  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-09T00:53:37Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 190,
+      "text": "let req = ctx.get::<OrderRequest>()?;  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-09T01:20:06Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-029-issue5-volta-feedback.md",
+      "line": 71,
+      "text": "**方針: emit() シグネチャは sync のまま。ChannelTelemetrySink を追加。**"
+    },
+    {
+      "timestamp": "2026-04-09T01:20:06Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-029-issue5-volta-feedback.md",
+      "line": 139,
+      "text": "- **emit() を async fn にする**: DD-012/DD-013 違反。エンジン全体が async に汚染される。却下。"
+    },
+    {
+      "timestamp": "2026-04-09T01:33:05Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-029-issue5-volta-feedback.md",
+      "line": 48,
+      "text": "- D3: ハウス診断 — FlowEngine が Mutex で包まれている限り TelemetrySink の Mutex contention は理論上起きない。要望の本質は将来の I/O sink 対応。ドキュメン�"
+    },
+    {
+      "timestamp": "2026-04-09T01:35:15Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-029-issue5-volta-feedback.md",
+      "line": 52,
+      "text": "- D3: ハウス診断 — FlowEngine が Mutex で包まれている限り TelemetrySink の Mutex contention は理論上起きない。要望の本質は将来の I/O sink 対応。ドキュメン�"
+    },
+    {
+      "timestamp": "2026-04-09T01:35:21Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-029-issue5-volta-feedback.md",
+      "line": 54,
+      "text": "- D3: ハウス診断 — FlowEngine が Mutex で包まれている限り TelemetrySink の Mutex contention は理論上起きない。要望の本質は将来の I/O sink 対応。ドキュメン�"
+    },
+    {
+      "timestamp": "2026-04-09T01:35:27Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/dge/decisions/DD-029-issue5-volta-feedback.md",
+      "line": 54,
+      "text": "- D3: ハウス診断 — FlowEngine が Mutex で包まれている限り TelemetrySink の Mutex contention は理論上起きない。要望の本質は将来の I/O sink 対応。ドキュメン�"
+    },
+    {
+      "timestamp": "2026-04-09T01:56:46Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/docs/session-handoff-2026-04-09-r3.md",
+      "line": 21,
+      "text": "**D3 — TelemetrySink async 方針:**"
+    },
+    {
+      "timestamp": "2026-04-09T02:32:12Z",
+      "file": "/home/opa/.claude/projects/-home-opa-work-AskOS-workspace-tramli/memory/MEMORY.md",
+      "line": 2,
+      "text": "- [groupId は org.unlaxer](feedback_groupid.md) — Maven の全プロジェクトで org.unlaxer namespace を使う"
+    },
+    {
+      "timestamp": "2026-04-09T02:32:12Z",
+      "file": "/home/opa/.claude/projects/-home-opa-work-AskOS-workspace-tramli/memory/MEMORY.md",
+      "line": 3,
+      "text": "- [Rust 版は volta-proxy 向け](project_rust_volta_proxy.md) — 高信頼性プロキシの状態管理に tramli を使う予定"
+    },
+    {
+      "timestamp": "2026-04-09T02:33:17Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/docs/tutorial-plugins-ja.md",
+      "line": 230,
+      "text": "**A:** `emit()` は意図的に同期だ（DD-012/DD-013）。HTTP/gRPC で外部に送る場合は channel パターンを使う — `emit()` 内で channel に送信し、別スレッドで I/O す�"
+    },
+    {
+      "timestamp": "2026-04-09T02:33:27Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/docs/tutorial-plugins-ja.md",
+      "line": 230,
+      "text": "**A:** `emit()` は意図的に同期だ（DD-012/DD-013）。HTTP/gRPC で外部に送る場合は channel パターンを使う — `emit()` 内で channel に送信し、別スレッドで I/O す�"
+    },
+    {
+      "timestamp": "2026-04-09T02:33:33Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/docs/tutorial-plugins-ja.md",
+      "line": 230,
+      "text": "**A:** `emit()` は意図的に同期だ（DD-012/DD-013）。HTTP/gRPC で外部に送る場合は channel パターンを使う — `emit()` 内で channel に送信し、別スレッドで I/O す�"
+    },
+    {
+      "timestamp": "2026-04-09T02:34:48Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/docs/plugin-guide-ja.md",
+      "line": 115,
+      "text": "差分のみの永続化に移行する場合、リプレイは fold/reducer に変更する必要がある。"
     }
   ]
 }

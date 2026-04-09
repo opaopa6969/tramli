@@ -1,0 +1,16 @@
+[
+  {
+    "timestamp": "2026-04-09T01:24:33Z",
+    "level": "critical",
+    "project": "tramli",
+    "title": "Enforcement violation",
+    "body": "[ERROR] dge-session: No Gap markers found.\n[WARN] dge-session: No numbered choices found. MUST present options after gap list.\n"
+  },
+  {
+    "timestamp": "2026-04-09T03:39:08Z",
+    "level": "critical",
+    "project": "tramli",
+    "title": "Enforcement violation",
+    "body": "[ERROR] dge-session: No Gap markers found.\n[ERROR] dge-session: No dialogue text. MUST save full dialogue (Scene markers + character lines), not just summary.\n[WARN] dge-session: No numbered choices"
+  }
+]

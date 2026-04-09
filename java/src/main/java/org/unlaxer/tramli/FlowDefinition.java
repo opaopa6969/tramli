@@ -199,6 +199,7 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
         private final Map<S, S> errorTransitions = new LinkedHashMap<>();
         private final Map<S, List<ExceptionRoute<S>>> exceptionRoutes = new LinkedHashMap<>();
         private final Set<Class<?>> initiallyAvailable = new HashSet<>();
+        private final Set<Class<?>> externallyProvided = new HashSet<>();
         private final Map<S, java.util.function.Consumer<FlowContext>> enterActions = new LinkedHashMap<>();
         private final Map<S, java.util.function.Consumer<FlowContext>> exitActions = new LinkedHashMap<>();
         private boolean perpetual = false;
@@ -211,6 +212,12 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
         /** Declare data types that will be provided via startFlow(initialData). */
         public Builder<S> initiallyAvailable(Class<?>... types) {
             Collections.addAll(initiallyAvailable, types);
+            return this;
+        }
+
+        /** Declare data types injected via resumeAndExecute(externalData), not available at start. */
+        public Builder<S> externallyProvided(Class<?>... types) {
+            Collections.addAll(externallyProvided, types);
             return this;
         }
 
@@ -280,7 +287,7 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
             }
 
             public Builder<S> external(S to, TransitionGuard guard, Duration timeout) {
-                transitions.add(new Transition<>(from, to, TransitionType.EXTERNAL, null, guard, null, Map.of(), null, Map.of(), timeout));
+                transitions.add(new Transition<>(from, to, TransitionType.EXTERNAL, null, guard, null, Map.of(), null, null, Map.of(), timeout));
                 return Builder.this;
             }
 
@@ -290,7 +297,7 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
             }
 
             public Builder<S> external(S to, TransitionGuard guard, StateProcessor processor, Duration timeout) {
-                transitions.add(new Transition<>(from, to, TransitionType.EXTERNAL, processor, guard, null, Map.of(), null, Map.of(), timeout));
+                transitions.add(new Transition<>(from, to, TransitionType.EXTERNAL, processor, guard, null, Map.of(), null, null, Map.of(), timeout));
                 return Builder.this;
             }
 
@@ -351,7 +358,7 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
                 for (var entry : targets.entrySet()) {
                     StateProcessor proc = processors.get(entry.getKey());
                     transitions.add(new Transition<>(from, entry.getValue(), TransitionType.BRANCH,
-                            proc, null, branch, Map.copyOf(targets)));
+                            proc, null, branch, Map.copyOf(targets), entry.getKey(), null, Map.of(), null));
                 }
                 return Builder.this;
             }
@@ -360,7 +367,7 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
         public FlowDefinition<S> build() {
             var def = new FlowDefinition<>(name, stateClass, ttl, maxGuardRetries, transitions, errorTransitions, exceptionRoutes, null, null, null, null);
             validate(def);
-            var graph = DataFlowGraph.build(def, initiallyAvailable);
+            var graph = DataFlowGraph.build(def, initiallyAvailable, externallyProvided);
             var warnings = buildWarnings(def);
             return new FlowDefinition<>(name, stateClass, ttl, maxGuardRetries, transitions, errorTransitions, exceptionRoutes, graph, warnings, enterActions, exitActions);
         }
@@ -549,6 +556,10 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
 
             for (Transition<S> t : def.transitionsFrom(state)) {
                 Set<Class<?>> newAvailable = new HashSet<>(stateAvailable.get(state));
+                // External transitions: externally provided data is available for guard evaluation
+                if (t.isExternal()) {
+                    newAvailable.addAll(externallyProvided);
+                }
                 if (t.guard() != null) {
                     for (Class<?> req : t.guard().requires()) {
                         if (!newAvailable.contains(req))

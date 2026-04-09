@@ -92,5 +92,15 @@ impl ObservabilityPlugin {
                 timestamp: Instant::now(),
             });
         });
+
+        let sink = self.sink.clone();
+        engine.set_guard_logger(move |entry| {
+            sink.emit(TelemetryEvent {
+                event_type: TelemetryType::Guard,
+                flow_id: entry.flow_id.clone(),
+                data: format!("guard {} at {}: {}", entry.guard_name, entry.state, entry.result),
+                timestamp: Instant::now(),
+            });
+        });
     }
 }

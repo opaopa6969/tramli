@@ -294,7 +294,9 @@ public final class FlowEngine {
                     "Branch '" + branch.name() + "' returned unknown label: " + label);
         }
         Transition<S> specific = transitions.stream()
-                .filter(tr -> tr.isBranch() && tr.to() == target).findFirst().orElse(t);
+                .filter(tr -> tr.isBranch() && label.equals(tr.branchLabel())).findFirst()
+                .or(() -> transitions.stream().filter(tr -> tr.isBranch() && tr.to() == target).findFirst())
+                .orElse(t);
         if (specific.processor() != null) specific.processor().process(flow.context());
         S from = flow.currentState();
         flow.transitionTo(target);

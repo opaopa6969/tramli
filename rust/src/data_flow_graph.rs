@@ -310,16 +310,17 @@ impl<S: FlowState> DataFlowGraph<S> {
 
     // ─── Builder ─────────────────────────────────────────────
 
-    pub(crate) fn build(def: &FlowDefinition<S>, initially_available: &[TypeId]) -> Self {
+    pub(crate) fn build(def: &FlowDefinition<S>, initially_available: &[TypeId], externally_provided: &[TypeId]) -> Self {
         let mut state_avail: HashMap<S, HashSet<TypeId>> = HashMap::new();
         let mut producers: HashMap<TypeId, Vec<NodeInfo<S>>> = HashMap::new();
         let mut consumers: HashMap<TypeId, Vec<NodeInfo<S>>> = HashMap::new();
         let mut all_produced: HashSet<TypeId> = initially_available.iter().copied().collect();
         let mut all_consumed: HashSet<TypeId> = HashSet::new();
         let mut type_names: HashMap<TypeId, String> = HashMap::new();
+        let ext_set: HashSet<TypeId> = externally_provided.iter().copied().collect();
 
         if let Some(initial) = def.initial_state() {
-            Self::traverse(def, initial, &initially_available.iter().copied().collect(),
+            Self::traverse(def, initial, &initially_available.iter().copied().collect(), &ext_set,
                 &mut state_avail, &mut producers, &mut consumers,
                 &mut all_produced, &mut all_consumed, &mut type_names);
 
@@ -337,7 +338,7 @@ impl<S: FlowState> DataFlowGraph<S> {
     }
 
     fn traverse(
-        def: &FlowDefinition<S>, state: S, available: &HashSet<TypeId>,
+        def: &FlowDefinition<S>, state: S, available: &HashSet<TypeId>, externally_provided: &HashSet<TypeId>,
         state_avail: &mut HashMap<S, HashSet<TypeId>>,
         producers: &mut HashMap<TypeId, Vec<NodeInfo<S>>>,
         consumers: &mut HashMap<TypeId, Vec<NodeInfo<S>>>,
@@ -355,6 +356,9 @@ impl<S: FlowState> DataFlowGraph<S> {
 
         for t in def.transitions.iter().filter(|t| t.from == state) {
             let mut new_avail = state_avail.get(&state).unwrap().clone();
+            if t.transition_type == crate::TransitionType::External {
+                new_avail.extend(externally_provided);
+            }
 
             if let Some(guard) = &t.guard {
                 for req in guard.requires() {
@@ -403,7 +407,7 @@ impl<S: FlowState> DataFlowGraph<S> {
                 Self::collect_type_names(guard.requires(), guard.produces(), type_names);
             }
 
-            Self::traverse(def, t.to, &new_avail, state_avail, producers, consumers,
+            Self::traverse(def, t.to, &new_avail, externally_provided, state_avail, producers, consumers,
                 all_produced, all_consumed, type_names);
         }
     }

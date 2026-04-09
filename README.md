@@ -816,7 +816,7 @@ Safety: auto-chain has a max depth of 10 to prevent infinite loops. [DAG validat
 | 1 | All non-terminal states [reachable](#reachable) from [initial](#initial-state) | Dead states that can never be entered |
 | 2 | Path from initial to [terminal](#terminal-state) exists | Flows that can never complete |
 | 3 | [Auto](#auto-transition)/[Branch](#branch-transition) transitions form a [DAG](#dag) | Infinite auto-chain loops |
-| 4 | At most 1 [External](#external-transition) per state | Ambiguous "which event am I waiting for?" |
+| 4 | Multi-[External](#external-transition) guards have distinct `requires` | Ambiguous "which guard handles this data?" (DD-020) |
 | 5 | All [branch](#branch-transition) targets defined | `decide()` returning a label with no target state |
 | 6 | [requires/produces](#requires--produces-contract) chain integrity | "Data not available" errors at runtime |
 | 7 | No transitions from [terminal](#terminal-state) states | States that should be final but aren't |

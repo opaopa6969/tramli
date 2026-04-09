@@ -67,6 +67,7 @@ pub struct Builder<S: FlowState> {
     transitions: Vec<Transition<S>>,
     error_transitions: HashMap<S, S>,
     initially_available: Vec<TypeId>,
+    externally_provided: Vec<TypeId>,
     perpetual: bool,
     enter_actions: HashMap<S, Box<dyn Fn(&mut crate::context::FlowContext) + Send + Sync>>,
     exit_actions: HashMap<S, Box<dyn Fn(&mut crate::context::FlowContext) + Send + Sync>>,
@@ -78,7 +79,7 @@ impl<S: FlowState> Builder<S> {
         Self {
             name: name.into(), ttl: Duration::from_secs(300), max_guard_retries: 3,
             transitions: Vec::new(), error_transitions: HashMap::new(),
-            initially_available: Vec::new(), perpetual: false,
+            initially_available: Vec::new(), externally_provided: Vec::new(), perpetual: false,
             enter_actions: HashMap::new(), exit_actions: HashMap::new(),
             exception_routes: HashMap::new(),
         }
@@ -88,6 +89,10 @@ impl<S: FlowState> Builder<S> {
     pub fn max_guard_retries(mut self, max: usize) -> Self { self.max_guard_retries = max; self }
     pub fn initially_available(mut self, type_ids: Vec<TypeId>) -> Self {
         self.initially_available.extend(type_ids); self
+    }
+    /// Declare data types injected via resume_and_execute(external_data), not available at start.
+    pub fn externally_provided(mut self, type_ids: Vec<TypeId>) -> Self {
+        self.externally_provided.extend(type_ids); self
     }
     pub fn allow_perpetual(mut self) -> Self { self.perpetual = true; self }
 
@@ -132,6 +137,7 @@ impl<S: FlowState> Builder<S> {
         }
         let perpetual = self.perpetual;
         let initially_available = self.initially_available;
+        let externally_provided = self.externally_provided;
         let name = self.name;
         let enter_actions = self.enter_actions;
         let exit_actions = self.exit_actions;
@@ -146,8 +152,8 @@ impl<S: FlowState> Builder<S> {
             enter_actions: HashMap::new(), exit_actions: HashMap::new(),
             exception_routes: HashMap::new(), warnings: Vec::new(),
         };
-        validate::<S>(&def, &name, perpetual, &initially_available)?;
-        let graph = DataFlowGraph::build(&def, &initially_available);
+        validate::<S>(&def, &name, perpetual, &initially_available, &externally_provided)?;
+        let graph = DataFlowGraph::build(&def, &initially_available, &externally_provided);
 
         // Build warnings
         let mut warnings = Vec::new();
@@ -181,7 +187,7 @@ impl<S: FlowState> FromBuilder<S> {
         self.builder.add_transition(Transition {
             from: self.from, to, transition_type: TransitionType::Auto,
             processor: Some(Box::new(processor)), guard: None, branch: None,
-            branch_targets: HashMap::new(), sub_flow: None, timeout: None,
+            branch_targets: HashMap::new(), branch_label: None, sub_flow: None, timeout: None,
         });
         self.builder
     }
@@ -190,7 +196,7 @@ impl<S: FlowState> FromBuilder<S> {
         self.builder.add_transition(Transition {
             from: self.from, to, transition_type: TransitionType::External,
             processor: None, guard: Some(Box::new(guard)), branch: None,
-            branch_targets: HashMap::new(), sub_flow: None, timeout: None,
+            branch_targets: HashMap::new(), branch_label: None, sub_flow: None, timeout: None,
         });
         self.builder
     }
@@ -199,7 +205,7 @@ impl<S: FlowState> FromBuilder<S> {
         self.builder.add_transition(Transition {
             from: self.from, to, transition_type: TransitionType::External,
             processor: Some(Box::new(processor)), guard: Some(Box::new(guard)), branch: None,
-            branch_targets: HashMap::new(), sub_flow: None, timeout: None,
+            branch_targets: HashMap::new(), branch_label: None, sub_flow: None, timeout: None,
         });
         self.builder
     }
@@ -208,7 +214,7 @@ impl<S: FlowState> FromBuilder<S> {
         self.builder.add_transition(Transition {
             from: self.from, to, transition_type: TransitionType::External,
             processor: None, guard: Some(Box::new(guard)), branch: None,
-            branch_targets: HashMap::new(), sub_flow: None, timeout: Some(timeout),
+            branch_targets: HashMap::new(), branch_label: None, sub_flow: None, timeout: Some(timeout),
         });
         self.builder
     }
@@ -217,7 +223,7 @@ impl<S: FlowState> FromBuilder<S> {
         self.builder.add_transition(Transition {
             from: self.from, to, transition_type: TransitionType::External,
             processor: Some(Box::new(processor)), guard: Some(Box::new(guard)), branch: None,
-            branch_targets: HashMap::new(), sub_flow: None, timeout: Some(timeout),
+            branch_targets: HashMap::new(), branch_label: None, sub_flow: None, timeout: Some(timeout),
         });
         self.builder
     }
@@ -254,12 +260,13 @@ impl<S: FlowState> BranchBuilder<S> {
     pub fn end_branch(mut self) -> Builder<S> {
         let targets_clone = self.targets.clone();
         let mut first = true;
-        for (_label, target) in &self.targets {
+        for (label, target) in &self.targets {
             self.builder.add_transition(Transition {
                 from: self.from, to: *target, transition_type: TransitionType::Branch,
                 processor: None, guard: None,
                 branch: if first { self.branch.take() } else { None },
-                branch_targets: targets_clone.clone(), sub_flow: None, timeout: None,
+                branch_targets: targets_clone.clone(), branch_label: Some(label.clone()),
+                sub_flow: None, timeout: None,
             });
             first = false;
         }
@@ -286,7 +293,7 @@ impl<S: FlowState> SubFlowBuilder<S> {
         self.builder.add_transition(Transition {
             from: self.from, to: self.from, transition_type: TransitionType::SubFlow,
             processor: None, guard: None, branch: None,
-            branch_targets: HashMap::new(),
+            branch_targets: HashMap::new(), branch_label: None,
             sub_flow: Some(crate::sub_flow::SubFlowConfig {
                 runner: self.runner,
                 exit_mappings: self.exit_mappings,
@@ -299,7 +306,7 @@ impl<S: FlowState> SubFlowBuilder<S> {
 
 // ─── Validation ─────────────────────────────────────────
 
-fn validate<S: FlowState>(def: &FlowDefinition<S>, name: &str, perpetual: bool, initially_available: &[TypeId]) -> Result<(), FlowError> {
+fn validate<S: FlowState>(def: &FlowDefinition<S>, name: &str, perpetual: bool, initially_available: &[TypeId], externally_provided: &[TypeId]) -> Result<(), FlowError> {
     let mut errors = Vec::new();
     if def.initial_state.is_none() { errors.push("No initial state found".into()); }
 
@@ -308,7 +315,7 @@ fn validate<S: FlowState>(def: &FlowDefinition<S>, name: &str, perpetual: bool, 
     check_dag(def, &mut errors);
     // check_external_uniqueness removed (DD-020: multi-external allowed)
     check_branch_completeness(def, &mut errors);
-    check_requires_produces(def, initially_available, &mut errors);
+    check_requires_produces(def, initially_available, externally_provided, &mut errors);
     check_auto_external_conflict(def, &mut errors);
     check_sub_flow_nesting_depth(def, &mut errors, 0);
     check_sub_flow_circular_ref(def, &mut errors, &mut Vec::new());
@@ -411,14 +418,15 @@ fn check_branch_completeness<S: FlowState>(def: &FlowDefinition<S>, errors: &mut
     }
 }
 
-fn check_requires_produces<S: FlowState>(def: &FlowDefinition<S>, initially_available: &[TypeId], errors: &mut Vec<String>) {
+fn check_requires_produces<S: FlowState>(def: &FlowDefinition<S>, initially_available: &[TypeId], externally_provided: &[TypeId], errors: &mut Vec<String>) {
     let Some(initial) = def.initial_state else { return };
     let mut state_available: HashMap<S, HashSet<TypeId>> = HashMap::new();
     let init_set: HashSet<TypeId> = initially_available.iter().copied().collect();
-    check_rp_from(def, initial, &init_set, &mut state_available, errors);
+    let ext_set: HashSet<TypeId> = externally_provided.iter().copied().collect();
+    check_rp_from(def, initial, &init_set, &ext_set, &mut state_available, errors);
 }
 
-fn check_rp_from<S: FlowState>(def: &FlowDefinition<S>, state: S, available: &HashSet<TypeId>,
+fn check_rp_from<S: FlowState>(def: &FlowDefinition<S>, state: S, available: &HashSet<TypeId>, externally_provided: &HashSet<TypeId>,
     state_available: &mut HashMap<S, HashSet<TypeId>>, errors: &mut Vec<String>) {
     if let Some(existing) = state_available.get_mut(&state) {
         if available.is_subset(existing) { return; }
@@ -430,6 +438,9 @@ fn check_rp_from<S: FlowState>(def: &FlowDefinition<S>, state: S, available: &Ha
     }
     for t in def.transitions_from(state) {
         let mut new_avail = state_available.get(&state).unwrap().clone();
+        if t.transition_type == TransitionType::External {
+            new_avail.extend(externally_provided);
+        }
         if let Some(g) = &t.guard {
             for r in g.requires() { if !new_avail.contains(&r) { errors.push(format!("Guard '{}' at {:?} requires a type that may not be available", g.name(), t.from)); } }
             new_avail.extend(g.produces());
@@ -441,14 +452,14 @@ fn check_rp_from<S: FlowState>(def: &FlowDefinition<S>, state: S, available: &Ha
             for r in p.requires() { if !new_avail.contains(&r) { errors.push(format!("Processor '{}' at {:?}->{:?} requires a type that may not be available", p.name(), t.from, t.to)); } }
             new_avail.extend(p.produces());
         }
-        check_rp_from(def, t.to, &new_avail, state_available, errors);
+        check_rp_from(def, t.to, &new_avail, externally_provided, state_available, errors);
 
         // Error path analysis: if processor fails, its produces are NOT available
         if t.processor.is_some() {
             if let Some(&error_target) = def.error_transitions.get(&t.from) {
                 let mut error_avail = state_available.get(&state).unwrap().clone();
                 if let Some(g) = &t.guard { error_avail.extend(g.produces()); }
-                check_rp_from(def, error_target, &error_avail, state_available, errors);
+                check_rp_from(def, error_target, &error_avail, externally_provided, state_available, errors);
             }
         }
     }

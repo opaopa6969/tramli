@@ -222,7 +222,7 @@ export class FlowEngine {
             throw new FlowError('UNKNOWN_BRANCH',
               `Branch '${branch.name}' returned unknown label: ${label}`);
           }
-          const specific = transitions.find(t => t.type === 'branch' && t.to === target) ?? autoOrBranch;
+          const specific = transitions.find(t => t.type === 'branch' && t.branchLabel === label) ?? transitions.find(t => t.type === 'branch' && t.to === target) ?? autoOrBranch;
           if (specific.processor) await specific.processor.process(flow.context);
           const from = flow.currentState;
           this.fireExit(flow, from);

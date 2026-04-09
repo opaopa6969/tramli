@@ -365,6 +365,14 @@ impl<S: FlowState> FlowEngine<S> {
             if let Some(branch) = &t.branch {
                 let label = branch.decide(&flow.context);
                 if let Some(&target) = t.branch_targets.get(&label) {
+                    // Find label-specific transition for its processor
+                    let specific = def.transitions.iter()
+                        .find(|tr| tr.from == current && tr.transition_type == TransitionType::Branch && tr.branch_label.as_deref() == Some(&label))
+                        .or_else(|| def.transitions.iter().find(|tr| tr.from == current && tr.transition_type == TransitionType::Branch && tr.to == target))
+                        .unwrap_or(t);
+                    if let Some(proc) = &specific.processor {
+                        proc.process(&mut flow.context)?;
+                    }
                     let from_dbg = format!("{:?}", current);
                     if let Some(action) = def.exit_action(current) { action(&mut flow.context); }
                     flow.transition_to(target);

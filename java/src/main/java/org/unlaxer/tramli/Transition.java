@@ -14,21 +14,22 @@ public record Transition<S extends Enum<S> & FlowState>(
         TransitionGuard guard,
         BranchProcessor branch,
         Map<String, S> branchTargets,
+        String branchLabel,
         FlowDefinition<?> subFlowDefinition,
         Map<String, S> exitMappings,
         Duration timeout
 ) {
-    /** Backwards-compatible constructor without subFlow/timeout fields. */
+    /** Backwards-compatible constructor without branchLabel/subFlow/timeout fields. */
     public Transition(S from, S to, TransitionType type, StateProcessor processor,
                       TransitionGuard guard, BranchProcessor branch, Map<String, S> branchTargets) {
-        this(from, to, type, processor, guard, branch, branchTargets, null, Map.of(), null);
+        this(from, to, type, processor, guard, branch, branchTargets, null, null, Map.of(), null);
     }
 
     /** Constructor with subFlow but no timeout. */
     public Transition(S from, S to, TransitionType type, StateProcessor processor,
                       TransitionGuard guard, BranchProcessor branch, Map<String, S> branchTargets,
                       FlowDefinition<?> subFlowDefinition, Map<String, S> exitMappings) {
-        this(from, to, type, processor, guard, branch, branchTargets, subFlowDefinition, exitMappings, null);
+        this(from, to, type, processor, guard, branch, branchTargets, null, subFlowDefinition, exitMappings, null);
     }
 
     public boolean isAuto() { return type == TransitionType.AUTO; }

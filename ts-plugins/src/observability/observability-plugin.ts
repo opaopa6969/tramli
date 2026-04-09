@@ -1,4 +1,4 @@
-import type { FlowEngine } from '@unlaxer/tramli';
+import type { FlowEngine, GuardLogEntry } from '@unlaxer/tramli';
 import type { EnginePlugin, PluginDescriptor } from '../api/types.js';
 
 export interface TelemetryEvent {
@@ -31,15 +31,22 @@ export class ObservabilityEnginePlugin implements EnginePlugin {
   install(engine: FlowEngine): void {
     engine.setTransitionLogger(entry => {
       this.sink.emit({
-        type: 'transition', flowId: entry.flowId, flowName: '',
-        data: { from: entry.from, to: entry.to, trigger: entry.trigger },
+        type: 'transition', flowId: entry.flowId, flowName: entry.flowName,
+        data: { from: entry.from, to: entry.to, trigger: entry.trigger, durationMicros: entry.durationMicros },
         timestamp: new Date(),
       });
     });
     engine.setErrorLogger(entry => {
       this.sink.emit({
-        type: 'error', flowId: entry.flowId, flowName: '',
-        data: { from: entry.from, to: entry.to, trigger: entry.trigger, cause: entry.cause?.message },
+        type: 'error', flowId: entry.flowId, flowName: entry.flowName,
+        data: { from: entry.from, to: entry.to, trigger: entry.trigger, cause: entry.cause?.message, durationMicros: entry.durationMicros },
+        timestamp: new Date(),
+      });
+    });
+    engine.setGuardLogger((entry: GuardLogEntry) => {
+      this.sink.emit({
+        type: 'guard', flowId: entry.flowId, flowName: entry.flowName,
+        data: { state: entry.state, guardName: entry.guardName, result: entry.result, reason: entry.reason, durationMicros: entry.durationMicros },
         timestamp: new Date(),
       });
     });

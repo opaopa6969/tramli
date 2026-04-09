@@ -345,16 +345,17 @@ export class DataFlowGraph<S extends string> {
   // ─── Builder ─────────────────────────────────────────────
 
   static build<S extends string>(
-    def: FlowDefinition<S>, initiallyAvailable: string[],
+    def: FlowDefinition<S>, initiallyAvailable: string[], externallyProvided: string[] = [],
   ): DataFlowGraph<S> {
     const stateAvail = new Map<S, Set<string>>();
     const producers = new Map<string, NodeInfo<S>[]>();
     const consumers = new Map<string, NodeInfo<S>[]>();
     const allProduced = new Set<string>(initiallyAvailable);
     const allConsumed = new Set<string>();
+    const extSet = new Set<string>(externallyProvided);
 
     if (def.initialState) {
-      traverse(def, def.initialState, new Set(initiallyAvailable),
+      traverse(def, def.initialState, new Set(initiallyAvailable), extSet,
         stateAvail, producers, consumers, allProduced, allConsumed);
 
       // Mark initially available types as produced by "initial"
@@ -371,7 +372,7 @@ export class DataFlowGraph<S extends string> {
 }
 
 function traverse<S extends string>(
-  def: FlowDefinition<S>, state: S, available: Set<string>,
+  def: FlowDefinition<S>, state: S, available: Set<string>, externallyProvided: Set<string>,
   stateAvail: Map<S, Set<string>>,
   producers: Map<string, NodeInfo<S>[]>,
   consumers: Map<string, NodeInfo<S>[]>,
@@ -389,6 +390,9 @@ function traverse<S extends string>(
 
   for (const t of def.transitionsFrom(state)) {
     const newAvail = new Set(stateAvail.get(state)!);
+    if (t.type === 'external') {
+      for (const k of externallyProvided) newAvail.add(k);
+    }
 
     if (t.guard) {
       for (const req of t.guard.requires) {
@@ -419,7 +423,7 @@ function traverse<S extends string>(
       }
     }
 
-    traverse(def, t.to, newAvail, stateAvail, producers, consumers, allProduced, allConsumed);
+    traverse(def, t.to, newAvail, externallyProvided, stateAvail, producers, consumers, allProduced, allConsumed);
   }
 }
 

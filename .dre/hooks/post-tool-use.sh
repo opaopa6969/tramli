@@ -149,7 +149,13 @@ fi
 # ─── 3. Decision Detection — capture implicit decisions from any conversation ───
 
 # Scan written content for decision patterns
-if [ -n "$FILE_PATH" ] && [ -f "$FILE_PATH" ]; then
+# SKIP: DGE session files + session-like content (character dialogue triggers false positives)
+if [ -n "$FILE_PATH" ] && [ -f "$FILE_PATH" ] && \
+   [[ "$FILE_PATH" != *"dge/sessions/"* ]] && \
+   [[ "$FILE_PATH" != *"dge/decisions/"* ]] && \
+   [[ "$FILE_PATH" != *"dge/specs/"* ]] && \
+   [[ "$FILE_PATH" != *"dve/annotations/"* ]] && \
+   [[ "$FILE_PATH" != *"dve/contexts/"* ]]; then
   PENDING_FILE=".dre/pending-decisions.json"
 
   # Decision patterns (Japanese + English)

@@ -56,6 +56,8 @@ pub struct Transition<S: FlowState> {
     pub guard: Option<Box<dyn TransitionGuard<S>>>,
     pub branch: Option<Box<dyn BranchProcessor<S>>>,
     pub branch_targets: HashMap<String, S>,
+    /// Label assigned by builder .to(target, label, processor). Used for branch label-specific processor matching.
+    pub branch_label: Option<String>,
     pub sub_flow: Option<crate::sub_flow::SubFlowConfig<S>>,
     /// Per-state timeout. If set, resumeAndExecute checks this before guard.
     pub timeout: Option<std::time::Duration>,

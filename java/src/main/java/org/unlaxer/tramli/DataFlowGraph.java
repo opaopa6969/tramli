@@ -494,7 +494,7 @@ public final class DataFlowGraph<S extends Enum<S> & FlowState> {
     // ─── Builder ─────────────────────────────────────────────
 
     static <S extends Enum<S> & FlowState> DataFlowGraph<S> build(
-            FlowDefinition<S> def, Set<Class<?>> initiallyAvailable) {
+            FlowDefinition<S> def, Set<Class<?>> initiallyAvailable, Set<Class<?>> externallyProvided) {
         Class<S> stateClass = def.stateClass();
         Map<S, Set<Class<?>>> stateAvail = new EnumMap<>(stateClass);
         Map<Class<?>, List<NodeInfo<S>>> producers = new LinkedHashMap<>();
@@ -503,7 +503,7 @@ public final class DataFlowGraph<S extends Enum<S> & FlowState> {
         Set<Class<?>> allConsumed = new LinkedHashSet<>();
 
         if (def.initialState() != null) {
-            traverse(def, def.initialState(), new HashSet<>(initiallyAvailable),
+            traverse(def, def.initialState(), new HashSet<>(initiallyAvailable), externallyProvided,
                     stateAvail, producers, consumers, allProduced, allConsumed);
         }
 
@@ -517,7 +517,7 @@ public final class DataFlowGraph<S extends Enum<S> & FlowState> {
     }
 
     private static <S extends Enum<S> & FlowState> void traverse(
-            FlowDefinition<S> def, S state, Set<Class<?>> available,
+            FlowDefinition<S> def, S state, Set<Class<?>> available, Set<Class<?>> externallyProvided,
             Map<S, Set<Class<?>>> stateAvail,
             Map<Class<?>, List<NodeInfo<S>>> producers,
             Map<Class<?>, List<NodeInfo<S>>> consumers,
@@ -532,6 +532,9 @@ public final class DataFlowGraph<S extends Enum<S> & FlowState> {
 
         for (Transition<S> t : def.transitionsFrom(state)) {
             Set<Class<?>> newAvail = new HashSet<>(stateAvail.get(state));
+            if (t.isExternal()) {
+                newAvail.addAll(externallyProvided);
+            }
 
             if (t.guard() != null) {
                 for (Class<?> req : t.guard().requires()) {
@@ -567,7 +570,7 @@ public final class DataFlowGraph<S extends Enum<S> & FlowState> {
                 }
             }
 
-            traverse(def, t.to(), newAvail, stateAvail, producers, consumers, allProduced, allConsumed);
+            traverse(def, t.to(), newAvail, externallyProvided, stateAvail, producers, consumers, allProduced, allConsumed);
         }
     }
 }

@@ -22,6 +22,8 @@ export interface Transition<S extends string> {
   guard?: TransitionGuard<S>;
   branch?: BranchProcessor<S>;
   branchTargets: Map<string, S>;
+  /** Label assigned by builder .to(target, label, processor). Used for branch label-specific processor matching. */
+  branchLabel?: string;
   subFlowDefinition?: import('./flow-definition.js').FlowDefinition<any>;
   exitMappings?: Map<string, S>;
   /** Per-state timeout in milliseconds. If set, resumeAndExecute checks this before guard. */

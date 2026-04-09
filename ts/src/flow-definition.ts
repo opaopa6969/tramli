@@ -122,6 +122,7 @@ export class Builder<S extends string> {
   private readonly _enterActions = new Map<S, (ctx: import('./flow-context.js').FlowContext) => void>();
   private readonly _exitActions = new Map<S, (ctx: import('./flow-context.js').FlowContext) => void>();
   private readonly initiallyAvailableKeys: string[] = [];
+  private readonly externallyProvidedKeys: string[] = [];
   private _perpetual = false;
 
   constructor(name: string, stateConfig: Record<S, StateConfig>) {
@@ -131,6 +132,12 @@ export class Builder<S extends string> {
 
   initiallyAvailable(...keys: FlowKey<unknown>[]): this {
     for (const k of keys) this.initiallyAvailableKeys.push(k);
+    return this;
+  }
+
+  /** Declare data keys injected via resumeAndExecute(externalData), not available at start. */
+  externallyProvided(...keys: FlowKey<unknown>[]): this {
+    for (const k of keys) this.externallyProvidedKeys.push(k);
     return this;
   }
 
@@ -203,7 +210,7 @@ export class Builder<S extends string> {
 
     this.validate(result);
 
-    (result as any).dataFlowGraph = DataFlowGraph.build(result, this.initiallyAvailableKeys);
+    (result as any).dataFlowGraph = DataFlowGraph.build(result, this.initiallyAvailableKeys, this.externallyProvidedKeys);
 
     // Build warnings
     const warnings: string[] = [];
@@ -358,6 +365,9 @@ export class Builder<S extends string> {
 
     for (const t of def.transitionsFrom(state)) {
       const newAvailable = new Set(stateAvailable.get(state)!);
+      if (t.type === 'external') {
+        for (const k of this.externallyProvidedKeys) newAvailable.add(k);
+      }
       if (t.guard) {
         for (const req of t.guard.requires) {
           if (!newAvailable.has(req))
@@ -535,6 +545,7 @@ export class BranchBuilder<S extends string> {
         processor: this.processors.get(label),
         guard: undefined, branch: this.branch,
         branchTargets: new Map(this.targets),
+        branchLabel: label,
       });
     }
     return this.builder;
