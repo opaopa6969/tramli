@@ -75,8 +75,17 @@ impl ObservabilityPlugin {
     }
 
     pub fn install<S: FlowState>(&self, engine: &mut FlowEngine<S>) {
+        self.install_with_options(engine, false);
+    }
+
+    pub fn install_with_options<S: FlowState>(&self, engine: &mut FlowEngine<S>, append: bool) {
+        let prev_transition = if append { engine.take_transition_logger() } else { None };
+        let prev_error = if append { engine.take_error_logger() } else { None };
+        let prev_guard = if append { engine.take_guard_logger() } else { None };
+
         let sink = self.sink.clone();
         engine.set_transition_logger(move |entry| {
+            if let Some(ref prev) = prev_transition { prev(entry); }
             sink.emit(TelemetryEvent {
                 event_type: TelemetryType::Transition,
                 flow_id: entry.flow_id.clone(),
@@ -89,6 +98,7 @@ impl ObservabilityPlugin {
 
         let sink = self.sink.clone();
         engine.set_error_logger(move |entry| {
+            if let Some(ref prev) = prev_error { prev(entry); }
             sink.emit(TelemetryEvent {
                 event_type: TelemetryType::Error,
                 flow_id: entry.flow_id.clone(),
@@ -101,6 +111,7 @@ impl ObservabilityPlugin {
 
         let sink = self.sink.clone();
         engine.set_guard_logger(move |entry| {
+            if let Some(ref prev) = prev_guard { prev(entry); }
             sink.emit(TelemetryEvent {
                 event_type: TelemetryType::Guard,
                 flow_id: entry.flow_id.clone(),

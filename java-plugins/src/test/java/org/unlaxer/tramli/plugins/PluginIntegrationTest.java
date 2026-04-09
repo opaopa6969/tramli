@@ -144,6 +144,48 @@ class PluginIntegrationTest {
         assertFalse(sink.events().isEmpty());
     }
 
+    @Test
+    void observabilityAppendModeChains() {
+        var def = buildDef();
+        FlowStore store = new InMemoryFlowStore();
+        FlowEngine engine = Tramli.engine(store);
+
+        // Install custom logger first
+        List<String> customLog = new ArrayList<>();
+        engine.setTransitionLogger(t -> customLog.add(t.from() + "->" + t.to()));
+
+        // Install observability with append=true
+        var sink = new InMemoryTelemetrySink();
+        new ObservabilityPlugin(sink).install(engine, true);
+
+        engine.startFlow(def, "s1", Map.of(Input.class, new Input("test")));
+
+        // Both should fire
+        assertFalse(customLog.isEmpty(), "custom logger should have fired");
+        assertFalse(sink.events().isEmpty(), "sink should have events");
+        assertEquals("CREATED->PENDING", customLog.get(0));
+        assertEquals("transition", sink.events().get(0).type());
+    }
+
+    @Test
+    void observabilityDefaultModeReplaces() {
+        var def = buildDef();
+        FlowStore store = new InMemoryFlowStore();
+        FlowEngine engine = Tramli.engine(store);
+
+        List<String> customLog = new ArrayList<>();
+        engine.setTransitionLogger(t -> customLog.add(t.from() + "->" + t.to()));
+
+        // Install without append (default)
+        var sink = new InMemoryTelemetrySink();
+        new ObservabilityPlugin(sink).install(engine);
+
+        engine.startFlow(def, "s1", Map.of(Input.class, new Input("test")));
+
+        assertTrue(customLog.isEmpty(), "custom logger should be replaced");
+        assertFalse(sink.events().isEmpty(), "sink should have events");
+    }
+
     // ─── Rich resume classification ──────────────────────
 
     @Test

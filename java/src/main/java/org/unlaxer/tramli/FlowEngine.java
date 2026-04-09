@@ -65,6 +65,15 @@ public final class FlowEngine {
         this.guardLogger = logger;
     }
 
+    /** Get transition logger. */
+    public java.util.function.Consumer<LogEntry.Transition> getTransitionLogger() { return transitionLogger; }
+    /** Get state logger. */
+    public java.util.function.Consumer<LogEntry.State> getStateLogger() { return stateLogger; }
+    /** Get error logger. */
+    public java.util.function.Consumer<LogEntry.Error> getErrorLogger() { return errorLogger; }
+    /** Get guard logger. */
+    public java.util.function.Consumer<LogEntry.GuardResult> getGuardLogger() { return guardLogger; }
+
     /** Remove all loggers. */
     public void removeAllLoggers() {
         this.transitionLogger = null;

@@ -90,6 +90,11 @@ impl<S: FlowState> FlowEngine<S> {
     pub fn set_guard_logger(&mut self, logger: impl Fn(&GuardLogEntry) + Send + Sync + 'static) {
         self.guard_logger = Some(Box::new(logger));
     }
+    pub fn take_transition_logger(&mut self) -> Option<Box<dyn Fn(&TransitionLogEntry) + Send + Sync>> { self.transition_logger.take() }
+    pub fn take_state_logger(&mut self) -> Option<Box<dyn Fn(&StateLogEntry) + Send + Sync>> { self.state_logger.take() }
+    pub fn take_error_logger(&mut self) -> Option<Box<dyn Fn(&ErrorLogEntry) + Send + Sync>> { self.error_logger.take() }
+    pub fn take_guard_logger(&mut self) -> Option<Box<dyn Fn(&GuardLogEntry) + Send + Sync>> { self.guard_logger.take() }
+
     pub fn remove_all_loggers(&mut self) {
         self.transition_logger = None;
         self.state_logger = None;

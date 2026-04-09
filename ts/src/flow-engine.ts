@@ -39,6 +39,11 @@ export class FlowEngine {
   setGuardLogger(logger: ((entry: GuardLogEntry) => void) | null): void {
     this.guardLogger = logger ?? undefined;
   }
+  getTransitionLogger(): ((entry: TransitionLogEntry) => void) | undefined { return this.transitionLogger; }
+  getStateLogger(): ((entry: StateLogEntry) => void) | undefined { return this.stateLogger; }
+  getErrorLogger(): ((entry: ErrorLogEntry) => void) | undefined { return this.errorLogger; }
+  getGuardLogger(): ((entry: GuardLogEntry) => void) | undefined { return this.guardLogger; }
+
   removeAllLoggers(): void {
     this.transitionLogger = undefined;
     this.stateLogger = undefined;

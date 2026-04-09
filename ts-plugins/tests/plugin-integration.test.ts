@@ -152,6 +152,49 @@ describe('Plugin Integration', () => {
     expect(plugin.kind()).toBe('ENGINE');
   });
 
+  it('observability append mode chains existing logger', async () => {
+    const def = buildDef(true);
+    const store = new InMemoryFlowStore();
+    const engine = Tramli.engine(store);
+
+    // Install a custom transition logger first
+    const customLog: string[] = [];
+    engine.setTransitionLogger(entry => { customLog.push(`${entry.from}->${entry.to}`); });
+
+    // Install observability with append=true — should chain, not replace
+    const sink = new InMemoryTelemetrySink();
+    const plugin = new ObservabilityEnginePlugin(sink);
+    plugin.install(engine, { append: true });
+
+    await engine.startFlow(def, 's1', new Map([[InputKey as string, { value: 'test' }]]));
+
+    // Both loggers should have fired
+    expect(customLog.length).toBeGreaterThanOrEqual(1);
+    expect(sink.events().length).toBeGreaterThanOrEqual(1);
+    expect(customLog[0]).toBe('CREATED->PENDING');
+    expect(sink.events()[0].type).toBe('transition');
+  });
+
+  it('observability default mode replaces existing logger', async () => {
+    const def = buildDef(true);
+    const store = new InMemoryFlowStore();
+    const engine = Tramli.engine(store);
+
+    const customLog: string[] = [];
+    engine.setTransitionLogger(entry => { customLog.push(`${entry.from}->${entry.to}`); });
+
+    const sink = new InMemoryTelemetrySink();
+    const plugin = new ObservabilityEnginePlugin(sink);
+    plugin.install(engine); // default: append=false
+
+    await engine.startFlow(def, 's1', new Map([[InputKey as string, { value: 'test' }]]));
+
+    // Custom logger should NOT have fired (replaced)
+    expect(customLog.length).toBe(0);
+    // Sink should have events
+    expect(sink.events().length).toBeGreaterThanOrEqual(1);
+  });
+
   it('rich resume classification', async () => {
     const def = buildDef(true);
     const store = new InMemoryFlowStore();

@@ -158,6 +158,57 @@ fn observability_plugin_installs() {
 }
 
 #[test]
+fn observability_append_mode_chains() {
+    let mut engine: FlowEngine<S> = FlowEngine::new(InMemoryFlowStore::new());
+
+    // Install custom logger first
+    let custom_log = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let log_ref = custom_log.clone();
+    engine.set_transition_logger(move |entry| {
+        log_ref.lock().unwrap().push(format!("{} -> {}", entry.from, entry.to));
+    });
+
+    // Install observability with append=true
+    let sink = Arc::new(observability::InMemoryTelemetrySink::new());
+    let plugin = observability::ObservabilityPlugin::new(sink.clone());
+    plugin.install_with_options(&mut engine, true);
+
+    let def = build_def(true);
+    engine.start_flow(def, "s1", initial_data()).unwrap();
+
+    // Both should fire
+    let entries = custom_log.lock().unwrap();
+    assert!(!entries.is_empty(), "custom logger should have fired");
+    assert_eq!(entries[0], "Created -> Pending");
+    let events = sink.events();
+    assert!(!events.is_empty(), "sink should have events");
+}
+
+#[test]
+fn observability_default_mode_replaces() {
+    let mut engine: FlowEngine<S> = FlowEngine::new(InMemoryFlowStore::new());
+
+    let custom_log = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let log_ref = custom_log.clone();
+    engine.set_transition_logger(move |entry| {
+        log_ref.lock().unwrap().push(format!("{} -> {}", entry.from, entry.to));
+    });
+
+    // Install without append (default)
+    let sink = Arc::new(observability::InMemoryTelemetrySink::new());
+    let plugin = observability::ObservabilityPlugin::new(sink.clone());
+    plugin.install(&mut engine);
+
+    let def = build_def(true);
+    engine.start_flow(def, "s1", initial_data()).unwrap();
+
+    let entries = custom_log.lock().unwrap();
+    assert!(entries.is_empty(), "custom logger should be replaced");
+    let events = sink.events();
+    assert!(!events.is_empty(), "sink should have events");
+}
+
+#[test]
 fn rich_resume_classification() {
     let def = build_def(true);
     let mut engine = FlowEngine::new(InMemoryFlowStore::new());
