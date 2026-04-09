@@ -39,6 +39,7 @@ State machines where **invalid transitions cannot exist** — enforced at build 
 - [Logging](#logging) — zero-dependency pluggable loggers
 - [Error Handling](#error-handling) — guard rejection, max retries, error transitions
 - [Plugin System](#plugin-system) — 14 plugins across 6 SPI types
+- [tramli-viz](#tramli-viz) — real-time flow monitoring UI
 - [Why LLMs Love This](#why-llms-love-this)
 - [Performance](#performance)
 - [Use Cases](#use-cases)
@@ -1573,6 +1574,50 @@ This is useful for I/O-heavy processors where **400 errors (client fault) and 50
 ### TTL Expiry
 
 Every flow has a TTL (set via `.ttl()`). If `resumeAndExecute()` is called after expiry, the flow completes with exit state `"EXPIRED"`. No transition fires — the flow is simply done.
+
+---
+
+## tramli-viz
+
+Real-time flow monitoring UI. Watch flow instances traverse your state machine as animated fireballs on a React Flow canvas.
+
+![tramli-viz screenshot](docs/images/viz-screenshot.png)
+
+### Features
+
+- **Fireball trace** — flow instances animate along bezier edges with glowing particle trails
+- **Heat trail** — frequently traveled paths glow brighter and thicker (configurable decay 0.5s–1day)
+- **Proportional edge width** — line thickness reflects transition share from each source state
+- **Node throughput** — total arrival count displayed on each node
+- **Replay** — scrub through event history with play/pause and speed control
+- **Draggable layout** — reposition nodes, save to localStorage
+- **Edge handle toggle** — double-click/right-click edges to change connection points
+- **Legend** — edge type reference (i18n: English / Japanese)
+
+### Quick Start
+
+```bash
+cd viz && npm install && npm run dev
+# Server: ws://localhost:3001  |  Web: http://localhost:5173
+```
+
+### Connect to Your Own Flow
+
+```typescript
+import { ObservabilityEnginePlugin } from '@unlaxer/tramli-plugins';
+import { VizSink } from './viz/server/viz-sink';
+import { startVizServer } from './viz/server';
+
+const vizSink = new VizSink();
+new ObservabilityEnginePlugin(vizSink).install(engine);
+
+startVizServer(vizSink, {
+  engine,
+  definition: yourFlowDefinition,
+  states: [/* StateInfo[] with x, y positions */],
+  edges: [/* EdgeInfo[] */],
+});
+```
 
 ---
 

@@ -39,6 +39,7 @@
 - [ロギング](#ロギング) — ゼロ依存プラガブルロガー
 - [エラーハンドリング](#エラーハンドリング) — Guard 拒否、リトライ上限、例外型ルーティング
 - [プラグインシステム](#プラグインシステム) — 6種のSPI、14プラグイン
+- [tramli-viz](#tramli-viz) — リアルタイムフロー監視 UI
 - [なぜ LLM と相性が良いか](#なぜ-llm-と相性が良いか)
 - [パフォーマンス](#パフォーマンス)
 - [ユースケース](#ユースケース)
@@ -1700,6 +1701,50 @@ engine.remove_all_loggers();
 </details>
 
 ログエントリは **record**（Java）/ **interface**（TS）/ **struct**（Rust）。型安全: `StateLogEntry.type()` で `Class<?>` にアクセス、`typeName()` でシンプル名の文字列。
+
+---
+
+## tramli-viz
+
+リアルタイムフロー監視 UI。フローインスタンスが状態マシン上を火の玉アニメーションで移動する様子を React Flow キャンバスで観察できます。
+
+![tramli-viz スクリーンショット](docs/images/viz-screenshot.png)
+
+### 機能
+
+- **火の玉トレース** — フローインスタンスがベジェエッジ上を光るパーティクル付きでアニメーション
+- **ヒートトレイル** — よく通るパスほど明るく太く光る（減衰時間 0.5秒〜1日で調整可能）
+- **比率ベース線幅** — ソースからの遷移割合に応じて線の太さが変化
+- **ノード通過数** — 各ノードに総到着数を表示
+- **リプレイ** — イベント履歴をスライダーで巻き戻し・再生（速度調整付き）
+- **ドラッグレイアウト** — ノードを自由に配置、localStorage に保存
+- **ハンドル切り替え** — エッジをダブルクリック/右クリックで接続点を変更
+- **凡例** — エッジタイプのリファレンス（日本語/英語 i18n 対応）
+
+### クイックスタート
+
+```bash
+cd viz && npm install && npm run dev
+# サーバー: ws://localhost:3001  |  Web: http://localhost:5173
+```
+
+### 自分のフローに接続
+
+```typescript
+import { ObservabilityEnginePlugin } from '@unlaxer/tramli-plugins';
+import { VizSink } from './viz/server/viz-sink';
+import { startVizServer } from './viz/server';
+
+const vizSink = new VizSink();
+new ObservabilityEnginePlugin(vizSink).install(engine);
+
+startVizServer(vizSink, {
+  engine,
+  definition: yourFlowDefinition,
+  states: [/* StateInfo[] — x, y 座標付き */],
+  edges: [/* EdgeInfo[] */],
+});
+```
 
 ---
 
