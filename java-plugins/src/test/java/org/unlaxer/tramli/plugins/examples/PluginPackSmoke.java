@@ -69,7 +69,7 @@ public final class PluginPackSmoke {
                 .onAnyError(OrderState.CANCELLED)
                 .build();
 
-        PluginRegistry<OrderState> registry = new PluginRegistry<OrderState>()
+        var registry = new PluginRegistry()
                 .register(PolicyLintPlugin.defaults())
                 .register(new AuditStorePlugin())
                 .register(new EventLogStorePlugin())

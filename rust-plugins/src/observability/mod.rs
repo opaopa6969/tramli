@@ -17,8 +17,10 @@ pub enum TelemetryType {
 pub struct TelemetryEvent {
     pub event_type: TelemetryType,
     pub flow_id: String,
+    pub flow_name: String,
     pub data: String,
     pub timestamp: Instant,
+    pub duration_micros: u64,
 }
 
 /// Telemetry sink trait.
@@ -78,8 +80,10 @@ impl ObservabilityPlugin {
             sink.emit(TelemetryEvent {
                 event_type: TelemetryType::Transition,
                 flow_id: entry.flow_id.clone(),
+                flow_name: entry.flow_name.clone(),
                 data: format!("{} -> {} via {}", entry.from, entry.to, entry.trigger),
                 timestamp: Instant::now(),
+                duration_micros: entry.duration_micros,
             });
         });
 
@@ -88,8 +92,10 @@ impl ObservabilityPlugin {
             sink.emit(TelemetryEvent {
                 event_type: TelemetryType::Error,
                 flow_id: entry.flow_id.clone(),
+                flow_name: entry.flow_name.clone(),
                 data: format!("{} -> {} error: {:?}", entry.from, entry.to, entry.cause),
                 timestamp: Instant::now(),
+                duration_micros: entry.duration_micros,
             });
         });
 
@@ -98,8 +104,10 @@ impl ObservabilityPlugin {
             sink.emit(TelemetryEvent {
                 event_type: TelemetryType::Guard,
                 flow_id: entry.flow_id.clone(),
+                flow_name: entry.flow_name.clone(),
                 data: format!("guard {} at {}: {}", entry.guard_name, entry.state, entry.result),
                 timestamp: Instant::now(),
+                duration_micros: entry.duration_micros,
             });
         });
     }

@@ -86,7 +86,7 @@ class PluginIntegrationTest {
         var graphWithout = def.dataFlowGraph().toMermaid();
 
         // Build with plugins registered (but plugins don't change definition)
-        var registry = new PluginRegistry<S>()
+        var registry = new PluginRegistry()
                 .register(PolicyLintPlugin.defaults())
                 .register(new AuditStorePlugin())
                 .register(new EventLogStorePlugin());
@@ -100,7 +100,7 @@ class PluginIntegrationTest {
 
     @Test
     void pluginRegistryLifecycle() {
-        var registry = new PluginRegistry<S>()
+        var registry = new PluginRegistry()
                 .register(PolicyLintPlugin.defaults())
                 .register(new AuditStorePlugin())
                 .register(new EventLogStorePlugin())
@@ -116,7 +116,7 @@ class PluginIntegrationTest {
 
     @Test
     void storePluginWrapping() {
-        var registry = new PluginRegistry<S>()
+        var registry = new PluginRegistry()
                 .register(new AuditStorePlugin())
                 .register(new EventLogStorePlugin());
 
@@ -131,7 +131,7 @@ class PluginIntegrationTest {
     @Test
     void enginePluginInstallation() {
         var sink = new InMemoryTelemetrySink();
-        var registry = new PluginRegistry<S>()
+        var registry = new PluginRegistry()
                 .register(new ObservabilityEnginePlugin(sink));
 
         var def = buildDef();
@@ -166,7 +166,7 @@ class PluginIntegrationTest {
 
     @Test
     void eventstoreReplay() {
-        var registry = new PluginRegistry<S>()
+        var registry = new PluginRegistry()
                 .register(new EventLogStorePlugin());
 
         FlowStore store = registry.applyStorePlugins(new InMemoryFlowStore());

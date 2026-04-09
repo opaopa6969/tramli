@@ -180,3 +180,43 @@ When a processor throws during execution, the engine:
 3. Routes to the error transition (if configured via `onError`/`onAnyError`)
 
 The `lastError` property is available for rollback processors to inspect what went wrong.
+
+## PostgreSQL JDBC 実装の注意点
+
+volta-auth-proxy の本番運用で発見された落とし穴。
+
+### SET LOCAL + SELECT の複合文
+
+```java
+// ❌ 動かない — rs は SET LOCAL の結果（空）を返す
+String sql = """
+    SET LOCAL lock_timeout = '5s';
+    SELECT ... FROM auth_flows WHERE id = ? FOR UPDATE
+    """;
+PreparedStatement ps = conn.prepareStatement(sql);
+ResultSet rs = ps.executeQuery();
+// → "クエリは結果を返却しませんでした" エラー
+
+// ✅ 正しい — 別 Statement で実行
+try (var stmt = conn.createStatement()) {
+    stmt.execute("SET LOCAL lock_timeout = '5s'");
+}
+PreparedStatement ps = conn.prepareStatement("SELECT ... FOR UPDATE");
+```
+
+**影響例:** OIDC callback で flow が見つからない → 400 → セッション Cookie 未設定 → ログインループ。
+エラーメッセージが「クエリは結果を返却しませんでした」で、flow データの問題に見えない。
+
+### Set-Cookie ヘッダの上書き (Javalin)
+
+FlowStore とは直接関係ないが、認証フローの実装で頻出:
+
+```java
+// ❌ Javalin の ctx.header() は上書き
+ctx.header("Set-Cookie", "session=abc");
+ctx.header("Set-Cookie", "mfa_flow=xyz");  // session cookie が消える
+
+// ✅ addHeader で追加
+ctx.res().addHeader("Set-Cookie", "session=abc");
+ctx.res().addHeader("Set-Cookie", "mfa_flow=xyz");
+```

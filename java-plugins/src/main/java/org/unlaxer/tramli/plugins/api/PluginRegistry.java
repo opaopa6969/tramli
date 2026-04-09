@@ -9,10 +9,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-public final class PluginRegistry<S extends Enum<S> & FlowState> {
+public final class PluginRegistry {
     private final List<FlowPlugin> plugins = new ArrayList<>();
 
-    public PluginRegistry<S> register(FlowPlugin plugin) {
+    public PluginRegistry register(FlowPlugin plugin) {
         plugins.add(plugin);
         return this;
     }
@@ -21,7 +21,7 @@ public final class PluginRegistry<S extends Enum<S> & FlowState> {
         return Collections.unmodifiableList(plugins);
     }
 
-    public PluginReport analyzeAll(FlowDefinition<S> definition) {
+    public <S extends Enum<S> & FlowState> PluginReport analyzeAll(FlowDefinition<S> definition) {
         PluginReport report = new PluginReport();
         for (FlowPlugin plugin : plugins) {
             if (plugin instanceof AnalysisPlugin<?> raw) {

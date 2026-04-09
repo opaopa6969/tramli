@@ -13,13 +13,13 @@ public final class ObservabilityPlugin {
     }
 
     public void install(FlowEngine engine) {
-        engine.setTransitionLogger(t -> sink.emit(new TelemetryEvent("transition", Instant.now(), t.flowId(),
-                t.from() + " -> " + t.to() + " via " + t.trigger())));
-        engine.setStateLogger(s -> sink.emit(new TelemetryEvent("state", Instant.now(), s.flowId(),
-                s.typeName() + "=" + String.valueOf(s.value()))));
-        engine.setErrorLogger(e -> sink.emit(new TelemetryEvent("error", Instant.now(), e.flowId(),
-                e.trigger() + ": " + e.cause().getMessage())));
-        engine.setGuardLogger(g -> sink.emit(new TelemetryEvent("guard", Instant.now(), g.flowId(),
-                g.guardName() + " -> " + g.result())));
+        engine.setTransitionLogger(t -> sink.emit(new TelemetryEvent("transition", Instant.now(), t.flowId(), t.flowName(),
+                t.from() + " -> " + t.to() + " via " + t.trigger(), t.durationMicros())));
+        engine.setStateLogger(s -> sink.emit(new TelemetryEvent("state", Instant.now(), s.flowId(), s.flowName(),
+                s.typeName() + "=" + String.valueOf(s.value()), 0)));
+        engine.setErrorLogger(e -> sink.emit(new TelemetryEvent("error", Instant.now(), e.flowId(), e.flowName(),
+                e.trigger() + ": " + (e.cause() != null ? e.cause().getMessage() : "unknown"), e.durationMicros())));
+        engine.setGuardLogger(g -> sink.emit(new TelemetryEvent("guard", Instant.now(), g.flowId(), g.flowName(),
+                g.guardName() + " -> " + g.result(), g.durationMicros())));
     }
 }
