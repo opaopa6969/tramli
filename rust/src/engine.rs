@@ -18,6 +18,7 @@ const MAX_CHAIN_DEPTH: usize = 10;
 /// Log entry for transitions.
 pub struct TransitionLogEntry {
     pub flow_id: String,
+    pub flow_name: String,
     pub from: String,
     pub to: String,
     pub trigger: String,
@@ -26,10 +27,21 @@ pub struct TransitionLogEntry {
 /// Log entry for errors.
 pub struct ErrorLogEntry {
     pub flow_id: String,
+    pub flow_name: String,
     pub from: String,
     pub to: String,
     pub trigger: String,
     pub cause: Option<String>,
+}
+
+/// Log entry for guard results.
+pub struct GuardLogEntry {
+    pub flow_id: String,
+    pub flow_name: String,
+    pub state: String,
+    pub guard_name: String,
+    pub result: &'static str,
+    pub reason: Option<String>,
 }
 
 pub struct FlowEngine<S: FlowState> {
@@ -37,14 +49,15 @@ pub struct FlowEngine<S: FlowState> {
     pub strict_mode: bool,
     transition_logger: Option<Box<dyn Fn(&TransitionLogEntry) + Send + Sync>>,
     error_logger: Option<Box<dyn Fn(&ErrorLogEntry) + Send + Sync>>,
+    guard_logger: Option<Box<dyn Fn(&GuardLogEntry) + Send + Sync>>,
 }
 
 impl<S: FlowState> FlowEngine<S> {
     pub fn new(store: InMemoryFlowStore<S>) -> Self {
-        Self { store, strict_mode: false, transition_logger: None, error_logger: None }
+        Self { store, strict_mode: false, transition_logger: None, error_logger: None, guard_logger: None }
     }
     pub fn with_strict_mode(store: InMemoryFlowStore<S>) -> Self {
-        Self { store, strict_mode: true, transition_logger: None, error_logger: None }
+        Self { store, strict_mode: true, transition_logger: None, error_logger: None, guard_logger: None }
     }
 
     pub fn set_transition_logger(&mut self, logger: impl Fn(&TransitionLogEntry) + Send + Sync + 'static) {
@@ -53,9 +66,13 @@ impl<S: FlowState> FlowEngine<S> {
     pub fn set_error_logger(&mut self, logger: impl Fn(&ErrorLogEntry) + Send + Sync + 'static) {
         self.error_logger = Some(Box::new(logger));
     }
+    pub fn set_guard_logger(&mut self, logger: impl Fn(&GuardLogEntry) + Send + Sync + 'static) {
+        self.guard_logger = Some(Box::new(logger));
+    }
     pub fn remove_all_loggers(&mut self) {
         self.transition_logger = None;
         self.error_logger = None;
+        self.guard_logger = None;
     }
 
     pub fn start_flow(
@@ -79,7 +96,8 @@ impl<S: FlowState> FlowEngine<S> {
         &mut self, flow_id: &str,
         external_data: Vec<(std::any::TypeId, Box<dyn crate::CloneAny>)>,
     ) -> Result<(), FlowError> {
-        // Phase 1: operate on flow, collect transition info
+        // Phase 1: operate on flow, collect transition info + guard info
+        let mut guard_info: Option<(String, String, &'static str, Option<String>)> = None; // (state, guardName, result, reason)
         let transition_info = {
             let flow = self.store.get_mut(flow_id)
                 .ok_or_else(|| FlowError::new("FLOW_NOT_FOUND", format!("Flow {flow_id} not found or completed")))?;
@@ -97,9 +115,11 @@ impl<S: FlowState> FlowEngine<S> {
                 .ok_or_else(|| FlowError::invalid_transition(&format!("{:?}", current), &format!("{:?}", current)))?;
 
             if let Some(guard) = &transition.guard {
+                let guard_name = guard.name().to_string();
                 let output = guard.validate(&flow.context);
                 match output {
                     GuardOutput::Accepted { data } => {
+                        guard_info = Some((format!("{:?}", current), guard_name.clone(), "accepted", None));
                         for (k, v) in data { flow.context.put_raw(k, v); }
                         let to = transition.to;
                         if let Some(proc) = &transition.processor {
@@ -117,7 +137,8 @@ impl<S: FlowState> FlowEngine<S> {
                             Some((from_dbg, format!("{:?}", to), guard.name().to_string()))
                         }
                     }
-                    GuardOutput::Rejected { .. } => {
+                    GuardOutput::Rejected { ref reason } => {
+                        guard_info = Some((format!("{:?}", current), guard_name.clone(), "rejected", Some(reason.clone())));
                         flow.increment_guard_failure();
                         if flow.guard_failure_count() >= def.max_guard_retries {
                             Self::handle_error(flow, current, &def);
@@ -127,6 +148,7 @@ impl<S: FlowState> FlowEngine<S> {
                         }
                     }
                     GuardOutput::Expired => {
+                        guard_info = Some((format!("{:?}", current), guard_name.clone(), "expired", None));
                         flow.complete("EXPIRED");
                         None
                     }
@@ -139,14 +161,37 @@ impl<S: FlowState> FlowEngine<S> {
             }
         }; // flow borrow ends here
 
-        // Phase 2: record transition (no flow borrow)
-        if let Some((from, to, trigger)) = &transition_info {
+        // Phase 2: log guard result + record transition (no flow borrow)
+        let flow_name = self.store.get(flow_id).map(|f| f.definition.name.clone()).unwrap_or_default();
+        if let Some((ref state, ref gname, result, ref reason)) = guard_info {
+            if let Some(ref logger) = self.guard_logger {
+                logger(&GuardLogEntry {
+                    flow_id: flow_id.to_string(), flow_name: flow_name.clone(),
+                    state: state.clone(), guard_name: gname.clone(),
+                    result, reason: reason.clone(),
+                });
+            }
+        }
+        if let Some((ref from, ref to, ref trigger)) = transition_info {
             self.store.record_transition(flow_id, from, to, trigger);
+            if let Some(ref logger) = self.transition_logger {
+                logger(&TransitionLogEntry {
+                    flow_id: flow_id.to_string(), flow_name: flow_name.clone(),
+                    from: from.clone(), to: to.clone(), trigger: trigger.clone(),
+                });
+            }
+            if trigger == "error" {
+                if let Some(ref logger) = self.error_logger {
+                    logger(&ErrorLogEntry {
+                        flow_id: flow_id.to_string(), flow_name: flow_name.clone(),
+                        from: from.clone(), to: to.clone(), trigger: trigger.clone(), cause: None,
+                    });
+                }
+            }
         }
 
         // Phase 3: auto chain (only if we transitioned successfully)
         if transition_info.is_some() {
-            // Check if the transition was an error — don't auto-chain after error
             if let Some((_, _, ref trigger)) = transition_info {
                 if trigger != "error" {
                     self.execute_auto_chain(flow_id)?;
@@ -171,10 +216,25 @@ impl<S: FlowState> FlowEngine<S> {
                 Self::dispatch_step(flow, current, &def, self.strict_mode)?
             }; // flow borrow ends
 
-            // Phase 2: record + check if we should stop
+            // Phase 2: record + log + check if we should stop
             let Some((from, to, trigger, is_error)) = step_result else { break };
             self.store.record_transition(flow_id, &from, &to, &trigger);
-            if is_error { return Ok(()); }
+            let flow_name = self.store.get(flow_id).map(|f| f.definition.name.clone()).unwrap_or_default();
+            if let Some(ref logger) = self.transition_logger {
+                logger(&TransitionLogEntry {
+                    flow_id: flow_id.to_string(), flow_name: flow_name.clone(),
+                    from: from.clone(), to: to.clone(), trigger: trigger.clone(),
+                });
+            }
+            if is_error {
+                if let Some(ref logger) = self.error_logger {
+                    logger(&ErrorLogEntry {
+                        flow_id: flow_id.to_string(), flow_name,
+                        from, to, trigger, cause: None,
+                    });
+                }
+                return Ok(());
+            }
             depth += 1;
         }
         if depth >= MAX_CHAIN_DEPTH { return Err(FlowError::max_chain_depth()); }
