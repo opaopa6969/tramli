@@ -225,6 +225,22 @@ for (const event of sink.events()) {
 
 **A:** `TelemetrySink` インターフェースを実装して、`emit()` からメトリクスを送信すればいい。`InMemoryTelemetrySink` はテスト用。
 
+**N:** 高負荷環境で `emit()` がブロックしない？
+
+**A:** `emit()` は意図的に同期だ（DD-012/DD-013）。HTTP/gRPC で外部に送る場合は channel パターンを使う — `emit()` 内で channel に送信し、別スレッドで I/O する。5 行で書ける。詳細は [`docs/patterns/non-blocking-sink.md`](patterns/non-blocking-sink.md) を参照。
+
+**N:** v3.3.0 で `durationMicros` が追加されたよね？
+
+**A:** そう。`TransitionLogEntry`, `ErrorLogEntry`, `GuardLogEntry` に `durationMicros`（マイクロ秒整数）が付いた。遷移のボトルネック特定に使える:
+
+```typescript
+engine.setTransitionLogger(entry => {
+  if (entry.durationMicros > 1000) { // 1ms 超え
+    console.warn(`Slow transition: ${entry.from} → ${entry.to} (${entry.durationMicros}μs)`);
+  }
+});
+```
+
 ---
 
 ## 第7幕: Lintポリシー
@@ -248,6 +264,24 @@ lint.analyze(definition, report);
 for (const finding of report.findings()) {
   console.warn(`[${finding.severity}] ${finding.pluginId}: ${finding.message}`);
 }
+```
+
+**N:** v3.3.0 で Finding に `location` が付いたって聞いた。
+
+**A:** そう。`FindingLocation` という enum が追加された。4 variant: `Transition(from, to)`, `State(state)`, `Data(dataKey)`, `Flow`。lint の結果がどの遷移・状態・データに関するか構造化されている:
+
+```typescript
+for (const finding of report.findings()) {
+  if (finding.location?.type === 'transition') {
+    console.warn(`${finding.message} @ ${finding.location.fromState} → ${finding.location.toState}`);
+  }
+}
+```
+
+カスタムポリシーでも `warnAt()` で location を付けられる:
+
+```typescript
+report.warnAt('my-policy', 'Too many transitions', { type: 'state', state: 'PENDING' });
 ```
 
 **N:** カスタムポリシーは追加できる？
@@ -317,7 +351,7 @@ console.log(gen.generateBuilderSkeleton(spec));
 
 **N:** フロー定義からBDD？
 
-**A:** `ScenarioTestPlugin` が遷移ごとに1シナリオを生成する:
+**A:** `ScenarioTestPlugin` が遷移ごとにシナリオを生成する。v3.3.0 からはエラーパス、ガード拒否、タイムアウトのシナリオも自動生成される。各シナリオには `kind` フィールド (`happy`, `error`, `guard_rejection`, `timeout`) が付く:
 
 ```typescript
 import { ScenarioTestPlugin } from '@unlaxer/tramli-plugins';

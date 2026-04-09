@@ -1,3 +1,5 @@
+[日本語版](plugin-guide-ja.md)
+
 # tramli Plugin Guide
 
 tramli is a **verification kernel** — flat semantics, `requires/produces`, build-time validation.
@@ -98,6 +100,9 @@ Integrates with FlowEngine's logger hooks. Emits TelemetryEvents to a configurab
 registry.register(new ObservabilityEnginePlugin(new InMemoryTelemetrySink()));
 ```
 
+**v3.3.0**: All log entries now include `durationMicros` (integer microseconds).
+For high-load I/O sinks, see the [non-blocking sink pattern](patterns/non-blocking-sink.md).
+
 ### Rich Resume
 Enhanced resumeAndExecute with explicit status classification:
 TRANSITIONED, ALREADY_COMPLETE, NO_APPLICABLE_TRANSITION, REJECTED, EXCEPTION_ROUTED.
@@ -127,6 +132,9 @@ Static analysis of FlowDefinition against design policies.
 registry.register(PolicyLintPlugin.defaults());
 ```
 
+**v3.3.0**: Findings now include `FindingLocation` (Transition/State/Data/Flow).
+Use `warnAt()` / `errorAt()` to attach structured location to custom policies.
+
 ### Diagram / Docs / Testing
 Generation plugins for Mermaid diagrams, Markdown documentation, and test scenarios.
 ```java
@@ -134,3 +142,6 @@ new DiagramGenerationPlugin<S>().generate(definition);
 new FlowDocumentationPlugin<S>().generate(definition);
 new ScenarioGenerationPlugin<S>().generate(definition);
 ```
+
+**v3.3.0**: `ScenarioTestPlugin` now generates error paths, guard rejection,
+and timeout scenarios. Each `FlowScenario` has a `kind` field for filtering.

@@ -118,7 +118,13 @@ impl<S: FlowState> EventLogStore<S> {
     }
 }
 
-/// Replay service — reconstruct state at a given version.
+/// Replay service — reconstructs flow state at any version.
+///
+/// Assumes each TRANSITION event stores a full snapshot of the state.
+/// Returns the latest matching state at or before the requested version.
+///
+/// If the event log is later changed to store diffs instead of full snapshots,
+/// use [`ProjectionReplayService`] with a fold/reducer instead.
 pub struct ReplayService;
 
 impl ReplayService {
@@ -132,7 +138,15 @@ impl ReplayService {
     }
 }
 
-/// Projection replay service — custom reducers for materialized views.
+/// Projection replay service — fold/reducer model for custom aggregations.
+///
+/// Unlike [`ReplayService`] which assumes full snapshots,
+/// this service supports both full-snapshot and diff-based event logs.
+/// `reducer.initial_state()` returns the empty starting state,
+/// `reducer.apply(state, event)` accumulates each event.
+///
+/// Use for custom aggregations (transition count, cumulative metrics)
+/// or when the event log stores diffs rather than full snapshots.
 pub struct ProjectionReplayService;
 
 impl ProjectionReplayService {

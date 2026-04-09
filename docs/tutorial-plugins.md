@@ -225,6 +225,22 @@ for (const event of sink.events()) {
 
 **A:** Implement the `TelemetrySink` interface and emit metrics from `emit()`. The `InMemoryTelemetrySink` is just for testing.
 
+**N:** Won't `emit()` block under high load?
+
+**A:** `emit()` is intentionally sync (DD-012/DD-013). For HTTP/gRPC sinks, use the channel pattern — send to a channel inside `emit()`, drain on a separate thread. It's 5 lines of code. See [`docs/patterns/non-blocking-sink.md`](patterns/non-blocking-sink.md).
+
+**N:** I heard v3.3.0 added `durationMicros`?
+
+**A:** Yes. `TransitionLogEntry`, `ErrorLogEntry`, and `GuardLogEntry` now include `durationMicros` (integer microseconds). Great for spotting bottlenecks:
+
+```typescript
+engine.setTransitionLogger(entry => {
+  if (entry.durationMicros > 1000) { // over 1ms
+    console.warn(`Slow transition: ${entry.from} → ${entry.to} (${entry.durationMicros}μs)`);
+  }
+});
+```
+
 ---
 
 ## Act 7: Lint Policies
@@ -248,6 +264,24 @@ lint.analyze(definition, report);
 for (const finding of report.findings()) {
   console.warn(`[${finding.severity}] ${finding.pluginId}: ${finding.message}`);
 }
+```
+
+**N:** v3.3.0 added `location` to Finding. How does that work?
+
+**A:** `FindingLocation` is a discriminated union with 4 variants: `Transition(from, to)`, `State(state)`, `Data(dataKey)`, `Flow`. Lint results now tell you exactly where the issue is:
+
+```typescript
+for (const finding of report.findings()) {
+  if (finding.location?.type === 'transition') {
+    console.warn(`${finding.message} @ ${finding.location.fromState} → ${finding.location.toState}`);
+  }
+}
+```
+
+Custom policies can use `warnAt()` to attach location:
+
+```typescript
+report.warnAt('my-policy', 'Too many transitions', { type: 'state', state: 'PENDING' });
 ```
 
 **N:** Can I add custom policies?
@@ -317,7 +351,7 @@ console.log(gen.generateBuilderSkeleton(spec));
 
 **N:** BDD from a flow definition?
 
-**A:** `ScenarioTestPlugin` generates one scenario per transition:
+**A:** `ScenarioTestPlugin` generates scenarios from your flow definition. Since v3.3.0 it also generates error paths, guard rejections, and timeout scenarios. Each scenario has a `kind` field (`happy`, `error`, `guard_rejection`, `timeout`):
 
 ```typescript
 import { ScenarioTestPlugin } from '@unlaxer/tramli-plugins';
