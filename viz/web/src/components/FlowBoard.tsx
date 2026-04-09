@@ -3,7 +3,6 @@ import {
   ReactFlow,
   Background,
   BackgroundVariant,
-  MarkerType,
   type Node,
   type Edge,
   type NodeChange,
@@ -13,6 +12,8 @@ import '@xyflow/react/dist/style.css';
 import { FlowNode, type FlowNodeData } from './FlowNode';
 import { CarLayer } from './CarLayer';
 import { TraceLayer } from './TraceLayer';
+import { ArrowEdge } from './ArrowEdge';
+import { Legend } from './Legend';
 import type { StateInfo, EdgeInfo, VizEvent } from '../types';
 import type { TransitAnimation } from '../hooks/useVizSocket';
 
@@ -32,6 +33,7 @@ interface FlowBoardProps {
 }
 
 const nodeTypes = { flowNode: FlowNode };
+const edgeTypes = { arrow: ArrowEdge };
 
 const HANDLE_CYCLE = [undefined, 'left', 'right'] as const;
 type HandleSide = typeof HANDLE_CYCLE[number];
@@ -63,39 +65,6 @@ function autoHandles(from: StateInfo, to: StateInfo): { source: HandleSide; targ
 
 // ── localStorage persistence ──
 
-const NODE_W = 120;
-const NODE_H = 36;
-
-/** Estimate edge path length from handle positions (not node centers). */
-function estimatePathLength(from: StateInfo | undefined, to: StateInfo | undefined): number {
-  if (!from || !to) return 100;
-  const goingUp = to.y < from.y - 10;
-  const sameRow = Math.abs(to.y - from.y) <= 10;
-  let sx: number, sy: number, tx: number, ty: number;
-  if (goingUp) {
-    // Side handles
-    const toLeft = to.x < from.x;
-    sx = toLeft ? from.x : from.x + NODE_W;
-    sy = from.y + NODE_H / 2;
-    tx = toLeft ? to.x + NODE_W : to.x;
-    ty = to.y + NODE_H / 2;
-  } else if (sameRow) {
-    const leftToRight = to.x > from.x;
-    sx = leftToRight ? from.x + NODE_W : from.x;
-    sy = from.y + NODE_H / 2;
-    tx = leftToRight ? to.x : to.x + NODE_W;
-    ty = to.y + NODE_H / 2;
-  } else {
-    // Bottom → Top
-    sx = from.x + NODE_W / 2;
-    sy = from.y + NODE_H;
-    tx = to.x + NODE_W / 2;
-    ty = to.y;
-  }
-  const dx = tx - sx;
-  const dy = ty - sy;
-  return Math.sqrt(dx * dx + dy * dy) * 1.1; // bezier is ~10% longer than straight
-}
 
 const STORAGE_KEY = 'tramli-viz-layout';
 
@@ -201,55 +170,42 @@ export function FlowBoard({ states, edges, flowPositions, transits, events, edge
       const srcSide = override?.source ?? auto.source;
       const tgtSide = override?.target ?? auto.target;
 
-      const edgeColor = e.type === 'error' ? '#ef4444' : e.type === 'external' ? '#f59e0b' : '#64748b';
+      // Color: error=red, external=amber, branch=white, auto=gray
+      const edgeColor = e.type === 'error' ? '#ef4444'
+        : e.type === 'external' ? '#f59e0b'
+        : e.type === 'branch' ? '#e2e8f0'
+        : '#64748b';
       const count = edgeCounts.get(edgeKey) ?? 0;
       const label = count > 0 ? `${e.label} (${count})` : e.label;
 
-      // Proportional width: this edge's share of all outgoing transitions from source
+      // Proportional width: 60% of previous max
       const sourceTotal = sourceOutTotals.get(e.from) ?? 0;
       const ratio = sourceTotal > 0 ? count / sourceTotal : 0;
-      // Min 1.5px (no data), max 8px (100% share). Scales with ratio.
-      const proportionalWidth = sourceTotal > 0 ? 1.5 + ratio * 6.5 : 1.5;
+      const proportionalWidth = sourceTotal > 0 ? 1.5 + ratio * 3.9 : 1.5;
 
-      // Heat glow adds a temporary boost on top
       const heat = edgeHeat.get(edgeKey) ?? 0;
       const heatIntensity = Math.min(heat / 3, 1);
-      const glowWidth = proportionalWidth + heatIntensity * 3;
+      const glowWidth = proportionalWidth + heatIntensity * 2;
       const glowFilter = heatIntensity > 0.08
         ? `drop-shadow(0 0 ${3 + heatIntensity * 8}px ${edgeColor})`
         : undefined;
 
-      // Arrow marker size and gap calculation
-      const markerSize = Math.round(glowWidth * 3 + 18);
-      const arrowLen = markerSize / 4; // 5/20 of viewBox
-      const gapPx = arrowLen + glowWidth; // arrow + stroke cap room
-      const pathLen = estimatePathLength(fromState, toState);
-      const showLen = Math.max(pathLen - gapPx, 5);
-
       return {
         id: `e-${i}`,
+        type: 'arrow',
         source: e.from,
         target: e.to,
-        data: { edgeKey },
+        data: { edgeKey, baseWidth: proportionalWidth, glowWidth, heatIntensity },
         label,
         sourceHandle: handleId(srcSide, 'source'),
         targetHandle: handleId(tgtSide, 'target'),
         style: {
           stroke: edgeColor,
-          // Show line for (pathLen - gap) then hide rest with huge gap → no repeat
-          strokeDasharray: e.type === 'error'
-            ? `5 3`
-            : `${showLen} 99999`,
+          // error=dense red dash, branch=gray dash, auto/external=solid
+          strokeDasharray: e.type === 'error' ? '8 3' : e.type === 'branch' ? '6 4' : undefined,
           strokeWidth: glowWidth,
           filter: glowFilter,
           transition: 'stroke-width 200ms, filter 200ms',
-        },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: edgeColor,
-          markerUnits: 'userSpaceOnUse',
-          width: markerSize,
-          height: markerSize,
         },
         labelStyle: { fill: '#94a3b8', fontSize: 10, fontFamily: 'monospace' },
         labelBgStyle: { fill: '#0f172a', fillOpacity: 0.8 },
@@ -301,6 +257,7 @@ export function FlowBoard({ states, edges, flowPositions, transits, events, edge
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+      <Legend />
       {/* Save button (floating) */}
       <button
         onClick={doSave}
@@ -317,6 +274,7 @@ export function FlowBoard({ states, edges, flowPositions, transits, events, edge
         nodes={rfNodes}
         edges={rfEdges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         onNodesChange={handleNodesChange}
         onEdgeDoubleClick={handleEdgeDoubleClick}
         onEdgeContextMenu={handleEdgeContextMenu}
