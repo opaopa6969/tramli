@@ -2,8 +2,9 @@ import { chromium } from 'playwright';
 import { spawn } from 'child_process';
 import { setTimeout as sleep } from 'timers/promises';
 
-const DURATION_MS = 15_000; // 15 seconds of recording
-const OUTPUT = new URL('../../docs/images/viz-demo.webm', import.meta.url).pathname;
+const DURATION_MS = 15_000;
+const OUTPUT_WEBM = new URL('../../docs/images/viz-demo.webm', import.meta.url).pathname;
+const OUTPUT_MP4 = new URL('../../docs/images/viz-demo-twitter.mp4', import.meta.url).pathname;
 
 async function main() {
   // Start server + demo
@@ -63,12 +64,22 @@ async function main() {
   await page.close();
   const video = page.video();
   if (video) {
-    await video.saveAs(OUTPUT);
-    console.log(`[record] Saved: ${OUTPUT}`);
+    await video.saveAs(OUTPUT_WEBM);
+    console.log(`[record] Saved: ${OUTPUT_WEBM}`);
   }
 
   await context.close();
   await browser.close();
+
+  // Convert to Twitter-compatible MP4 (H.264, AAC, ≤140s, ≤512MB)
+  console.log('[record] Converting to Twitter MP4...');
+  const { execSync } = await import('child_process');
+  execSync(
+    `ffmpeg -y -i "${OUTPUT_WEBM}" -c:v libx264 -preset slow -crf 22 -pix_fmt yuv420p -movflags +faststart -an "${OUTPUT_MP4}"`,
+    { stdio: 'inherit' },
+  );
+  console.log(`[record] Saved: ${OUTPUT_MP4}`);
+
   server.kill();
   vite.kill();
 }
