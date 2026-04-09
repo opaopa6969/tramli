@@ -1,6 +1,7 @@
 // ── API framework ──
 export { PluginReport } from './api/types.js';
 export type {
+  FindingLocation, FindingEntry,
   PluginKind, PluginDescriptor, FlowPlugin,
   AnalysisPlugin, StorePlugin, EnginePlugin,
   RuntimeAdapterPlugin, GenerationPlugin,
@@ -64,7 +65,7 @@ export type { FlowPolicy } from './lint/types.js';
 // ── Testing ──
 export { ScenarioTestPlugin } from './testing/scenario-test-plugin.js';
 export { ScenarioGenerationPlugin } from './testing/scenario-generation-plugin.js';
-export type { FlowScenario, FlowTestPlan } from './testing/types.js';
+export type { FlowScenario, FlowTestPlan, ScenarioKind } from './testing/types.js';
 
 // ── SubFlow ──
 export { GuaranteedSubflowValidator } from './subflow/guaranteed-subflow-validator.js';

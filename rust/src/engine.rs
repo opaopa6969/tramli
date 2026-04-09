@@ -22,6 +22,7 @@ pub struct TransitionLogEntry {
     pub from: String,
     pub to: String,
     pub trigger: String,
+    pub duration_micros: u64,
 }
 
 /// Log entry for errors.
@@ -32,6 +33,7 @@ pub struct ErrorLogEntry {
     pub to: String,
     pub trigger: String,
     pub cause: Option<String>,
+    pub duration_micros: u64,
 }
 
 /// Log entry for state changes (context.put). Opt-in for debugging.
@@ -51,6 +53,7 @@ pub struct GuardLogEntry {
     pub guard_name: String,
     pub result: &'static str,
     pub reason: Option<String>,
+    pub duration_micros: u64,
 }
 
 pub struct FlowEngine<S: FlowState> {
@@ -116,6 +119,7 @@ impl<S: FlowState> FlowEngine<S> {
         external_data: Vec<(std::any::TypeId, Box<dyn crate::CloneAny>)>,
     ) -> Result<(), FlowError> {
         // Phase 1: operate on flow, collect transition info + guard info
+        let phase1_start = Instant::now();
         let mut guard_info: Option<(String, String, &'static str, Option<String>)> = None; // (state, guardName, result, reason)
         // Collect external data TypeIds before consuming
         let data_type_ids: std::collections::HashSet<std::any::TypeId> =
@@ -214,13 +218,14 @@ impl<S: FlowState> FlowEngine<S> {
         }; // flow borrow ends here
 
         // Phase 2: log guard result + record transition (no flow borrow)
+        let phase2_elapsed = phase1_start.elapsed().as_micros() as u64;
         let flow_name = self.store.get(flow_id).map(|f| f.definition.name.clone()).unwrap_or_default();
         if let Some((ref state, ref gname, result, ref reason)) = guard_info {
             if let Some(ref logger) = self.guard_logger {
                 logger(&GuardLogEntry {
                     flow_id: flow_id.to_string(), flow_name: flow_name.clone(),
                     state: state.clone(), guard_name: gname.clone(),
-                    result, reason: reason.clone(),
+                    result, reason: reason.clone(), duration_micros: phase2_elapsed,
                 });
             }
         }
@@ -230,6 +235,7 @@ impl<S: FlowState> FlowEngine<S> {
                 logger(&TransitionLogEntry {
                     flow_id: flow_id.to_string(), flow_name: flow_name.clone(),
                     from: from.clone(), to: to.clone(), trigger: trigger.clone(),
+                    duration_micros: phase2_elapsed,
                 });
             }
             if trigger == "error" {
@@ -237,6 +243,7 @@ impl<S: FlowState> FlowEngine<S> {
                     logger(&ErrorLogEntry {
                         flow_id: flow_id.to_string(), flow_name: flow_name.clone(),
                         from: from.clone(), to: to.clone(), trigger: trigger.clone(), cause: None,
+                        duration_micros: phase2_elapsed,
                     });
                 }
             }
@@ -257,6 +264,7 @@ impl<S: FlowState> FlowEngine<S> {
         let mut depth = 0;
         let max_depth = self.max_chain_depth;
         while depth < max_depth {
+            let step_start = Instant::now();
             // Phase 1: operate on flow, collect result
             let step_result = {
                 let flow = match self.store.get_mut(flow_id) { Some(f) => f, None => break };
@@ -271,12 +279,14 @@ impl<S: FlowState> FlowEngine<S> {
 
             // Phase 2: record + log + check if we should stop
             let Some((from, to, trigger, is_error)) = step_result else { break };
+            let duration_micros = step_start.elapsed().as_micros() as u64;
             self.store.record_transition(flow_id, &from, &to, &trigger);
             let flow_name = self.store.get(flow_id).map(|f| f.definition.name.clone()).unwrap_or_default();
             if let Some(ref logger) = self.transition_logger {
                 logger(&TransitionLogEntry {
                     flow_id: flow_id.to_string(), flow_name: flow_name.clone(),
                     from: from.clone(), to: to.clone(), trigger: trigger.clone(),
+                    duration_micros,
                 });
             }
             if is_error {
@@ -284,6 +294,7 @@ impl<S: FlowState> FlowEngine<S> {
                     logger(&ErrorLogEntry {
                         flow_id: flow_id.to_string(), flow_name,
                         from, to, trigger, cause: None,
+                        duration_micros,
                     });
                 }
                 return Ok(());

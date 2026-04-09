@@ -94,7 +94,8 @@ export class Pipeline {
     let prev = 'initial';
 
     for (const step of this.steps) {
-      this.transitionLogger?.({ flowId, flowName: this.name, from: prev, to: step.name, trigger: step.name });
+      const stepStart = (this.transitionLogger || this.errorLogger) ? performance.now() : 0;
+      this.transitionLogger?.({ flowId, flowName: this.name, from: prev, to: step.name, trigger: step.name, durationMicros: 0 });
 
       const keysBefore = this.stateLogger ? new Set(ctx.snapshot().keys()) : null;
 
@@ -102,7 +103,8 @@ export class Pipeline {
         await step.process(ctx);
       } catch (e: any) {
         const err = e instanceof Error ? e : new Error(String(e));
-        this.errorLogger?.({ flowId, flowName: this.name, from: prev, to: step.name, trigger: step.name, cause: err });
+        const durationMicros = Math.round((performance.now() - stepStart) * 1000);
+        this.errorLogger?.({ flowId, flowName: this.name, from: prev, to: step.name, trigger: step.name, cause: err, durationMicros });
         throw new PipelineException(step.name, [...completed], ctx, err);
       }
 

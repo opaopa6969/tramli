@@ -9,10 +9,10 @@ import type { Transition, GuardOutput } from './types.js';
 export const DEFAULT_MAX_CHAIN_DEPTH = 10;
 
 /** Log entry types for tramli's pluggable logger API. */
-export interface TransitionLogEntry { flowId: string; flowName: string; from: string | null; to: string; trigger: string }
+export interface TransitionLogEntry { flowId: string; flowName: string; from: string | null; to: string; trigger: string; durationMicros: number }
 export interface StateLogEntry { flowId: string; flowName: string; state: string; key: string; value: unknown }
-export interface ErrorLogEntry { flowId: string; flowName: string; from: string | null; to: string | null; trigger: string; cause: Error | null }
-export interface GuardLogEntry { flowId: string; flowName: string; state: string; guardName: string; result: 'accepted' | 'rejected' | 'expired'; reason?: string }
+export interface ErrorLogEntry { flowId: string; flowName: string; from: string | null; to: string | null; trigger: string; cause: Error | null; durationMicros: number }
+export interface GuardLogEntry { flowId: string; flowName: string; state: string; guardName: string; result: 'accepted' | 'rejected' | 'expired'; reason?: string; durationMicros: number }
 
 export class FlowEngine {
   private readonly strictMode: boolean;
@@ -118,10 +118,13 @@ export class FlowEngine {
 
     const guard = transition.guard;
     if (guard) {
+      const guardStart = this.guardLogger ? performance.now() : 0;
       const output: GuardOutput = await guard.validate(flow.context);
+      const guardDurationMicros = this.guardLogger ? Math.round((performance.now() - guardStart) * 1000) : 0;
       switch (output.type) {
         case 'accepted': {
-          this.logGuard(flow, currentState, guard.name, 'accepted');
+          this.logGuard(flow, currentState, guard.name, 'accepted', guardDurationMicros);
+          const transStart = this.transitionLogger ? performance.now() : 0;
           const backup = flow.context.snapshot();
           if (output.data) {
             for (const [key, value] of output.data) flow.context.put(key as any, value);
@@ -133,7 +136,7 @@ export class FlowEngine {
             flow.transitionTo(transition.to);
             this.fireEnter(flow, transition.to);
             this.store.recordTransition(flow.id, from, transition.to, guard.name, flow.context);
-            this.logTransition(flow, from, transition.to, guard.name);
+            this.logTransition(flow, from, transition.to, guard.name, transStart);
           } catch (e: any) {
             flow.context.restoreFrom(backup);
             this.handleError(flow, currentState, e instanceof Error ? e : new Error(String(e)));
@@ -143,7 +146,7 @@ export class FlowEngine {
           break;
         }
         case 'rejected': {
-          this.logGuard(flow, currentState, guard.name, 'rejected', output.reason);
+          this.logGuard(flow, currentState, guard.name, 'rejected', guardDurationMicros, output.reason);
           flow.incrementGuardFailure(guard.name);
           if (flow.guardFailureCount >= definition.maxGuardRetries) {
             this.handleError(flow, currentState);
@@ -152,19 +155,20 @@ export class FlowEngine {
           return flow;
         }
         case 'expired': {
-          this.logGuard(flow, currentState, guard.name, 'expired');
+          this.logGuard(flow, currentState, guard.name, 'expired', guardDurationMicros);
           flow.complete('EXPIRED');
           this.store.save(flow);
           return flow;
         }
       }
     } else {
+      const transStart = this.transitionLogger ? performance.now() : 0;
       const from = flow.currentState;
       this.fireExit(flow, from);
       flow.transitionTo(transition.to);
       this.fireEnter(flow, transition.to);
       this.store.recordTransition(flow.id, from, transition.to, 'external', flow.context);
-      this.logTransition(flow, from, transition.to, 'external');
+      this.logTransition(flow, from, transition.to, 'external', transStart);
     }
 
     await this.executeAutoChain(flow);
@@ -196,6 +200,7 @@ export class FlowEngine {
       if (!autoOrBranch) break;
 
       const backup = flow.context.snapshot();
+      const stepStart = this.transitionLogger ? performance.now() : 0;
       try {
         if (autoOrBranch.type === 'auto') {
           if (autoOrBranch.processor) {
@@ -208,7 +213,7 @@ export class FlowEngine {
           this.fireEnter(flow, autoOrBranch.to);
           const trigger = autoOrBranch.processor?.name ?? 'auto';
           this.store.recordTransition(flow.id, from, autoOrBranch.to, trigger, flow.context);
-          this.logTransition(flow, from, autoOrBranch.to, trigger);
+          this.logTransition(flow, from, autoOrBranch.to, trigger, stepStart);
         } else {
           const branch = autoOrBranch.branch!;
           const label = await branch.decide(flow.context);
@@ -225,7 +230,7 @@ export class FlowEngine {
           this.fireEnter(flow, target);
           const trigger = `${branch.name}:${label}`;
           this.store.recordTransition(flow.id, from, target, trigger, flow.context);
-          this.logTransition(flow, from, target, trigger);
+          this.logTransition(flow, from, target, trigger, stepStart);
         }
       } catch (e: any) {
         flow.context.restoreFrom(backup);
@@ -256,13 +261,14 @@ export class FlowEngine {
       parentFlow.setActiveSubFlow(null);
       const target = exitMappings.get(subFlow.exitState!);
       if (target) {
+        const sfStart = this.transitionLogger ? performance.now() : 0;
         const from = parentFlow.currentState;
         this.fireExit(parentFlow, from);
         parentFlow.transitionTo(target);
         this.fireEnter(parentFlow, target);
         const trigger = `subFlow:${subDef.name}/${subFlow.exitState}`;
         this.store.recordTransition(parentFlow.id, from, target, trigger, parentFlow.context);
-        this.logTransition(parentFlow, from, target, trigger);
+        this.logTransition(parentFlow, from, target, trigger, sfStart);
         return 1;
       }
       // Error bubbling: no exit mapping → fall back to parent's error transitions
@@ -286,16 +292,19 @@ export class FlowEngine {
 
     const guard = transition.guard;
     if (guard) {
+      const guardStart = this.guardLogger ? performance.now() : 0;
       const output: GuardOutput = await guard.validate(parentFlow.context);
+      const guardDur = this.guardLogger ? Math.round((performance.now() - guardStart) * 1000) : 0;
       if (output.type === 'accepted') {
         if (output.data) {
           for (const [key, value] of output.data) parentFlow.context.put(key as any, value);
         }
+        const sfStart = this.transitionLogger ? performance.now() : 0;
         const sfFrom = subFlow.currentState;
         subFlow.transitionTo(transition.to);
         this.store.recordTransition(parentFlow.id, sfFrom, transition.to, guard.name, parentFlow.context);
-        this.logTransition(parentFlow, sfFrom, transition.to, guard.name);
-        this.logGuard(parentFlow, sfFrom, guard.name, 'accepted');
+        this.logTransition(parentFlow, sfFrom, transition.to, guard.name, sfStart);
+        this.logGuard(parentFlow, sfFrom, guard.name, 'accepted', guardDur);
       } else if (output.type === 'rejected') {
         subFlow.incrementGuardFailure();
         if (subFlow.guardFailureCount >= subDef.maxGuardRetries) {
@@ -321,13 +330,14 @@ export class FlowEngine {
       if (subFlowT?.exitMappings) {
         const target = subFlowT.exitMappings.get(subFlow.exitState!);
         if (target) {
+          const exitStart = this.transitionLogger ? performance.now() : 0;
           const from = parentFlow.currentState;
           this.fireExit(parentFlow, from);
           parentFlow.transitionTo(target);
           this.fireEnter(parentFlow, target);
           const trigger = `subFlow:${subDef.name}/${subFlow.exitState}`;
           this.store.recordTransition(parentFlow.id, from, target, trigger, parentFlow.context);
-          this.logTransition(parentFlow, from, target, trigger);
+          this.logTransition(parentFlow, from, target, trigger, exitStart);
           await this.executeAutoChain(parentFlow);
         }
       }
@@ -357,19 +367,26 @@ export class FlowEngine {
     if (action) action(flow.context);
   }
 
-  private logTransition<S extends string>(flow: FlowInstance<S>, from: string | null, to: string, trigger: string): void {
-    this.transitionLogger?.({ flowId: flow.id, flowName: flow.definition.name, from, to, trigger });
+  private logTransition<S extends string>(flow: FlowInstance<S>, from: string | null, to: string, trigger: string, startMs: number): void {
+    if (this.transitionLogger) {
+      const durationMicros = Math.round((performance.now() - startMs) * 1000);
+      this.transitionLogger({ flowId: flow.id, flowName: flow.definition.name, from, to, trigger, durationMicros });
+    }
   }
 
-  private logError<S extends string>(flow: FlowInstance<S>, from: string | null, to: string | null, trigger: string, cause: Error | null): void {
-    this.errorLogger?.({ flowId: flow.id, flowName: flow.definition.name, from, to, trigger, cause });
+  private logError<S extends string>(flow: FlowInstance<S>, from: string | null, to: string | null, trigger: string, cause: Error | null, startMs: number): void {
+    if (this.errorLogger) {
+      const durationMicros = Math.round((performance.now() - startMs) * 1000);
+      this.errorLogger({ flowId: flow.id, flowName: flow.definition.name, from, to, trigger, cause, durationMicros });
+    }
   }
 
-  private logGuard<S extends string>(flow: FlowInstance<S>, state: string, guardName: string, result: 'accepted' | 'rejected' | 'expired', reason?: string): void {
-    this.guardLogger?.({ flowId: flow.id, flowName: flow.definition.name, state, guardName, result, reason });
+  private logGuard<S extends string>(flow: FlowInstance<S>, state: string, guardName: string, result: 'accepted' | 'rejected' | 'expired', durationMicros: number, reason?: string): void {
+    this.guardLogger?.({ flowId: flow.id, flowName: flow.definition.name, state, guardName, result, reason, durationMicros });
   }
 
   private handleError<S extends string>(flow: FlowInstance<S>, fromState: S, cause?: Error): void {
+    const errorStart = (this.transitionLogger || this.errorLogger) ? performance.now() : 0;
     if (cause) {
       flow.setLastError(`${cause.constructor.name}: ${cause.message}`);
       if (cause instanceof FlowError) {
@@ -378,7 +395,7 @@ export class FlowEngine {
         cause.withContextSnapshot(available, new Set());
       }
     }
-    this.logError(flow, fromState, null, 'error', cause ?? null);
+    this.logError(flow, fromState, null, 'error', cause ?? null, errorStart);
 
     // 1. Try exception-typed routes first (onStepError)
     if (cause && flow.definition.exceptionRoutes) {
@@ -390,7 +407,7 @@ export class FlowEngine {
             flow.transitionTo(route.target);
             const trigger = `error:${cause.constructor.name}`;
             this.store.recordTransition(flow.id, from, route.target, trigger, flow.context);
-            this.logTransition(flow, from, route.target, trigger);
+            this.logTransition(flow, from, route.target, trigger, errorStart);
             if (flow.definition.stateConfig[route.target]?.terminal) flow.complete(route.target);
             return;
           }
@@ -404,7 +421,7 @@ export class FlowEngine {
       const from = flow.currentState;
       flow.transitionTo(errorTarget);
       this.store.recordTransition(flow.id, from, errorTarget, 'error', flow.context);
-      this.logTransition(flow, from, errorTarget, 'error');
+      this.logTransition(flow, from, errorTarget, 'error', errorStart);
       if (flow.definition.stateConfig[errorTarget]?.terminal) flow.complete(errorTarget);
     } else {
       flow.complete('TERMINAL_ERROR');

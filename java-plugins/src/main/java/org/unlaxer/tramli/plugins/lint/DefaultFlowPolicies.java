@@ -24,7 +24,9 @@ public final class DefaultFlowPolicies {
     private static <S extends Enum<S> & FlowState> void warnTerminalWithOutgoing(FlowDefinition<S> def, PluginReport report) {
         for (S state : def.terminalStates()) {
             if (!def.transitionsFrom(state).isEmpty()) {
-                report.warn("policy/terminal-outgoing", "terminal state " + state + " has outgoing transitions");
+                report.warnAt("policy/terminal-outgoing",
+                        "terminal state " + state + " has outgoing transitions",
+                        new PluginReport.FindingLocation.StateLoc(state.name()));
             }
         }
     }
@@ -33,7 +35,9 @@ public final class DefaultFlowPolicies {
         for (S state : def.allStates()) {
             long count = def.externalsFrom(state).size();
             if (count > 3) {
-                report.warn("policy/external-count", "state " + state + " has " + count + " external transitions");
+                report.warnAt("policy/external-count",
+                        "state " + state + " has " + count + " external transitions",
+                        new PluginReport.FindingLocation.StateLoc(state.name()));
             }
         }
     }
@@ -41,15 +45,18 @@ public final class DefaultFlowPolicies {
     private static <S extends Enum<S> & FlowState> void warnDeadProducedData(FlowDefinition<S> def, PluginReport report) {
         Set<Class<?>> dead = def.dataFlowGraph().deadData();
         for (Class<?> type : dead) {
-            report.warn("policy/dead-data", "produced but never consumed: " + type.getSimpleName());
+            report.warnAt("policy/dead-data",
+                    "produced but never consumed: " + type.getSimpleName(),
+                    new PluginReport.FindingLocation.DataLoc(type.getSimpleName()));
         }
     }
 
     private static <S extends Enum<S> & FlowState> void warnOverwideProcessors(FlowDefinition<S> def, PluginReport report) {
         for (Transition<S> t : def.transitions()) {
             if (t.processor() != null && t.processor().produces().size() > 3) {
-                report.warn("policy/overwide-processor",
-                        t.processor().name() + " produces " + t.processor().produces().size() + " types; consider splitting it");
+                report.warnAt("policy/overwide-processor",
+                        t.processor().name() + " produces " + t.processor().produces().size() + " types; consider splitting it",
+                        new PluginReport.FindingLocation.TransitionLoc(t.from().name(), t.to().name()));
             }
         }
     }

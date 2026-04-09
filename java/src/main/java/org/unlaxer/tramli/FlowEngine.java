@@ -163,15 +163,17 @@ public final class FlowEngine {
         TransitionGuard guard = transition.guard();
 
         if (guard != null) {
+            long guardStart = guardLogger != null ? System.nanoTime() : 0;
             TransitionGuard.GuardOutput output = guard.validate(flow.context());
             if (guardLogger != null) {
+                long guardDurationMicros = (System.nanoTime() - guardStart) / 1000;
                 String result = switch (output) {
                     case TransitionGuard.GuardOutput.Accepted a -> "accepted";
                     case TransitionGuard.GuardOutput.Rejected r -> "rejected";
                     case TransitionGuard.GuardOutput.Expired e -> "expired";
                 };
                 String reason = output instanceof TransitionGuard.GuardOutput.Rejected r ? r.reason() : null;
-                guardLogger.accept(new LogEntry.GuardResult(flow.id(), definition.name(), currentState.name(), guard.name(), result, reason));
+                guardLogger.accept(new LogEntry.GuardResult(flow.id(), definition.name(), currentState.name(), guard.name(), result, reason, guardDurationMicros));
             }
             switch (output) {
                 case TransitionGuard.GuardOutput.Accepted accepted -> {
@@ -266,6 +268,7 @@ public final class FlowEngine {
     }
 
     private <S extends Enum<S> & FlowState> int dispatchAuto(FlowInstance<S> flow, Transition<S> t) {
+        long start = transitionLogger != null ? System.nanoTime() : 0;
         if (t.processor() != null) {
             t.processor().process(flow.context());
             verifyProduces(t.processor(), flow.context());
@@ -276,12 +279,13 @@ public final class FlowEngine {
         fireEnter(flow, t.to());
         store.recordTransition(flow.id(), from, t.to(),
                 t.processor() != null ? t.processor().name() : "auto", flow.context());
-        logTransition(flow.id(), flow.definition().name(), from, t.to(), t.processor() != null ? t.processor().name() : "auto");
+        logTransition(flow.id(), flow.definition().name(), from, t.to(), t.processor() != null ? t.processor().name() : "auto", start);
         return 1;
     }
 
     private <S extends Enum<S> & FlowState> int dispatchBranch(
             FlowInstance<S> flow, Transition<S> t, List<Transition<S>> transitions) {
+        long start = transitionLogger != null ? System.nanoTime() : 0;
         BranchProcessor branch = t.branch();
         String label = branch.decide(flow.context());
         S target = t.branchTargets().get(label);
@@ -295,7 +299,7 @@ public final class FlowEngine {
         S from = flow.currentState();
         flow.transitionTo(target);
         store.recordTransition(flow.id(), from, target, branch.name() + ":" + label, flow.context());
-        logTransition(flow.id(), flow.definition().name(), from, target, branch.name() + ":" + label);
+        logTransition(flow.id(), flow.definition().name(), from, target, branch.name() + ":" + label, start);
         return 1;
     }
 
@@ -409,6 +413,7 @@ public final class FlowEngine {
     }
 
     private <S extends Enum<S> & FlowState> void handleError(FlowInstance<S> flow, S fromState, Exception cause) {
+        long errorStart = (transitionLogger != null || errorLogger != null) ? System.nanoTime() : 0;
         if (cause != null) {
             flow.setLastError(cause.getClass().getSimpleName() + ": " + cause.getMessage());
             if (cause instanceof FlowException fe) {
@@ -427,8 +432,8 @@ public final class FlowEngine {
                         flow.transitionTo(route.target());
                         store.recordTransition(flow.id(), from, route.target(),
                                 "error:" + cause.getClass().getSimpleName(), flow.context());
-                        logTransition(flow.id(), flow.definition().name(), from, route.target(), "error:" + cause.getClass().getSimpleName());
-                        logError(flow.id(), flow.definition().name(), fromState, route.target(), "error:" + cause.getClass().getSimpleName(), cause);
+                        logTransition(flow.id(), flow.definition().name(), from, route.target(), "error:" + cause.getClass().getSimpleName(), errorStart);
+                        logError(flow.id(), flow.definition().name(), fromState, route.target(), "error:" + cause.getClass().getSimpleName(), cause, errorStart);
                         if (route.target().isTerminal()) flow.complete(route.target().name());
                         return;
                     }
@@ -442,8 +447,8 @@ public final class FlowEngine {
             S from = flow.currentState();
             flow.transitionTo(errorTarget);
             store.recordTransition(flow.id(), from, errorTarget, "error", flow.context());
-            logTransition(flow.id(), flow.definition().name(), from, errorTarget, "error");
-            logError(flow.id(), flow.definition().name(), fromState, errorTarget, "error", cause);
+            logTransition(flow.id(), flow.definition().name(), from, errorTarget, "error", errorStart);
+            logError(flow.id(), flow.definition().name(), fromState, errorTarget, "error", cause, errorStart);
             if (errorTarget.isTerminal()) flow.complete(errorTarget.name());
         } else {
             flow.complete("TERMINAL_ERROR");
@@ -471,17 +476,19 @@ public final class FlowEngine {
         }
     }
 
-    private void logTransition(String flowId, String flowName, FlowState from, FlowState to, String trigger) {
+    private void logTransition(String flowId, String flowName, FlowState from, FlowState to, String trigger, long startNanos) {
         if (transitionLogger != null) {
+            long durationMicros = (System.nanoTime() - startNanos) / 1000;
             transitionLogger.accept(new LogEntry.Transition(flowId, flowName,
-                    from != null ? from.name() : null, to.name(), trigger));
+                    from != null ? from.name() : null, to.name(), trigger, durationMicros));
         }
     }
 
-    private void logError(String flowId, String flowName, FlowState from, FlowState to, String trigger, Throwable cause) {
+    private void logError(String flowId, String flowName, FlowState from, FlowState to, String trigger, Throwable cause, long startNanos) {
         if (errorLogger != null) {
+            long durationMicros = (System.nanoTime() - startNanos) / 1000;
             errorLogger.accept(new LogEntry.Error(flowId, flowName,
-                    from != null ? from.name() : null, to != null ? to.name() : null, trigger, cause));
+                    from != null ? from.name() : null, to != null ? to.name() : null, trigger, cause, durationMicros));
         }
     }
 

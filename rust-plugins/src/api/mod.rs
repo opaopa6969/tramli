@@ -20,12 +20,35 @@ pub struct PluginDescriptor {
     pub description: &'static str,
 }
 
+/// Describes where in a flow definition a finding is located.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FindingLocation {
+    Transition { from_state: String, to_state: String },
+    State { state: String },
+    Data { data_key: String },
+    Flow,
+}
+
+impl fmt::Display for FindingLocation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FindingLocation::Transition { from_state, to_state } => {
+                write!(f, "transition({} -> {})", from_state, to_state)
+            }
+            FindingLocation::State { state } => write!(f, "state({})", state),
+            FindingLocation::Data { data_key } => write!(f, "data({})", data_key),
+            FindingLocation::Flow => write!(f, "flow"),
+        }
+    }
+}
+
 /// A single report finding.
 #[derive(Debug, Clone)]
 pub struct Finding {
     pub plugin_id: String,
     pub severity: String,
     pub message: String,
+    pub location: Option<FindingLocation>,
 }
 
 /// Collects analysis findings across plugins.
@@ -44,6 +67,7 @@ impl PluginReport {
             plugin_id: plugin_id.to_string(),
             severity: severity.to_string(),
             message: message.to_string(),
+            location: None,
         });
     }
 
@@ -53,6 +77,24 @@ impl PluginReport {
 
     pub fn error(&mut self, plugin_id: &str, message: &str) {
         self.add(plugin_id, "ERROR", message);
+    }
+
+    pub fn warn_at(&mut self, plugin_id: &str, message: &str, location: FindingLocation) {
+        self.entries.push(Finding {
+            plugin_id: plugin_id.to_string(),
+            severity: "WARN".to_string(),
+            message: message.to_string(),
+            location: Some(location),
+        });
+    }
+
+    pub fn error_at(&mut self, plugin_id: &str, message: &str, location: FindingLocation) {
+        self.entries.push(Finding {
+            plugin_id: plugin_id.to_string(),
+            severity: "ERROR".to_string(),
+            message: message.to_string(),
+            location: Some(location),
+        });
     }
 
     pub fn findings(&self) -> &[Finding] {
@@ -65,7 +107,13 @@ impl PluginReport {
         }
         self.entries
             .iter()
-            .map(|e| format!("[{}] {}: {}", e.severity, e.plugin_id, e.message))
+            .map(|e| {
+                let base = format!("[{}] {}: {}", e.severity, e.plugin_id, e.message);
+                match &e.location {
+                    Some(loc) => format!("{} @ {}", base, loc),
+                    None => base,
+                }
+            })
             .collect::<Vec<_>>()
             .join("\n")
     }

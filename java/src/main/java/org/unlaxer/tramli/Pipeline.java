@@ -61,9 +61,11 @@ public final class Pipeline {
         String prev = "initial";
 
         for (var step : steps) {
+            long stepStart = (transitionLogger != null || errorLogger != null) ? System.nanoTime() : 0;
+
             // Transition log
             if (transitionLogger != null) {
-                transitionLogger.accept(new LogEntry.Transition(flowId, name, prev, step.name(), step.name()));
+                transitionLogger.accept(new LogEntry.Transition(flowId, name, prev, step.name(), step.name(), 0));
             }
 
             // State logger: capture keys before
@@ -73,7 +75,8 @@ public final class Pipeline {
                 step.process(ctx);
             } catch (Exception e) {
                 if (errorLogger != null) {
-                    errorLogger.accept(new LogEntry.Error(flowId, name, prev, step.name(), step.name(), e));
+                    long durationMicros = (System.nanoTime() - stepStart) / 1000;
+                    errorLogger.accept(new LogEntry.Error(flowId, name, prev, step.name(), step.name(), e, durationMicros));
                 }
                 throw new PipelineException(step.name(), completed, ctx, e);
             }
