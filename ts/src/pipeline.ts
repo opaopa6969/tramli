@@ -94,7 +94,7 @@ export class Pipeline {
     let prev = 'initial';
 
     for (const step of this.steps) {
-      this.transitionLogger?.({ flowId, from: prev, to: step.name, trigger: step.name });
+      this.transitionLogger?.({ flowId, flowName: this.name, from: prev, to: step.name, trigger: step.name });
 
       const keysBefore = this.stateLogger ? new Set(ctx.snapshot().keys()) : null;
 
@@ -102,7 +102,7 @@ export class Pipeline {
         await step.process(ctx);
       } catch (e: any) {
         const err = e instanceof Error ? e : new Error(String(e));
-        this.errorLogger?.({ flowId, from: prev, to: step.name, trigger: step.name, cause: err });
+        this.errorLogger?.({ flowId, flowName: this.name, from: prev, to: step.name, trigger: step.name, cause: err });
         throw new PipelineException(step.name, [...completed], ctx, err);
       }
 
@@ -119,7 +119,7 @@ export class Pipeline {
       if (this.stateLogger && keysBefore) {
         for (const [k] of ctx.snapshot()) {
           if (!keysBefore.has(k)) {
-            this.stateLogger({ flowId, state: step.name, key: k, value: ctx.snapshot().get(k) });
+            this.stateLogger({ flowId, flowName: this.name, state: step.name, key: k, value: ctx.snapshot().get(k) });
           }
         }
       }
