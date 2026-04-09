@@ -274,3 +274,50 @@ fn processor_throws_routes_to_error() {
     assert_eq!(flow.current_state(), OrderState::Cancelled);
     assert!(flow.is_completed());
 }
+
+// ─── explain / why_missing tests ────────────────────
+
+#[test]
+fn explain_at_created_shows_available() {
+    let def = order_def(true);
+    let result = def.data_flow_graph().explain(OrderState::Created);
+    assert_eq!(result.state, "Created");
+    // OrderRequest should be available at Created
+    assert!(result.available.contains(&TypeId::of::<OrderRequest>()));
+    // Nothing should be missing that is needed at Created
+    // (OrderInit requires OrderRequest which IS available)
+    assert!(result.missing.is_empty(), "Expected no missing types at Created, got: {:?}", result.missing);
+}
+
+#[test]
+fn explain_at_payment_confirmed_shows_available() {
+    let def = order_def(true);
+    let result = def.data_flow_graph().explain(OrderState::PaymentConfirmed);
+    // PaymentResult should be available at PaymentConfirmed (produced by PaymentGuard)
+    assert!(result.available.contains(&TypeId::of::<PaymentResult>()));
+}
+
+#[test]
+fn why_missing_returns_not_missing_when_available() {
+    let def = order_def(true);
+    let reasons = def.data_flow_graph().why_missing(TypeId::of::<OrderRequest>(), OrderState::Created);
+    assert_eq!(reasons.len(), 1);
+    assert!(reasons[0].contains("NOT missing"), "Expected 'NOT missing' message, got: {}", reasons[0]);
+}
+
+#[test]
+fn why_missing_with_no_producers() {
+    let def = order_def(true);
+    #[derive(Clone)]
+    struct UnknownType;
+    let reasons = def.data_flow_graph().why_missing(TypeId::of::<UnknownType>(), OrderState::Created);
+    assert!(!reasons.is_empty());
+    assert!(reasons[0].contains("no producers"), "Expected 'no producers' message, got: {}", reasons[0]);
+}
+
+#[test]
+fn explain_result_has_state_string() {
+    let def = order_def(true);
+    let result = def.data_flow_graph().explain(OrderState::PaymentPending);
+    assert_eq!(result.state, "PaymentPending");
+}

@@ -13,6 +13,30 @@ pub struct NodeInfo<S: FlowState> {
     pub kind: &'static str, // "processor", "guard", "branch", "initial"
 }
 
+/// Result of `explain()`: what data is available and what is missing at a given state.
+#[derive(Debug)]
+pub struct ExplainResult {
+    pub state: String,
+    pub available: HashSet<TypeId>,
+    pub missing: Vec<MissingInfo>,
+}
+
+/// Information about a missing data type at a given state.
+#[derive(Debug)]
+pub struct MissingInfo {
+    pub type_id: TypeId,
+    pub needed_by: Vec<String>,
+    pub producers: Vec<ProducerInfo>,
+    pub reason: String,
+}
+
+/// Information about a processor that can produce a data type.
+#[derive(Debug)]
+pub struct ProducerInfo {
+    pub name: String,
+    pub produced_at: String,
+}
+
 /// Bipartite graph of data types (TypeId) and processors/guards.
 /// Built automatically during FlowDefinition::build().
 pub struct DataFlowGraph<S: FlowState> {
@@ -47,6 +71,119 @@ impl<S: FlowState> DataFlowGraph<S> {
     /// Processors/guards that consume (require) the given type.
     pub fn consumers_of(&self, type_id: &TypeId) -> &[NodeInfo<S>] {
         self.consumers.get(type_id).map(|v| v.as_slice()).unwrap_or(&[])
+    }
+
+    /// Explain what data is available and what is missing at a given state.
+    /// For each missing type, includes which processors need it, which processors
+    /// could produce it, and a human-readable reason why it is missing.
+    pub fn explain(&self, state: S) -> ExplainResult {
+        let available = self.available_at(state);
+
+        // Collect all types that are consumed (required) at or after this state
+        let mut all_needed: HashMap<TypeId, Vec<String>> = HashMap::new();
+        for (type_id, nodes) in &self.consumers {
+            for node in nodes {
+                // A type is "needed" at a state if some consumer at that state requires it
+                if node.from_state == state {
+                    all_needed.entry(*type_id).or_default().push(node.name.clone());
+                }
+            }
+        }
+
+        let mut missing_list = Vec::new();
+        for (type_id, needed_by) in &all_needed {
+            if !available.contains(type_id) {
+                let producers_info: Vec<ProducerInfo> = self.producers_of(type_id).iter().map(|n| {
+                    ProducerInfo {
+                        name: n.name.clone(),
+                        produced_at: format!("{:?}", n.to_state),
+                    }
+                }).collect();
+
+                let type_name = self.short_type_name(type_id);
+                let reason = if producers_info.is_empty() {
+                    format!("'{}' has no producers in this flow", type_name)
+                } else {
+                    let producer_names: Vec<String> = producers_info.iter()
+                        .map(|p| format!("'{}' (at {})", p.name, p.produced_at))
+                        .collect();
+                    format!(
+                        "'{}' is produced by {} but not available at {:?}",
+                        type_name,
+                        producer_names.join(", "),
+                        state
+                    )
+                };
+
+                missing_list.push(MissingInfo {
+                    type_id: *type_id,
+                    needed_by: needed_by.clone(),
+                    producers: producers_info,
+                    reason,
+                });
+            }
+        }
+
+        ExplainResult {
+            state: format!("{:?}", state),
+            available,
+            missing: missing_list,
+        }
+    }
+
+    /// Explain why a specific type is missing at a given state.
+    /// Returns a list of human-readable explanation strings.
+    pub fn why_missing(&self, type_id: TypeId, state: S) -> Vec<String> {
+        let available = self.available_at(state);
+        let type_name = self.short_type_name(&type_id);
+        let mut reasons = Vec::new();
+
+        if available.contains(&type_id) {
+            reasons.push(format!("'{}' is NOT missing at {:?} — it is available", type_name, state));
+            return reasons;
+        }
+
+        let producers = self.producers_of(&type_id);
+        if producers.is_empty() {
+            reasons.push(format!("'{}' has no producers in this flow", type_name));
+            return reasons;
+        }
+
+        for producer in producers {
+            let prod_state = producer.to_state;
+            // Check if producer runs at or before this state
+            let available_at_prod = self.available_at(prod_state);
+            if available_at_prod.contains(&type_id) && !available.contains(&type_id) {
+                reasons.push(format!(
+                    "'{}' is produced by '{}' at {:?}, but that state is not on the path to {:?}",
+                    type_name, producer.name, prod_state, state
+                ));
+            } else if !available_at_prod.contains(&type_id) {
+                reasons.push(format!(
+                    "'{}' should be produced by '{}' ({:?} -> {:?}), but its own requires may not be met",
+                    type_name, producer.name, producer.from_state, producer.to_state
+                ));
+            } else {
+                reasons.push(format!(
+                    "'{}' is produced by '{}' at {:?}, but not propagated to {:?}",
+                    type_name, producer.name, prod_state, state
+                ));
+            }
+        }
+
+        // Also mention who needs it at this state
+        let consumers: Vec<String> = self.consumers_of(&type_id).iter()
+            .filter(|n| n.from_state == state)
+            .map(|n| n.name.clone())
+            .collect();
+        if !consumers.is_empty() {
+            reasons.push(format!(
+                "'{}' is needed by {} at {:?}",
+                type_name, consumers.join(", "), state
+            ));
+        }
+
+        reasons
     }
 
     /// Types produced but never required by any downstream processor/guard.

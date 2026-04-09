@@ -1,6 +1,7 @@
 package org.unlaxer.tramli;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Bipartite graph of data types and processors/guards derived from a FlowDefinition.
@@ -156,6 +157,113 @@ public final class DataFlowGraph<S extends Enum<S> & FlowState> {
         }
         return missing;
     }
+
+    // ─── Explain / WhyMissing ────────────────────────────────
+
+    /** Info about a producer: its name and the state where it produces the type. */
+    public record ProducerInfo<S>(String name, S producedAt) {}
+
+    /** Info about a missing type at a state. */
+    public record MissingInfo<S>(Class<?> type, List<String> neededBy,
+                                 List<ProducerInfo<S>> producers, String reason) {}
+
+    /** Result of {@link #explain(Enum)} / {@link #explain(Enum, Class)}. */
+    public record ExplainResult<S>(S state, Set<Class<?>> available, List<MissingInfo<S>> missing) {}
+
+    /**
+     * Explain data availability at a state. For each missing type, trace why it is unavailable.
+     * Checks all types required by outgoing processors/guards/branches from that state.
+     */
+    public ExplainResult<S> explain(S state) {
+        return explain(state, null);
+    }
+
+    /**
+     * Explain data availability at a state. If {@code key} is non-null, only that type is checked.
+     * Otherwise all types required by outgoing transitions from the state are checked.
+     */
+    public ExplainResult<S> explain(S state, Class<?> key) {
+        Set<Class<?>> available = availableAt(state);
+        var missingList = new ArrayList<MissingInfo<S>>();
+
+        // Determine which types to check
+        List<Class<?>> keysToCheck;
+        if (key != null) {
+            keysToCheck = List.of(key);
+        } else {
+            // All types required by processors/guards/branches departing from this state
+            keysToCheck = new ArrayList<>();
+            for (var entry : consumers.entrySet()) {
+                if (entry.getValue().stream().anyMatch(n -> n.fromState().equals(state))) {
+                    keysToCheck.add(entry.getKey());
+                }
+            }
+        }
+
+        for (Class<?> k : keysToCheck) {
+            if (available.contains(k)) continue;
+            List<NodeInfo<S>> prods = producers.getOrDefault(k, List.of());
+            List<NodeInfo<S>> neededByNodes = consumers.getOrDefault(k, List.of()).stream()
+                    .filter(n -> n.fromState().equals(state))
+                    .toList();
+            String reason = prods.isEmpty()
+                    ? "'" + k.getSimpleName() + "' is never produced by any processor or guard"
+                    : "'" + k.getSimpleName() + "' is produced by ["
+                      + prods.stream().map(NodeInfo::name).collect(Collectors.joining(", "))
+                      + "] but not on a path reaching " + state.name();
+            missingList.add(new MissingInfo<>(
+                    k,
+                    neededByNodes.stream().map(NodeInfo::name).toList(),
+                    prods.stream().map(p -> new ProducerInfo<>(p.name(), p.toState())).toList(),
+                    reason));
+        }
+        return new ExplainResult<>(state, new LinkedHashSet<>(available), missingList);
+    }
+
+    /**
+     * Human-readable explanation of why a type is missing at a state.
+     * Returns a list of explanation strings.
+     */
+    public List<String> whyMissing(Class<?> key, S state) {
+        Set<Class<?>> available = availableAt(state);
+        if (available.contains(key)) {
+            return List.of("'" + key.getSimpleName() + "' IS available at " + state.name());
+        }
+
+        var lines = new ArrayList<String>();
+        List<NodeInfo<S>> prods = producers.getOrDefault(key, List.of());
+        List<NodeInfo<S>> cons = consumers.getOrDefault(key, List.of());
+
+        if (prods.isEmpty()) {
+            lines.add("'" + key.getSimpleName() + "' is never produced — no processor or guard declares it in produces()");
+        } else {
+            lines.add("'" + key.getSimpleName() + "' is produced by:");
+            for (NodeInfo<S> p : prods) {
+                lines.add("  - " + p.name() + " (" + p.fromState().name() + " \u2192 " + p.toState().name() + ")");
+            }
+            lines.add("But none of these producers are on a path that reaches " + state.name());
+        }
+
+        List<NodeInfo<S>> neededBy = cons.stream()
+                .filter(c -> c.fromState().equals(state))
+                .toList();
+        if (!neededBy.isEmpty()) {
+            lines.add("Required at " + state.name() + " by: "
+                    + neededBy.stream().map(NodeInfo::name).collect(Collectors.joining(", ")));
+        }
+
+        // Show what IS available at this state
+        if (!available.isEmpty()) {
+            var sorted = available.stream()
+                    .map(Class::getSimpleName)
+                    .sorted()
+                    .toList();
+            lines.add("Available at " + state.name() + ": " + sorted);
+        }
+        return lines;
+    }
+
+    // ─── Impact / Parallelism ──────────────────────────────
 
     /**
      * Impact analysis: all producers and consumers of a given type.

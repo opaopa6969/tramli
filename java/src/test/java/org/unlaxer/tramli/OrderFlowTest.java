@@ -299,4 +299,86 @@ class OrderFlowTest {
         // + PaymentGuard + PAYMENT_CONFIRMED → SHIPPED
         assertTrue(store.transitionLog().size() >= 3);
     }
+
+    // ─── explain() / whyMissing() tests ─────────────────────
+
+    @Test
+    void explainAtState_noMissing() {
+        var def = definition(true);
+        var graph = def.dataFlowGraph();
+        // At CREATED: OrderRequest is available, that's what OrderInit requires
+        var result = graph.explain(OrderState.CREATED);
+        assertEquals(OrderState.CREATED, result.state());
+        assertTrue(result.available().contains(OrderRequest.class));
+        assertTrue(result.missing().isEmpty(), "Expected no missing types at CREATED");
+    }
+
+    @Test
+    void explainAtState_withSpecificKey_available() {
+        var def = definition(true);
+        var graph = def.dataFlowGraph();
+        // OrderRequest is available at CREATED
+        var result = graph.explain(OrderState.CREATED, OrderRequest.class);
+        assertTrue(result.missing().isEmpty());
+        assertTrue(result.available().contains(OrderRequest.class));
+    }
+
+    @Test
+    void explainAtState_withSpecificKey_notAvailable() {
+        var def = definition(true);
+        var graph = def.dataFlowGraph();
+        // ShipmentInfo is NOT available at CREATED
+        var result = graph.explain(OrderState.CREATED, ShipmentInfo.class);
+        assertEquals(1, result.missing().size());
+        var missing = result.missing().getFirst();
+        assertEquals(ShipmentInfo.class, missing.type());
+        assertFalse(missing.reason().isEmpty());
+        // ShipmentInfo is produced by ShipProcessor
+        assertFalse(missing.producers().isEmpty());
+        assertEquals("ShipProcessor", missing.producers().getFirst().name());
+    }
+
+    @Test
+    void explainAtState_neverProducedType() {
+        var def = definition(true);
+        var graph = def.dataFlowGraph();
+        // String.class is never in the flow at all
+        var result = graph.explain(OrderState.CREATED, String.class);
+        assertEquals(1, result.missing().size());
+        var missing = result.missing().getFirst();
+        assertEquals(String.class, missing.type());
+        assertTrue(missing.reason().contains("never produced"));
+        assertTrue(missing.producers().isEmpty());
+    }
+
+    @Test
+    void whyMissing_typeIsAvailable() {
+        var def = definition(true);
+        var graph = def.dataFlowGraph();
+        // OrderRequest IS available at CREATED
+        var lines = graph.whyMissing(OrderRequest.class, OrderState.CREATED);
+        assertEquals(1, lines.size());
+        assertTrue(lines.getFirst().contains("IS available"));
+    }
+
+    @Test
+    void whyMissing_typeNeverProduced() {
+        var def = definition(true);
+        var graph = def.dataFlowGraph();
+        // String.class is never produced
+        var lines = graph.whyMissing(String.class, OrderState.CREATED);
+        assertTrue(lines.stream().anyMatch(l -> l.contains("never produced")));
+    }
+
+    @Test
+    void whyMissing_typeProducedElsewhere() {
+        var def = definition(true);
+        var graph = def.dataFlowGraph();
+        // ShipmentInfo is produced at PAYMENT_CONFIRMED→SHIPPED but not available at CREATED
+        var lines = graph.whyMissing(ShipmentInfo.class, OrderState.CREATED);
+        assertTrue(lines.stream().anyMatch(l -> l.contains("produced by")));
+        assertTrue(lines.stream().anyMatch(l -> l.contains("ShipProcessor")));
+        // Should also show what IS available at CREATED
+        assertTrue(lines.stream().anyMatch(l -> l.contains("Available at CREATED")));
+    }
 }
