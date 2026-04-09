@@ -19,7 +19,7 @@ mod types;
 pub use clone_any::CloneAny;
 pub use context::FlowContext;
 pub use data_flow_graph::{DataFlowGraph, NodeInfo};
-pub use definition::{FlowDefinition, Builder, FromBuilder, BranchBuilder, SubFlowBuilder};
+pub use definition::{FlowDefinition, Builder, FromBuilder, BranchBuilder, SubFlowBuilder, ValidationError, BuildResult};
 pub use engine::{FlowEngine, TransitionLogEntry, ErrorLogEntry, GuardLogEntry};
 pub use error::FlowError;
 pub use instance::FlowInstance;

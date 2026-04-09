@@ -71,6 +71,7 @@ pub struct Builder<S: FlowState> {
     externally_provided: Vec<TypeId>,
     perpetual: bool,
     strict_mode: bool,
+    allow_unreachable: bool,
     enter_actions: HashMap<S, Box<dyn Fn(&mut crate::context::FlowContext) + Send + Sync>>,
     exit_actions: HashMap<S, Box<dyn Fn(&mut crate::context::FlowContext) + Send + Sync>>,
     exception_routes: HashMap<S, Vec<(Box<dyn Fn(&FlowError) -> bool + Send + Sync>, String, S)>>,
@@ -81,7 +82,7 @@ impl<S: FlowState> Builder<S> {
         Self {
             name: name.into(), ttl: Duration::from_secs(300), max_guard_retries: 3,
             transitions: Vec::new(), error_transitions: HashMap::new(),
-            initially_available: Vec::new(), externally_provided: Vec::new(), perpetual: false, strict_mode: false,
+            initially_available: Vec::new(), externally_provided: Vec::new(), perpetual: false, strict_mode: false, allow_unreachable: false,
             enter_actions: HashMap::new(), exit_actions: HashMap::new(),
             exception_routes: HashMap::new(),
         }
@@ -97,6 +98,8 @@ impl<S: FlowState> Builder<S> {
         self.externally_provided.extend(type_ids); self
     }
     pub fn allow_perpetual(mut self) -> Self { self.perpetual = true; self }
+    /// Allow unreachable states (shared enum across multiple flows). Skips reachability check.
+    pub fn allow_unreachable(mut self) -> Self { self.allow_unreachable = true; self }
     /// Declare that this flow should run in strict mode (produces verification).
     pub fn strict_mode(mut self) -> Self { self.strict_mode = true; self }
 
@@ -156,7 +159,7 @@ impl<S: FlowState> Builder<S> {
             enter_actions: HashMap::new(), exit_actions: HashMap::new(),
             exception_routes: HashMap::new(), strict_mode: self.strict_mode, warnings: Vec::new(),
         };
-        validate::<S>(&def, &name, perpetual, &initially_available, &externally_provided)?;
+        validate::<S>(&def, &name, perpetual, self.allow_unreachable, &initially_available, &externally_provided)?;
         let graph = DataFlowGraph::build(&def, &initially_available, &externally_provided);
 
         // Build warnings
@@ -179,6 +182,59 @@ impl<S: FlowState> Builder<S> {
         }
 
         Ok(FlowDefinition { data_flow_graph: graph, enter_actions, exit_actions, exception_routes, warnings, ..def })
+    }
+
+    pub fn build_and_validate(self) -> BuildResult<S> {
+        let mut initial = None;
+        let mut terminals = HashSet::new();
+        for s in S::all_states() {
+            if s.is_initial() { initial = Some(*s); }
+            if s.is_terminal() { terminals.insert(*s); }
+        }
+        let perpetual = self.perpetual;
+        let initially_available = self.initially_available;
+        let externally_provided = self.externally_provided;
+        let name = self.name;
+        let enter_actions = self.enter_actions;
+        let exit_actions = self.exit_actions;
+        let exception_routes: HashMap<S, Vec<ExceptionRoute<S>>> = self.exception_routes.into_iter()
+            .map(|(s, routes)| (s, routes.into_iter().map(|(pred, label, target)| ExceptionRoute { predicate: pred, label, target }).collect()))
+            .collect();
+        let def = FlowDefinition {
+            name: name.clone(), ttl: self.ttl, max_guard_retries: self.max_guard_retries,
+            transitions: self.transitions, error_transitions: self.error_transitions,
+            initial_state: initial, terminal_states: terminals,
+            data_flow_graph: DataFlowGraph::empty(),
+            enter_actions: HashMap::new(), exit_actions: HashMap::new(),
+            exception_routes: HashMap::new(), strict_mode: self.strict_mode, warnings: Vec::new(),
+        };
+        let errors = collect_errors::<S>(&def, &name, perpetual, self.allow_unreachable, &initially_available, &externally_provided);
+        if !errors.is_empty() {
+            return BuildResult { definition: None, errors };
+        }
+        let graph = DataFlowGraph::build(&def, &initially_available, &externally_provided);
+
+        // Build warnings
+        let mut warnings = Vec::new();
+        let is_perpetual = def.terminal_states.is_empty();
+        let has_external = def.transitions.iter().any(|t| t.transition_type == TransitionType::External);
+        if is_perpetual && has_external {
+            warnings.push(format!("Perpetual flow '{}' has External transitions — ensure events are always delivered to avoid deadlock (liveness risk)", name));
+        }
+        let dead = graph.dead_data();
+        if !dead.is_empty() {
+            warnings.push(format!("Dead data detected: {:?} — produced but never required by any downstream processor", dead));
+        }
+        for (state, routes) in &exception_routes {
+            if routes.len() > 1 {
+                warnings.push(format!("onStepError at {:?}: {} routes registered — ensure broader predicates come after specific ones", state, routes.len()));
+            }
+        }
+
+        BuildResult {
+            definition: Some(FlowDefinition { data_flow_graph: graph, enter_actions, exit_actions, exception_routes, warnings, ..def }),
+            errors: Vec::new(),
+        }
     }
 }
 
@@ -308,13 +364,27 @@ impl<S: FlowState> SubFlowBuilder<S> {
     }
 }
 
+// ─── ValidationError / BuildResult ──────────────────────
+
+#[derive(Clone, Debug)]
+pub struct ValidationError {
+    pub code: String,
+    pub message: String,
+    pub state: Option<String>,
+}
+
+pub struct BuildResult<S: FlowState> {
+    pub definition: Option<FlowDefinition<S>>,
+    pub errors: Vec<ValidationError>,
+}
+
 // ─── Validation ─────────────────────────────────────────
 
-fn validate<S: FlowState>(def: &FlowDefinition<S>, name: &str, perpetual: bool, initially_available: &[TypeId], externally_provided: &[TypeId]) -> Result<(), FlowError> {
+fn validate<S: FlowState>(def: &FlowDefinition<S>, name: &str, perpetual: bool, allow_unreachable: bool, initially_available: &[TypeId], externally_provided: &[TypeId]) -> Result<(), FlowError> {
     let mut errors = Vec::new();
     if def.initial_state.is_none() { errors.push("No initial state found".into()); }
 
-    check_reachability(def, &mut errors);
+    if !allow_unreachable { check_reachability(def, &mut errors); }
     if !perpetual { check_path_to_terminal(def, &mut errors); }
     check_dag(def, &mut errors);
     // check_external_uniqueness removed (DD-020: multi-external allowed)
@@ -329,6 +399,122 @@ fn validate<S: FlowState>(def: &FlowDefinition<S>, name: &str, perpetual: bool, 
         Err(FlowError::new("INVALID_FLOW_DEFINITION",
             format!("Flow '{}' has {} error(s):\n  - {}", name, errors.len(), errors.join("\n  - "))))
     }
+}
+
+fn collect_errors<S: FlowState>(def: &FlowDefinition<S>, _name: &str, perpetual: bool, allow_unreachable: bool, initially_available: &[TypeId], externally_provided: &[TypeId]) -> Vec<ValidationError> {
+    // Each check category is run independently so we can tag errors with a code.
+    if def.initial_state.is_none() {
+        return vec![ValidationError { code: "NO_INITIAL_STATE".into(), message: "No initial state found".into(), state: None }];
+    }
+
+    let mut result: Vec<ValidationError> = Vec::new();
+
+    if !allow_unreachable {
+        let mut errs = Vec::new();
+        check_reachability(def, &mut errs);
+        for msg in errs {
+            let st = parse_state_from_msg(&msg);
+            result.push(ValidationError { code: "UNREACHABLE_STATE".into(), message: msg, state: st });
+        }
+    }
+
+    if !perpetual {
+        let mut errs = Vec::new();
+        check_path_to_terminal(def, &mut errs);
+        for msg in errs {
+            let st = parse_state_from_msg(&msg);
+            result.push(ValidationError { code: "NO_PATH_TO_TERMINAL".into(), message: msg, state: st });
+        }
+    }
+
+    {
+        let mut errs = Vec::new();
+        check_dag(def, &mut errs);
+        for msg in errs {
+            let st = parse_state_from_msg(&msg);
+            result.push(ValidationError { code: "DAG_CYCLE".into(), message: msg, state: st });
+        }
+    }
+
+    {
+        let mut errs = Vec::new();
+        check_branch_completeness(def, &mut errs);
+        for msg in errs {
+            let st = parse_state_from_msg(&msg);
+            result.push(ValidationError { code: "BRANCH_INCOMPLETE".into(), message: msg, state: st });
+        }
+    }
+
+    {
+        let mut errs = Vec::new();
+        check_requires_produces(def, initially_available, externally_provided, &mut errs);
+        for msg in errs {
+            let st = parse_state_from_msg(&msg);
+            result.push(ValidationError { code: "REQUIRES_PRODUCES".into(), message: msg, state: st });
+        }
+    }
+
+    {
+        let mut errs = Vec::new();
+        check_auto_external_conflict(def, &mut errs);
+        for msg in errs {
+            let st = parse_state_from_msg(&msg);
+            result.push(ValidationError { code: "AUTO_EXTERNAL_CONFLICT".into(), message: msg, state: st });
+        }
+    }
+
+    {
+        let mut errs = Vec::new();
+        check_sub_flow_nesting_depth(def, &mut errs, 0);
+        for msg in errs {
+            result.push(ValidationError { code: "SUB_FLOW_NESTING".into(), message: msg, state: None });
+        }
+    }
+
+    {
+        let mut errs = Vec::new();
+        check_sub_flow_circular_ref(def, &mut errs, &mut Vec::new());
+        for msg in errs {
+            result.push(ValidationError { code: "SUB_FLOW_CIRCULAR".into(), message: msg, state: None });
+        }
+    }
+
+    {
+        let mut errs = Vec::new();
+        check_terminal_no_outgoing(def, &mut errs);
+        for msg in errs {
+            let st = parse_state_from_msg(&msg);
+            result.push(ValidationError { code: "TERMINAL_HAS_OUTGOING".into(), message: msg, state: st });
+        }
+    }
+
+    result
+}
+
+/// Extract state name from validation message patterns like "State Foo is not reachable ..."
+fn parse_state_from_msg(msg: &str) -> Option<String> {
+    // Pattern: "State <Name> ..."
+    if msg.starts_with("State ") {
+        let rest = &msg[6..];
+        if let Some(pos) = rest.find(" is ").or_else(|| rest.find(" has ")) {
+            return Some(rest[..pos].to_string());
+        }
+    }
+    // Pattern: "Terminal state <Name> has ..."
+    if msg.starts_with("Terminal state ") {
+        let rest = &msg[15..];
+        if let Some(pos) = rest.find(" has ") {
+            return Some(rest[..pos].to_string());
+        }
+    }
+    // Pattern: "No path from <Name> to ..."
+    if msg.starts_with("No path from ") {
+        let rest = &msg[13..];
+        if let Some(pos) = rest.find(" to ") {
+            return Some(rest[..pos].to_string());
+        }
+    }
+    None
 }
 
 fn check_reachability<S: FlowState>(def: &FlowDefinition<S>, errors: &mut Vec<String>) {

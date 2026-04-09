@@ -3,6 +3,38 @@ import type { StateConfig, Transition, TransitionType, StateProcessor, Transitio
 import { FlowError } from './flow-error.js';
 import { DataFlowGraph } from './data-flow-graph.js';
 
+/** Structured validation error returned by buildAndValidate(). */
+export interface ValidationError {
+  code: string;
+  message: string;
+  state?: string;
+  transition?: string;
+  missingTypes?: string[];
+}
+
+/** Parse a raw error message into a structured ValidationError. */
+function parseValidationError(msg: string): ValidationError {
+  const result: ValidationError = { code: 'VALIDATION', message: msg };
+  // "State X is not reachable from Y"
+  const reach = msg.match(/State (\S+) is not reachable/);
+  if (reach) { result.code = 'UNREACHABLE_STATE'; result.state = reach[1]; return result; }
+  // "No path from X to any terminal"
+  const path = msg.match(/No path from (\S+) to/);
+  if (path) { result.code = 'NO_PATH_TO_TERMINAL'; result.state = path[1]; return result; }
+  // "Processor 'X' at A -> B requires Y but it may not be available"
+  const req = msg.match(/Processor '([^']+)' at (\S+) -> (\S+) requires (\S+)/);
+  if (req) { result.code = 'MISSING_REQUIRES'; result.transition = `${req[2]}->${req[3]}`; result.missingTypes = [req[4]]; return result; }
+  // "Auto/Branch transitions contain a cycle"
+  if (msg.includes('cycle')) { result.code = 'DAG_CYCLE'; return result; }
+  // "State X has both auto/branch and external"
+  const conflict = msg.match(/State (\S+) has both/);
+  if (conflict) { result.code = 'AUTO_EXTERNAL_CONFLICT'; result.state = conflict[1]; return result; }
+  // "Terminal state X has an outgoing transition"
+  const term = msg.match(/Terminal state (\S+)/);
+  if (term) { result.code = 'TERMINAL_OUTGOING'; result.state = term[1]; return result; }
+  return result;
+}
+
 export class FlowDefinition<S extends string> {
   readonly name: string;
   readonly stateConfig: Record<S, StateConfig>;
@@ -126,6 +158,7 @@ export class Builder<S extends string> {
   private readonly externallyProvidedKeys: string[] = [];
   private _perpetual = false;
   private _strictMode = false;
+  private _allowUnreachable = false;
 
   constructor(name: string, stateConfig: Record<S, StateConfig>) {
     this.name = name;
@@ -184,6 +217,9 @@ export class Builder<S extends string> {
   /** Allow perpetual flows (no terminal states). Skips path-to-terminal validation. */
   allowPerpetual(): this { this._perpetual = true; return this; }
 
+  /** Allow unreachable states (shared enum across multiple flows). Skips reachability check. */
+  allowUnreachable(): this { this._allowUnreachable = true; return this; }
+
   /** Declare that this flow should run in strict mode (produces verification). */
   strictMode(): this { this._strictMode = true; return this; }
 
@@ -191,8 +227,26 @@ export class Builder<S extends string> {
   addTransition(t: Transition<S>): void { this.transitions.push(t); }
 
   build(): FlowDefinition<S> {
-    const def = (FlowDefinition as any).builder(this.name, this.stateConfig) as unknown;
-    // Build via private constructor
+    const def = this.buildInternal();
+    this.validate(def);
+    this.finalize(def);
+    return def;
+  }
+
+  /** Build without throwing. Returns definition (if valid) + structured errors. */
+  buildAndValidate(): { definition: FlowDefinition<S> | null; errors: ValidationError[] } {
+    try {
+      const def = this.buildInternal();
+      const errors = this.collectErrors(def);
+      if (errors.length > 0) return { definition: null, errors };
+      this.finalize(def);
+      return { definition: def, errors: [] };
+    } catch (e: any) {
+      return { definition: null, errors: [{ code: 'BUILD_ERROR', message: e.message }] };
+    }
+  }
+
+  private buildInternal(): FlowDefinition<S> {
     const result = Object.create(FlowDefinition.prototype) as FlowDefinition<S>;
     Object.assign(result, {
       name: this.name,
@@ -202,7 +256,6 @@ export class Builder<S extends string> {
       transitions: [...this.transitions],
       errorTransitions: new Map(this.errorTransitions),
     });
-    // Compute initial/terminal
     let initial: S | null = null;
     const terminals = new Set<S>();
     for (const [state, cfg] of Object.entries(this.stateConfig) as [S, StateConfig][]) {
@@ -212,46 +265,45 @@ export class Builder<S extends string> {
     (result as any).initialState = initial;
     (result as any).terminalStates = terminals;
     (result as any).dataFlowGraph = null;
+    return result;
+  }
 
-    this.validate(result);
-
-    (result as any).dataFlowGraph = DataFlowGraph.build(result, this.initiallyAvailableKeys, this.externallyProvidedKeys);
-
-    // Build warnings
+  private finalize(def: FlowDefinition<S>): void {
+    (def as any).dataFlowGraph = DataFlowGraph.build(def, this.initiallyAvailableKeys, this.externallyProvidedKeys);
     const warnings: string[] = [];
-    const perpetual = terminals.size === 0;
+    const perpetual = def.terminalStates.size === 0;
     const hasExternal = this.transitions.some(t => t.type === 'external');
     if (perpetual && hasExternal) {
       warnings.push(`Perpetual flow '${this.name}' has External transitions — ensure events are always delivered to avoid deadlock (liveness risk)`);
     }
-    (result as any).warnings = warnings;
-    (result as any).strictMode = this._strictMode;
-    (result as any).exceptionRoutes = new Map(this._exceptionRoutes);
-    (result as any).enterActions = new Map(this._enterActions);
-    (result as any).exitActions = new Map(this._exitActions);
-    return result;
+    (def as any).warnings = warnings;
+    (def as any).strictMode = this._strictMode;
+    (def as any).exceptionRoutes = new Map(this._exceptionRoutes);
+    (def as any).enterActions = new Map(this._enterActions);
+    (def as any).exitActions = new Map(this._exitActions);
+  }
+
+  private collectErrors(def: FlowDefinition<S>): ValidationError[] {
+    const raw: string[] = [];
+    if (!def.initialState) raw.push('No initial state found (exactly one state must have initial=true)');
+    if (!this._allowUnreachable) this.checkReachability(def, raw);
+    if (!this._perpetual) this.checkPathToTerminal(def, raw);
+    this.checkDag(def, raw);
+    this.checkBranchCompleteness(def, raw);
+    this.checkRequiresProduces(def, raw);
+    this.checkAutoExternalConflict(def, raw);
+    this.checkTerminalNoOutgoing(def, raw);
+    this.checkSubFlowExitCompleteness(def, raw);
+    this.checkSubFlowNestingDepth(def, raw, 0);
+    this.checkSubFlowCircularRef(def, raw, new Set());
+    return raw.map(msg => parseValidationError(msg));
   }
 
   private validate(def: FlowDefinition<S>): void {
-    const errors: string[] = [];
-    if (!def.initialState) {
-      errors.push('No initial state found (exactly one state must have initial=true)');
-    }
-    this.checkReachability(def, errors);
-    if (!this._perpetual) this.checkPathToTerminal(def, errors);
-    this.checkDag(def, errors);
-    // checkExternalUniqueness removed (DD-020: multi-external allowed)
-    this.checkBranchCompleteness(def, errors);
-    this.checkRequiresProduces(def, errors);
-    this.checkAutoExternalConflict(def, errors);
-    this.checkTerminalNoOutgoing(def, errors);
-    this.checkSubFlowExitCompleteness(def, errors);
-    this.checkSubFlowNestingDepth(def, errors, 0);
-    this.checkSubFlowCircularRef(def, errors, new Set());
-
+    const errors = this.collectErrors(def);
     if (errors.length > 0) {
       throw new FlowError('INVALID_FLOW_DEFINITION',
-        `Flow '${this.name}' has ${errors.length} validation error(s):\n  - ${errors.join('\n  - ')}`);
+        `Flow '${this.name}' has ${errors.length} validation error(s):\n  - ${errors.map(e => e.message).join('\n  - ')}`);
     }
   }
 

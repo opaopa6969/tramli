@@ -35,3 +35,4 @@
 | [DD-037](DD-037-viz-trace-mode.md) | tramli-viz トレースモード + エッジ表現改善 | — | 2026-04-09 |
 | [DD-038](DD-038-viz-heatmap-polish.md) | tramli-viz ヒートマップ軌跡 + 表示改善 | — | 2026-04-09 |
 | [DD-039](DD-039-viz-layout-persistence.md) | tramli-viz レイアウト永続化 + UX 改善 | — | 2026-04-09 |
+| [DD-040](DD-040-issue33-appspec-feedback.md) | Issue #33 appspec フィードバック対応 | — | 2026-04-10 |

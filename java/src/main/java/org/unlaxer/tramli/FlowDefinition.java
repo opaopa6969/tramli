@@ -20,6 +20,13 @@ import java.util.*;
  * </pre>
  */
 public final class FlowDefinition<S extends Enum<S> & FlowState> {
+
+    /** Structured validation error returned by {@link Builder#buildAndValidate()}. */
+    public record ValidationError(String code, String message, String state, String transition, List<String> missingTypes) {}
+
+    /** Result of {@link Builder#buildAndValidate()}: definition (if valid) + structured errors. */
+    public record BuildResult<S extends Enum<S> & FlowState>(FlowDefinition<S> definition, List<ValidationError> errors) {}
+
     private final String name;
     private final Class<S> stateClass;
     private final Duration ttl;
@@ -187,6 +194,54 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
                 this.dataFlowGraph, this.strictMode, this.warnings, this.enterActions, this.exitActions);
     }
 
+    /** Parse a raw error message into a structured {@link ValidationError}. */
+    static ValidationError parseValidationError(String msg) {
+        // "State X is not reachable from Y"
+        var reach = java.util.regex.Pattern.compile("State (\\S+) is not reachable").matcher(msg);
+        if (reach.find()) return new ValidationError("UNREACHABLE_STATE", msg, reach.group(1), null, null);
+
+        // "No path from X to any terminal state"
+        var path = java.util.regex.Pattern.compile("No path from (\\S+) to").matcher(msg);
+        if (path.find()) return new ValidationError("NO_PATH_TO_TERMINAL", msg, path.group(1), null, null);
+
+        // "No initial state found"
+        if (msg.contains("No initial state")) return new ValidationError("NO_INITIAL_STATE", msg, null, null, null);
+
+        // "Processor 'X' at A -> B requires Y but it may not be available"
+        var req = java.util.regex.Pattern.compile("Processor '([^']+)' at (\\S+) -> (\\S+) requires (\\S+)").matcher(msg);
+        if (req.find()) return new ValidationError("MISSING_REQUIRES", msg, null, req.group(2) + "->" + req.group(3), List.of(req.group(4)));
+
+        // "Guard 'X' at A requires Y but it may not be available"
+        var guardReq = java.util.regex.Pattern.compile("Guard '([^']+)' at (\\S+) requires (\\S+)").matcher(msg);
+        if (guardReq.find()) return new ValidationError("MISSING_REQUIRES", msg, guardReq.group(2), null, List.of(guardReq.group(3)));
+
+        // "Branch 'X' at A requires Y but it may not be available"
+        var branchReq = java.util.regex.Pattern.compile("Branch '([^']+)' at (\\S+) requires (\\S+)").matcher(msg);
+        if (branchReq.find()) return new ValidationError("MISSING_REQUIRES", msg, branchReq.group(2), null, List.of(branchReq.group(3)));
+
+        // "Auto/Branch transitions contain a cycle"
+        if (msg.contains("cycle")) return new ValidationError("DAG_CYCLE", msg, null, null, null);
+
+        // "State X has both auto/branch and external"
+        var conflict = java.util.regex.Pattern.compile("State (\\S+) has both").matcher(msg);
+        if (conflict.find()) return new ValidationError("AUTO_EXTERNAL_CONFLICT", msg, conflict.group(1), null, null);
+
+        // "Terminal state X has an outgoing transition to Y"
+        var term = java.util.regex.Pattern.compile("Terminal state (\\S+)").matcher(msg);
+        if (term.find()) return new ValidationError("TERMINAL_OUTGOING", msg, term.group(1), null, null);
+
+        // "SubFlow ... has terminal state X with no onExit mapping"
+        if (msg.contains("no onExit mapping")) return new ValidationError("SUBFLOW_EXIT_INCOMPLETE", msg, null, null, null);
+
+        // "SubFlow nesting depth exceeds maximum"
+        if (msg.contains("nesting depth")) return new ValidationError("SUBFLOW_NESTING_DEPTH", msg, null, null, null);
+
+        // "Circular sub-flow reference"
+        if (msg.contains("Circular sub-flow")) return new ValidationError("SUBFLOW_CIRCULAR_REF", msg, null, null, null);
+
+        return new ValidationError("VALIDATION", msg, null, null, null);
+    }
+
     // ─── Builder ─────────────────────────────────────────────
 
     public static <S extends Enum<S> & FlowState> Builder<S> builder(String name, Class<S> stateClass) {
@@ -207,6 +262,7 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
         private final Map<S, java.util.function.Consumer<FlowContext>> exitActions = new LinkedHashMap<>();
         private boolean perpetual = false;
         private boolean strictMode = false;
+        private boolean allowUnreachable = false;
 
         private Builder(String name, Class<S> stateClass) {
             this.name = name;
@@ -273,6 +329,12 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
         /** Allow perpetual flows (no terminal states). Skips path-to-terminal validation. */
         public Builder<S> allowPerpetual() {
             this.perpetual = true;
+            return this;
+        }
+
+        /** Allow unreachable states (shared enum across multiple flows). Skips reachability check. */
+        public Builder<S> allowUnreachable() {
+            this.allowUnreachable = true;
             return this;
         }
 
@@ -375,8 +437,29 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
         }
 
         public FlowDefinition<S> build() {
-            var def = new FlowDefinition<>(name, stateClass, ttl, maxGuardRetries, transitions, errorTransitions, exceptionRoutes, null, false, null, null, null);
+            var def = buildInternal();
             validate(def);
+            return finalize(def);
+        }
+
+        /** Build without throwing. Returns definition (if valid) + structured errors. */
+        public BuildResult<S> buildAndValidate() {
+            try {
+                var def = buildInternal();
+                var errors = collectErrors(def);
+                if (!errors.isEmpty()) return new BuildResult<>(null, errors);
+                return new BuildResult<>(finalize(def), List.of());
+            } catch (Exception e) {
+                return new BuildResult<>(null, List.of(
+                        new ValidationError("BUILD_ERROR", e.getMessage(), null, null, null)));
+            }
+        }
+
+        private FlowDefinition<S> buildInternal() {
+            return new FlowDefinition<>(name, stateClass, ttl, maxGuardRetries, transitions, errorTransitions, exceptionRoutes, null, false, null, null, null);
+        }
+
+        private FlowDefinition<S> finalize(FlowDefinition<S> def) {
             var graph = DataFlowGraph.build(def, initiallyAvailable, externallyProvided);
             var warnings = buildWarnings(def);
             return new FlowDefinition<>(name, stateClass, ttl, maxGuardRetries, transitions, errorTransitions, exceptionRoutes, graph, strictMode, warnings, enterActions, exitActions);
@@ -416,27 +499,32 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
             return warnings;
         }
 
-        private void validate(FlowDefinition<S> def) {
-            List<String> errors = new ArrayList<>();
+        private List<ValidationError> collectErrors(FlowDefinition<S> def) {
+            List<String> raw = new ArrayList<>();
             if (def.initialState == null) {
-                errors.add("No initial state found (exactly one state must have isInitial()=true)");
+                raw.add("No initial state found (exactly one state must have isInitial()=true)");
             }
-            checkReachability(def, errors);
-            if (!perpetual) checkPathToTerminal(def, errors);
-            checkDag(def, errors);
+            if (!allowUnreachable) checkReachability(def, raw);
+            if (!perpetual) checkPathToTerminal(def, raw);
+            checkDag(def, raw);
             // checkExternalUniqueness removed (DD-020: multi-external allowed)
-            checkBranchCompleteness(def, errors);
-            checkRequiresProduces(def, errors);
-            checkAutoExternalConflict(def, errors);
-            checkSubFlowExitCompleteness(def, errors);
-            checkSubFlowNestingDepth(def, errors, 0);
-            checkSubFlowCircularRef(def, errors, new java.util.LinkedHashSet<>());
-            checkTerminalNoOutgoing(def, errors);
+            checkBranchCompleteness(def, raw);
+            checkRequiresProduces(def, raw);
+            checkAutoExternalConflict(def, raw);
+            checkSubFlowExitCompleteness(def, raw);
+            checkSubFlowNestingDepth(def, raw, 0);
+            checkSubFlowCircularRef(def, raw, new java.util.LinkedHashSet<>());
+            checkTerminalNoOutgoing(def, raw);
 
+            return raw.stream().map(FlowDefinition::parseValidationError).toList();
+        }
+
+        private void validate(FlowDefinition<S> def) {
+            var errors = collectErrors(def);
             if (!errors.isEmpty()) {
                 throw new FlowException("INVALID_FLOW_DEFINITION",
                         "Flow '" + name + "' has " + errors.size() + " validation error(s):\n  - " +
-                                String.join("\n  - ", errors));
+                                errors.stream().map(ValidationError::message).collect(java.util.stream.Collectors.joining("\n  - ")));
             }
         }
 

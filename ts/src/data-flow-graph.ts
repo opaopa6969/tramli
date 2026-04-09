@@ -3,6 +3,18 @@ import type { FlowKey } from './flow-key.js';
 import type { StateProcessor } from './types.js';
 import type { FlowContext } from './flow-context.js';
 
+/** Result of DataFlowGraph.explain(). */
+export interface ExplainResult<S extends string> {
+  state: S;
+  available: Set<string>;
+  missing: Array<{
+    type: string;
+    neededBy: string[];
+    producers: Array<{ name: string; producedAt: S }>;
+    reason: string;
+  }>;
+}
+
 export interface NodeInfo<S extends string> {
   name: string;
   fromState: S;
@@ -157,6 +169,78 @@ export class DataFlowGraph<S extends string> {
       if (!ctx.has(type as FlowKey<unknown>)) missing.push(type);
     }
     return missing;
+  }
+
+  /**
+   * Explain data availability at a state. For each missing type, trace why it's unavailable.
+   * If `key` is provided, explains only that type. Otherwise explains all types needed by
+   * outgoing transitions from that state.
+   */
+  explain(state: S, key?: FlowKey<unknown>): ExplainResult<S> {
+    const available = this.availableAt(state);
+    const result: ExplainResult<S> = { state, available: new Set(available), missing: [] };
+
+    // Determine which types to check
+    let keysToCheck: string[];
+    if (key) {
+      keysToCheck = [key as string];
+    } else {
+      // All types required by outgoing processors/guards/branches from this state
+      keysToCheck = [];
+      for (const [typeName, nodes] of this._consumers) {
+        if (nodes.some(n => n.fromState === state)) keysToCheck.push(typeName);
+      }
+    }
+
+    for (const k of keysToCheck) {
+      if (available.has(k)) continue;
+      const producers = this._producers.get(k) ?? [];
+      const neededBy = (this._consumers.get(k) ?? []).filter(n => n.fromState === state);
+      result.missing.push({
+        type: k,
+        neededBy: neededBy.map(n => n.name),
+        producers: producers.map(p => ({ name: p.name, producedAt: p.toState })),
+        reason: producers.length === 0
+          ? `'${k}' is never produced by any processor or guard`
+          : `'${k}' is produced by [${producers.map(p => p.name).join(', ')}] but not on a path reaching ${state}`,
+      });
+    }
+    return result;
+  }
+
+  /**
+   * Human-readable explanation of why a type is missing at a transition.
+   * Returns an array of explanation strings.
+   */
+  whyMissing(key: FlowKey<unknown>, state: S): string[] {
+    const k = key as string;
+    const available = this.availableAt(state);
+    if (available.has(k)) return [`'${k}' IS available at ${state}`];
+
+    const lines: string[] = [];
+    const producers = this._producers.get(k) ?? [];
+    const consumers = this._consumers.get(k) ?? [];
+
+    if (producers.length === 0) {
+      lines.push(`'${k}' is never produced — no processor or guard declares it in produces[]`);
+    } else {
+      lines.push(`'${k}' is produced by:`);
+      for (const p of producers) {
+        lines.push(`  - ${p.name} (${p.fromState} → ${p.toState})`);
+      }
+      lines.push(`But none of these producers are on a path that reaches ${state}`);
+    }
+
+    const neededBy = consumers.filter(c => c.fromState === state);
+    if (neededBy.length > 0) {
+      lines.push(`Required at ${state} by: ${neededBy.map(n => n.name).join(', ')}`);
+    }
+
+    // Show what IS available at this state
+    if (available.size > 0) {
+      lines.push(`Available at ${state}: [${[...available].sort().join(', ')}]`);
+    }
+    return lines;
   }
 
   /** Impact analysis: all producers and consumers of a given type. */
