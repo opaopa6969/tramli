@@ -719,6 +719,96 @@
       "file": "/home/opa/work/AskOS-workspace/tramli/docs/plugin-guide-ja.md",
       "line": 115,
       "text": "差分のみの永続化に移行する場合、リプレイは fold/reducer に変更する必要がある。"
+    },
+    {
+      "timestamp": "2026-04-09T09:59:21Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/docs/backlog.md",
+      "line": 110,
+      "text": "- Sub-Pipeline — asStep() で十分"
+    },
+    {
+      "timestamp": "2026-04-09T10:11:16Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/docs/backlog.md",
+      "line": 110,
+      "text": "- Sub-Pipeline — asStep() で十分"
+    },
+    {
+      "timestamp": "2026-04-09T10:51:08Z",
+      "file": "/home/opa/.claude/plans/smooth-hatching-meerkat.md",
+      "line": 48,
+      "text": "- **アニメーション**: CSS transition (ライブラリ不要)"
+    },
+    {
+      "timestamp": "2026-04-09T10:51:08Z",
+      "file": "/home/opa/.claude/plans/smooth-hatching-meerkat.md",
+      "line": 87,
+      "text": "クライアントサイド完結。events 配列をスライダーで巻き戻す。サーバーへのリクエスト不要。"
+    },
+    {
+      "timestamp": "2026-04-09T10:56:29Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/viz/web/src/components/Metrics.tsx",
+      "line": 35,
+      "text": "<div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>"
+    },
+    {
+      "timestamp": "2026-04-09T10:56:59Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/viz/web/src/App.tsx",
+      "line": 20,
+      "text": "flexDirection: 'column',"
+    },
+    {
+      "timestamp": "2026-04-09T10:56:59Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/viz/web/src/App.tsx",
+      "line": 79,
+      "text": "flexDirection: 'column',"
+    },
+    {
+      "timestamp": "2026-04-09T14:44:13Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 70,
+      "text": "tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。"
+    },
+    {
+      "timestamp": "2026-04-09T14:44:13Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 78,
+      "text": "階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（ネストではなく合成）を使う。並行する関心事は[別フロー](docs/patterns/long-lived-flows-ja.md)にして `cr"
+    },
+    {
+      "timestamp": "2026-04-09T14:44:13Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 156,
+      "text": "OrderRequest req = ctx.get(OrderRequest.class);  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-09T14:44:13Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 191,
+      "text": "let req = ctx.get::<OrderRequest>()?;  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-09T14:44:27Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 70,
+      "text": "tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。"
+    },
+    {
+      "timestamp": "2026-04-09T14:44:27Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 78,
+      "text": "階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（ネストではなく合成）を使う。並行する関心事は[別フロー](docs/patterns/long-lived-flows-ja.md)にして `cr"
+    },
+    {
+      "timestamp": "2026-04-09T14:44:27Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 156,
+      "text": "OrderRequest req = ctx.get(OrderRequest.class);  // 型安全、キャスト不要"
+    },
+    {
+      "timestamp": "2026-04-09T14:44:27Z",
+      "file": "/home/opa/work/AskOS-workspace/tramli/README-ja.md",
+      "line": 191,
+      "text": "let req = ctx.get::<OrderRequest>()?;  // 型安全、キャスト不要"
     }
   ]
 }
