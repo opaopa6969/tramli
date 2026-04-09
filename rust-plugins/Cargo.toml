@@ -1,6 +1,6 @@
 [package]
 name = "tramli-plugins"
-version = "3.6.0"
+version = "3.6.1"
 edition = "2021"
 rust-version = "1.75.0"
 description = "Plugin pack for tramli — audit, eventstore, observability, resume, idempotency, hierarchy, diagram, docs, lint, testing, subflow"
@@ -10,4 +10,4 @@ keywords = ["state-machine", "workflow", "plugins", "flow-engine"]
 categories = ["data-structures", "rust-patterns"]
 
 [dependencies]
-tramli = { version = "3.6.0", path = "../rust" }
+tramli = { version = "3.6.1", path = "../rust" }

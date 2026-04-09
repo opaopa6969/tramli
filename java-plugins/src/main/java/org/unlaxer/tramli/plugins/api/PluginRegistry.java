@@ -45,6 +45,16 @@ public final class PluginRegistry {
         return def;
     }
 
+    /** Run all analysis plugins and throw if any ERROR findings. For already-built definitions. */
+    public <S extends Enum<S> & FlowState> void analyzeAndValidate(FlowDefinition<S> definition) {
+        PluginReport report = analyzeAll(definition);
+        var errors = report.findings().stream().filter(f -> "ERROR".equals(f.severity())).toList();
+        if (!errors.isEmpty()) {
+            var msg = errors.stream().map(e -> "  [" + e.pluginId() + "] " + e.message()).reduce("", (a, b) -> a + "\n" + b);
+            throw new IllegalStateException("Analysis errors:" + msg);
+        }
+    }
+
     public FlowStore applyStorePlugins(FlowStore baseStore) {
         FlowStore current = baseStore;
         for (FlowPlugin plugin : plugins) {

@@ -6,7 +6,7 @@
 
     <groupId>org.unlaxer</groupId>
     <artifactId>tramli-plugins</artifactId>
-    <version>3.6.0</version>
+    <version>3.6.1</version>
     <packaging>jar</packaging>
 
     <name>tramli-plugins</name>
@@ -45,7 +45,7 @@
         <dependency>
             <groupId>org.unlaxer</groupId>
             <artifactId>tramli</artifactId>
-            <version>3.6.0</version>
+            <version>3.6.1</version>
         </dependency>
 
         <dependency>

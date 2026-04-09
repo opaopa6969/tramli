@@ -26,6 +26,7 @@ export type {
 
 // ── Observability ──
 export { ObservabilityEnginePlugin, InMemoryTelemetrySink } from './observability/observability-plugin.js';
+export { NoopTelemetrySink } from './observability/noop-telemetry-sink.js';
 export type { TelemetryEvent, TelemetrySink } from './observability/observability-plugin.js';
 
 // ── Rich Resume ──

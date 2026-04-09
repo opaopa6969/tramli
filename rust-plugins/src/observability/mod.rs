@@ -56,6 +56,14 @@ impl TelemetrySink for InMemoryTelemetrySink {
     }
 }
 
+/// No-op telemetry sink for benchmarking baseline.
+pub struct NoopTelemetrySink;
+
+impl TelemetrySink for NoopTelemetrySink {
+    fn emit(&self, _event: TelemetryEvent) {}
+    fn events(&self) -> Vec<TelemetryEvent> { Vec::new() }
+}
+
 /// Observability engine plugin — installs transition/error logger hooks.
 pub struct ObservabilityPlugin {
     sink: Arc<dyn TelemetrySink>,

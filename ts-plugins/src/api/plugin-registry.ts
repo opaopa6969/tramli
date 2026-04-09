@@ -39,6 +39,15 @@ export class PluginRegistry<S extends string> {
     return def;
   }
 
+  /** Run all analysis plugins and throw if any ERROR findings. For already-built definitions. */
+  analyzeAndValidate(definition: FlowDefinition<S>): void {
+    const report = this.analyzeAll(definition);
+    const errors = report.findings().filter(f => f.severity === 'ERROR');
+    if (errors.length > 0) {
+      throw new Error(`Analysis errors:\n${errors.map(e => `  [${e.pluginId}] ${e.message}`).join('\n')}`);
+    }
+  }
+
   /** Apply all store plugins (wrapping in registration order). */
   applyStorePlugins(store: any): any {
     let wrapped = store;
