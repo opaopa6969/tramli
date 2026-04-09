@@ -13,6 +13,7 @@ export class FlowDefinition<S extends string> {
   readonly initialState: S | null;
   readonly terminalStates: Set<S>;
   readonly dataFlowGraph!: DataFlowGraph<S> | null;
+  readonly strictMode!: boolean;
   readonly warnings!: string[];
   readonly exceptionRoutes!: Map<S, Array<{ errorClass: new (...args: any[]) => Error; target: S }>>;
   readonly enterActions!: Map<S, (ctx: import('./flow-context.js').FlowContext) => void>;
@@ -124,6 +125,7 @@ export class Builder<S extends string> {
   private readonly initiallyAvailableKeys: string[] = [];
   private readonly externallyProvidedKeys: string[] = [];
   private _perpetual = false;
+  private _strictMode = false;
 
   constructor(name: string, stateConfig: Record<S, StateConfig>) {
     this.name = name;
@@ -182,6 +184,9 @@ export class Builder<S extends string> {
   /** Allow perpetual flows (no terminal states). Skips path-to-terminal validation. */
   allowPerpetual(): this { this._perpetual = true; return this; }
 
+  /** Declare that this flow should run in strict mode (produces verification). */
+  strictMode(): this { this._strictMode = true; return this; }
+
   /** @internal */
   addTransition(t: Transition<S>): void { this.transitions.push(t); }
 
@@ -220,6 +225,7 @@ export class Builder<S extends string> {
       warnings.push(`Perpetual flow '${this.name}' has External transitions — ensure events are always delivered to avoid deadlock (liveness risk)`);
     }
     (result as any).warnings = warnings;
+    (result as any).strictMode = this._strictMode;
     (result as any).exceptionRoutes = new Map(this._exceptionRoutes);
     (result as any).enterActions = new Map(this._enterActions);
     (result as any).exitActions = new Map(this._exitActions);

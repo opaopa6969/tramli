@@ -24,7 +24,7 @@ pub use engine::{FlowEngine, TransitionLogEntry, ErrorLogEntry, GuardLogEntry};
 pub use error::FlowError;
 pub use instance::FlowInstance;
 pub use mermaid::MermaidGenerator;
-pub use store::{InMemoryFlowStore, TransitionRecord};
+pub use store::{FlowStore, InMemoryFlowStore, TransitionRecord};
 pub use types::*;
 
 /// Shorthand for creating a Vec<TypeId> from type names.

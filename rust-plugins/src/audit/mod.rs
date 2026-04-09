@@ -1,5 +1,5 @@
 use std::time::Instant;
-use tramli::{FlowState, InMemoryFlowStore, FlowInstance};
+use tramli::{FlowState, FlowStore, InMemoryFlowStore, FlowInstance, TransitionRecord};
 
 /// Audited transition record.
 #[derive(Debug, Clone)]
@@ -57,4 +57,15 @@ impl<S: FlowState> AuditingStore<S> {
         self.delegate.clear();
         self.audit_log.clear();
     }
+}
+
+impl<S: FlowState> FlowStore<S> for AuditingStore<S> {
+    fn create(&mut self, flow: FlowInstance<S>) { self.delegate.create(flow); }
+    fn get(&self, flow_id: &str) -> Option<&FlowInstance<S>> { self.delegate.get(flow_id) }
+    fn get_mut(&mut self, flow_id: &str) -> Option<&mut FlowInstance<S>> { self.delegate.get_mut(flow_id) }
+    fn record_transition(&mut self, flow_id: &str, from: &str, to: &str, trigger: &str) {
+        self.record_transition(flow_id, from, to, trigger);
+    }
+    fn transition_log(&self) -> &[TransitionRecord] { self.delegate.transition_log() }
+    fn clear(&mut self) { self.clear(); }
 }

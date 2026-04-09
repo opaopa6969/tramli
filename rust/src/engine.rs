@@ -344,7 +344,7 @@ impl<S: FlowState> FlowEngine<S> {
             if let Some(proc) = &t.processor {
                 let backup = flow.context.snapshot();
                 let result = proc.process(&mut flow.context);
-                let strict_fail = result.is_ok() && strict_mode &&
+                let strict_fail = result.is_ok() && (strict_mode || def.strict_mode) &&
                     proc.produces().iter().any(|p| !flow.context.has_type_id(p));
                 if result.is_err() || strict_fail {
                     flow.context.restore_from(backup);

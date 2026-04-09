@@ -64,6 +64,7 @@ export type { FlowPolicy } from './lint/types.js';
 
 // ── Testing ──
 export { ScenarioTestPlugin } from './testing/scenario-test-plugin.js';
+export type { TestFramework } from './testing/scenario-test-plugin.js';
 export { ScenarioGenerationPlugin } from './testing/scenario-generation-plugin.js';
 export type { FlowScenario, FlowTestPlan, ScenarioKind } from './testing/types.js';
 

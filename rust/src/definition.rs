@@ -18,6 +18,7 @@ pub struct FlowDefinition<S: FlowState> {
     enter_actions: HashMap<S, Box<dyn Fn(&mut crate::context::FlowContext) + Send + Sync>>,
     exit_actions: HashMap<S, Box<dyn Fn(&mut crate::context::FlowContext) + Send + Sync>>,
     pub exception_routes: HashMap<S, Vec<ExceptionRoute<S>>>,
+    pub strict_mode: bool,
     warnings: Vec<String>,
 }
 
@@ -69,6 +70,7 @@ pub struct Builder<S: FlowState> {
     initially_available: Vec<TypeId>,
     externally_provided: Vec<TypeId>,
     perpetual: bool,
+    strict_mode: bool,
     enter_actions: HashMap<S, Box<dyn Fn(&mut crate::context::FlowContext) + Send + Sync>>,
     exit_actions: HashMap<S, Box<dyn Fn(&mut crate::context::FlowContext) + Send + Sync>>,
     exception_routes: HashMap<S, Vec<(Box<dyn Fn(&FlowError) -> bool + Send + Sync>, String, S)>>,
@@ -79,7 +81,7 @@ impl<S: FlowState> Builder<S> {
         Self {
             name: name.into(), ttl: Duration::from_secs(300), max_guard_retries: 3,
             transitions: Vec::new(), error_transitions: HashMap::new(),
-            initially_available: Vec::new(), externally_provided: Vec::new(), perpetual: false,
+            initially_available: Vec::new(), externally_provided: Vec::new(), perpetual: false, strict_mode: false,
             enter_actions: HashMap::new(), exit_actions: HashMap::new(),
             exception_routes: HashMap::new(),
         }
@@ -95,6 +97,8 @@ impl<S: FlowState> Builder<S> {
         self.externally_provided.extend(type_ids); self
     }
     pub fn allow_perpetual(mut self) -> Self { self.perpetual = true; self }
+    /// Declare that this flow should run in strict mode (produces verification).
+    pub fn strict_mode(mut self) -> Self { self.strict_mode = true; self }
 
     pub fn from(self, state: S) -> FromBuilder<S> { FromBuilder { builder: self, from: state } }
 
@@ -150,7 +154,7 @@ impl<S: FlowState> Builder<S> {
             initial_state: initial, terminal_states: terminals,
             data_flow_graph: DataFlowGraph::empty(),
             enter_actions: HashMap::new(), exit_actions: HashMap::new(),
-            exception_routes: HashMap::new(), warnings: Vec::new(),
+            exception_routes: HashMap::new(), strict_mode: self.strict_mode, warnings: Vec::new(),
         };
         validate::<S>(&def, &name, perpetual, &initially_available, &externally_provided)?;
         let graph = DataFlowGraph::build(&def, &initially_available, &externally_provided);

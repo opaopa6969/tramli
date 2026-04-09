@@ -14,6 +14,16 @@ pub struct TransitionRecord {
     pub timestamp: Instant,
 }
 
+/// FlowStore trait — abstraction over flow persistence.
+pub trait FlowStore<S: FlowState> {
+    fn create(&mut self, flow: FlowInstance<S>);
+    fn get(&self, flow_id: &str) -> Option<&FlowInstance<S>>;
+    fn get_mut(&mut self, flow_id: &str) -> Option<&mut FlowInstance<S>>;
+    fn record_transition(&mut self, flow_id: &str, from: &str, to: &str, trigger: &str);
+    fn transition_log(&self) -> &[TransitionRecord];
+    fn clear(&mut self);
+}
+
 /// In-memory FlowStore for testing.
 pub struct InMemoryFlowStore<S: FlowState> {
     flows: HashMap<String, FlowInstance<S>>,
@@ -51,3 +61,14 @@ impl<S: FlowState> InMemoryFlowStore<S> {
 }
 
 impl<S: FlowState> Default for InMemoryFlowStore<S> { fn default() -> Self { Self::new() } }
+
+impl<S: FlowState> FlowStore<S> for InMemoryFlowStore<S> {
+    fn create(&mut self, flow: FlowInstance<S>) { self.create(flow); }
+    fn get(&self, flow_id: &str) -> Option<&FlowInstance<S>> { self.get(flow_id) }
+    fn get_mut(&mut self, flow_id: &str) -> Option<&mut FlowInstance<S>> { self.get_mut(flow_id) }
+    fn record_transition(&mut self, flow_id: &str, from: &str, to: &str, trigger: &str) {
+        self.record_transition(flow_id, from, to, trigger);
+    }
+    fn transition_log(&self) -> &[TransitionRecord] { self.transition_log() }
+    fn clear(&mut self) { self.clear(); }
+}

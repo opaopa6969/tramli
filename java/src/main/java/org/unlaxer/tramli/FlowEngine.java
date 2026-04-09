@@ -280,7 +280,7 @@ public final class FlowEngine {
         long start = System.nanoTime();
         if (t.processor() != null) {
             t.processor().process(flow.context());
-            verifyProduces(t.processor(), flow.context());
+            verifyProduces(t.processor(), flow.context(), flow.definition().strictMode());
         }
         S from = flow.currentState();
         fireExit(flow, from);
@@ -477,7 +477,11 @@ public final class FlowEngine {
     }
 
     private void verifyProduces(StateProcessor processor, FlowContext ctx) {
-        if (!strictMode || processor == null) return;
+        verifyProduces(processor, ctx, false);
+    }
+
+    private void verifyProduces(StateProcessor processor, FlowContext ctx, boolean defStrictMode) {
+        if ((!strictMode && !defStrictMode) || processor == null) return;
         for (Class<?> prod : processor.produces()) {
             if (!ctx.has(prod)) {
                 throw new FlowException("PRODUCES_VIOLATION",

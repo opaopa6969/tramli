@@ -1,4 +1,4 @@
-import type { FlowDefinition, FlowEngine } from '@unlaxer/tramli';
+import type { FlowDefinition, FlowEngine, Builder } from '@unlaxer/tramli';
 import type {
   FlowPlugin, AnalysisPlugin, StorePlugin, EnginePlugin,
   RuntimeAdapterPlugin, GenerationPlugin
@@ -26,6 +26,17 @@ export class PluginRegistry<S extends string> {
       }
     }
     return report;
+  }
+
+  /** Build a FlowDefinition and run all analysis plugins. Throws if any ERROR findings. */
+  buildAndAnalyze(builder: Builder<S>): FlowDefinition<S> {
+    const def = builder.build();
+    const report = this.analyzeAll(def);
+    const errors = report.findings().filter(f => f.severity === 'ERROR');
+    if (errors.length > 0) {
+      throw new Error(`Analysis errors:\n${errors.map(e => `  [${e.pluginId}] ${e.message}`).join('\n')}`);
+    }
+    return def;
   }
 
   /** Apply all store plugins (wrapping in registration order). */

@@ -1,11 +1,77 @@
 import type { FlowDefinition } from '@unlaxer/tramli';
 import type { FlowScenario, FlowTestPlan } from './types.js';
 
+export type TestFramework = 'vitest' | 'jest';
+
 /**
  * Generates BDD-style test scenarios from a flow definition.
  * Covers happy paths, error transitions, guard rejections, and timeout expiry.
  */
 export class ScenarioTestPlugin {
+  /**
+   * Generate executable test code from a flow definition.
+   * Produces a string of vitest/jest test code that validates transitions
+   * against the definition's structure (no FlowEngine required).
+   */
+  generateCode<S extends string>(definition: FlowDefinition<S>, framework: TestFramework = 'vitest'): string {
+    const plan = this.generate(definition);
+    const lines: string[] = [];
+    const imp = framework === 'vitest' ? "import { describe, it, expect } from 'vitest';" : '';
+    if (imp) lines.push(imp);
+    lines.push('');
+    lines.push(`describe('${definition.name} scenarios', () => {`);
+
+    for (const scenario of plan.scenarios) {
+      lines.push(`  it('${scenario.name}', () => {`);
+      for (const step of scenario.steps) {
+        lines.push(`    // ${step}`);
+      }
+      // Add assertion based on scenario kind
+      switch (scenario.kind) {
+        case 'happy': {
+          const fromMatch = scenario.steps[0]?.match(/given flow in (\S+)/);
+          const toMatch = scenario.steps[scenario.steps.length - 1]?.match(/then flow reaches (\S+)/);
+          if (fromMatch && toMatch) {
+            const from = fromMatch[1];
+            const to = toMatch[1];
+            lines.push(`    const transitions = definition.transitionsFrom('${from}');`);
+            lines.push(`    expect(transitions.some(t => t.to === '${to}')).toBe(true);`);
+          }
+          break;
+        }
+        case 'error': {
+          const fromMatch = scenario.steps[0]?.match(/given flow in (\S+)/);
+          const toMatch = scenario.steps[scenario.steps.length - 1]?.match(/then flow transitions to (\S+)/);
+          if (fromMatch && toMatch) {
+            lines.push(`    expect(definition.errorTransitions.get('${fromMatch[1]}')).toBe('${toMatch[1]}');`);
+          }
+          break;
+        }
+        case 'guard_rejection': {
+          const guardMatch = scenario.steps[1]?.match(/when guard (\S+) rejects/);
+          if (guardMatch) {
+            lines.push(`    expect(definition.maxGuardRetries).toBeGreaterThan(0);`);
+          }
+          break;
+        }
+        case 'timeout': {
+          const fromMatch = scenario.steps[0]?.match(/given flow in (\S+)/);
+          if (fromMatch) {
+            lines.push(`    const t = definition.transitionsFrom('${fromMatch[1]}').find(t => t.timeout != null);`);
+            lines.push(`    expect(t).toBeDefined();`);
+          }
+          break;
+        }
+      }
+      lines.push('  });');
+      lines.push('');
+    }
+
+    lines.push('});');
+    lines.push('');
+    return lines.join('\n');
+  }
+
   generate<S extends string>(definition: FlowDefinition<S>): FlowTestPlan {
     const scenarios: FlowScenario[] = [];
 

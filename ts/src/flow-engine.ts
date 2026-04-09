@@ -210,7 +210,7 @@ export class FlowEngine {
         if (autoOrBranch.type === 'auto') {
           if (autoOrBranch.processor) {
             await autoOrBranch.processor.process(flow.context);
-            this.verifyProduces(autoOrBranch.processor, flow.context);
+            this.verifyProduces(autoOrBranch.processor, flow.context, flow.definition.strictMode);
           }
           const from = flow.currentState;
           this.fireExit(flow, from);
@@ -352,8 +352,8 @@ export class FlowEngine {
     return parentFlow;
   }
 
-  private verifyProduces(processor: { name: string; produces: any[] }, ctx: FlowContext): void {
-    if (!this.strictMode) return;
+  private verifyProduces(processor: { name: string; produces: any[] }, ctx: FlowContext, defStrictMode?: boolean): void {
+    if (!this.strictMode && !defStrictMode) return;
     for (const prod of processor.produces) {
       if (!ctx.has(prod)) {
         throw new FlowError('PRODUCES_VIOLATION',

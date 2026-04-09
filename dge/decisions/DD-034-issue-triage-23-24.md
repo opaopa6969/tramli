@@ -59,13 +59,14 @@ status: accepted
 | R1 | MermaidGenerator excludeErrorTransitions | 3 言語 | S |
 | R6 | SystemLoggerTelemetrySink | Java | S |
 
-## Deferred to v3.6.0
+## v3.6.0 実装対象（全件実装済み）
 
-| # | 内容 | 備考 |
-|---|------|------|
-| R2 | ScenarioTestPlugin テストコード生成 | 設計検討要 |
-| R5 | Builder.withAnalysis() | build 内自動 lint |
-| S1 | Builder.strict_mode | #14 残件 |
+| # | 内容 | 言語 | 状態 |
+|---|------|------|------|
+| R2 | ScenarioTestPlugin.generateCode() | TS | done |
+| R5 | PluginRegistry.buildAndAnalyze() | TS/Java | done |
+| S1 | Builder.strictMode() + FlowDefinition.strictMode | 3 言語 | done |
+| S4 | FlowStore trait + AuditingStore impl | Rust | done |
 
 ## Closed
 
@@ -73,3 +74,4 @@ status: accepted
 |---|------|------|
 | R3 | Guard ボイラープレート削減 | ゼロ依存ラムダ設計に反する |
 | R4 | FlowEngine.withPlugins() | PluginRegistry が既に facade |
+| S6 | DiagramPlugin annotation | P3、defer |
