@@ -68,7 +68,7 @@ tramli では [StateProcessor](#stateprocessor) が閉じた単位。[requires()
 
 tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。
 
-[DGE セッション](dge/sessions/dge-session-harel-carta.md)（AI が David Harel（Statecharts の発明者）や Pat Helland（分散システムの先駆者）の役を演じる架空の設計対話）で、両ペルソナが独立に同じ結論に到達:
+[DGE によって生成された会話劇](dge/sessions/dge-session-harel-carta.md)（AI が David Harel（Statecharts の発明者）や Pat Helland（分散システムの先駆者）の役を演じる架空の設計対話）の中で、両ペルソナが独立に同じ結論に到達:
 
 - **階層状態**はデータフロー検証を劣化させる（super-state を通る暗黙のパス）
 - **直交領域**はデータフロー検証を破壊する（指数的なパス組み合わせ）
