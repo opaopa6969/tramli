@@ -1,6 +1,6 @@
 {
   "name": "@unlaxer/tramli-plugins",
-  "version": "3.3.0",
+  "version": "3.4.0",
   "description": "Plugin pack for tramli — audit, eventstore, observability, resume, idempotency, hierarchy, diagram, docs, lint, testing, subflow",
   "type": "module",
   "exports": {
