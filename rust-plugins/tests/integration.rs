@@ -288,3 +288,25 @@ fn subflow_validator() {
     );
     assert!(result.is_ok());
 }
+
+#[test]
+fn validator_semantics_unchanged_with_plugins() {
+    let def = build_def(true);
+
+    // Capture without plugins
+    let warnings_without = def.warnings().to_vec();
+    let transitions_count = def.transitions.len();
+
+    // Register plugins (they do not mutate the definition)
+    let sink = Arc::new(observability::InMemoryTelemetrySink::new());
+    let _obs = observability::ObservabilityPlugin::new(sink);
+
+    let mut report = api::PluginReport::new();
+    for policy in lint::default_policies() {
+        policy(&def, &mut report);
+    }
+
+    // Definition is immutable — plugins do not change validation
+    assert_eq!(def.warnings().to_vec(), warnings_without);
+    assert_eq!(def.transitions.len(), transitions_count);
+}

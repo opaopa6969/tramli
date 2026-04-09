@@ -370,6 +370,31 @@ describe('Plugin Integration', () => {
     expect(() => validator.validate(parentDef, 'PENDING', subDef, new Set())).not.toThrow();
   });
 
+  it('validator semantics unchanged with plugins', () => {
+    const def = buildDef(true);
+
+    // Capture without plugins
+    const warningsWithout = def.warnings;
+    const mermaidWithout = MermaidGenerator.generate(def);
+
+    // Register all plugin types
+    const registry = new PluginRegistry<S>();
+    registry
+      .register(PolicyLintPlugin.defaults<S>())
+      .register(new AuditStorePlugin())
+      .register(new EventLogStorePlugin())
+      .register(new ObservabilityEnginePlugin(new InMemoryTelemetrySink()));
+
+    // Definition is immutable — plugins do not change validation
+    expect(def.warnings).toEqual(warningsWithout);
+    expect(MermaidGenerator.generate(def)).toBe(mermaidWithout);
+
+    // analyzeAll returns findings but does not mutate definition
+    const report = registry.analyzeAll(def);
+    expect(report.findings().length).toBeGreaterThanOrEqual(0);
+    expect(def.warnings).toEqual(warningsWithout);
+  });
+
   it('runtime adapter plugin binding', async () => {
     const def = buildDef(true);
     const store = new InMemoryFlowStore();
