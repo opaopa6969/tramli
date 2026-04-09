@@ -15,9 +15,13 @@ export class ScenarioTestPlugin {
    */
   generateCode<S extends string>(definition: FlowDefinition<S>, framework: TestFramework = 'vitest'): string {
     const plan = this.generate(definition);
+    const defName = definition.name.replace(/[^a-zA-Z0-9]/g, '_');
     const lines: string[] = [];
     const imp = framework === 'vitest' ? "import { describe, it, expect } from 'vitest';" : '';
     if (imp) lines.push(imp);
+    lines.push(`// TODO: import or inline your FlowDefinition here`);
+    lines.push(`// import { ${defName}Definition } from './your-definitions';`);
+    lines.push(`// const definition = ${defName}Definition;`);
     lines.push('');
     lines.push(`describe('${definition.name} scenarios', () => {`);
 
