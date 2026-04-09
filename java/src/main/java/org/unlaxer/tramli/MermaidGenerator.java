@@ -14,6 +14,10 @@ public final class MermaidGenerator {
     private MermaidGenerator() {}
 
     public static <S extends Enum<S> & FlowState> String generate(FlowDefinition<S> definition) {
+        return generate(definition, false);
+    }
+
+    public static <S extends Enum<S> & FlowState> String generate(FlowDefinition<S> definition, boolean excludeErrorTransitions) {
         var sb = new StringBuilder();
         sb.append("stateDiagram-v2\n");
 
@@ -52,13 +56,15 @@ public final class MermaidGenerator {
             sb.append('\n');
         }
 
-        Set<String> errorSeen = new LinkedHashSet<>();
-        for (var entry : definition.errorTransitions().entrySet()) {
-            String key = entry.getKey().name() + "->" + entry.getValue().name();
-            if (seen.contains(key)) continue;
-            if (!errorSeen.add(key)) continue;
-            sb.append("    ").append(entry.getKey().name())
-              .append(" --> ").append(entry.getValue().name()).append(" : error\n");
+        if (!excludeErrorTransitions) {
+            Set<String> errorSeen = new LinkedHashSet<>();
+            for (var entry : definition.errorTransitions().entrySet()) {
+                String key = entry.getKey().name() + "->" + entry.getValue().name();
+                if (seen.contains(key)) continue;
+                if (!errorSeen.add(key)) continue;
+                sb.append("    ").append(entry.getKey().name())
+                  .append(" --> ").append(entry.getValue().name()).append(" : error\n");
+            }
         }
 
         for (S s : definition.terminalStates()) {

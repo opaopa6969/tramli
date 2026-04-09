@@ -9,6 +9,11 @@ pub struct MermaidGenerator;
 impl MermaidGenerator {
     /// Generate Mermaid stateDiagram-v2 (state transitions).
     pub fn generate<S: FlowState>(def: &FlowDefinition<S>) -> String {
+        Self::generate_with_options(def, false)
+    }
+
+    /// Generate Mermaid stateDiagram-v2 with options.
+    pub fn generate_with_options<S: FlowState>(def: &FlowDefinition<S>, exclude_error_transitions: bool) -> String {
         let mut lines = vec!["stateDiagram-v2".to_string()];
 
         if let Some(initial) = def.initial_state() {
@@ -41,10 +46,12 @@ impl MermaidGenerator {
             }
         }
 
-        for (from, to) in &def.error_transitions {
-            let key = format!("{:?}->{:?}", from, to);
-            if !seen.insert(key) { continue; }
-            lines.push(format!("    {:?} --> {:?} : error", from, to));
+        if !exclude_error_transitions {
+            for (from, to) in &def.error_transitions {
+                let key = format!("{:?}->{:?}", from, to);
+                if !seen.insert(key) { continue; }
+                lines.push(format!("    {:?} --> {:?} : error", from, to));
+            }
         }
 
         for s in S::all_states() {

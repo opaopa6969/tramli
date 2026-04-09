@@ -130,6 +130,16 @@ describe('OrderFlow', () => {
     expect(mermaid).toContain('SHIPPED --> [*]');
   });
 
+  it('mermaid diagram excludeErrorTransitions', () => {
+    const def = definition(true);
+    const withErrors = MermaidGenerator.generate(def);
+    const withoutErrors = MermaidGenerator.generate(def, { excludeErrorTransitions: true });
+    expect(withErrors).toContain('error');
+    expect(withoutErrors).not.toContain('error');
+    expect(withoutErrors).toContain('stateDiagram-v2');
+    expect(withoutErrors).toContain('[*] --> CREATED');
+  });
+
   it('data-flow graph', () => {
     const def = definition(true);
     const graph = def.dataFlowGraph!;

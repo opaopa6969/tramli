@@ -186,6 +186,18 @@ class PluginIntegrationTest {
         assertFalse(sink.events().isEmpty(), "sink should have events");
     }
 
+    @Test
+    void systemLoggerTelemetrySink() {
+        var sink = new SystemLoggerTelemetrySink("test.tramli");
+        // Just verify it doesn't throw and implements TelemetrySink
+        sink.emit(new TelemetryEvent("transition", java.time.Instant.now(), "f1", "test-flow", "A -> B via Proc1", 42));
+        sink.emit(new TelemetryEvent("error", java.time.Instant.now(), "f1", "test-flow", "processor failed", 0));
+        // Verify it works with ObservabilityPlugin
+        var plugin = new ObservabilityPlugin(sink);
+        FlowEngine engine = Tramli.engine(new InMemoryFlowStore());
+        plugin.install(engine);
+    }
+
     // ─── Rich resume classification ──────────────────────
 
     @Test

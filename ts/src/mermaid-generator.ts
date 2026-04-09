@@ -1,8 +1,12 @@
 import type { FlowDefinition } from './flow-definition.js';
 import type { Transition } from './types.js';
 
+export interface MermaidOptions {
+  excludeErrorTransitions?: boolean;
+}
+
 export class MermaidGenerator {
-  static generate<S extends string>(def: FlowDefinition<S>): string {
+  static generate<S extends string>(def: FlowDefinition<S>, options?: MermaidOptions): string {
     const lines: string[] = ['stateDiagram-v2'];
     if (def.initialState) lines.push(`  [*] --> ${def.initialState}`);
 
@@ -33,11 +37,13 @@ export class MermaidGenerator {
       lines.push(label ? `  ${t.from} --> ${t.to}: ${label}` : `  ${t.from} --> ${t.to}`);
     }
 
-    for (const [from, to] of def.errorTransitions) {
-      const key = `${from}->${to}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        lines.push(`  ${from} --> ${to}: error`);
+    if (!options?.excludeErrorTransitions) {
+      for (const [from, to] of def.errorTransitions) {
+        const key = `${from}->${to}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          lines.push(`  ${from} --> ${to}: error`);
+        }
       }
     }
 

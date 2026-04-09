@@ -8,6 +8,7 @@ export { FlowError } from './flow-error.js';
 export { InMemoryFlowStore } from './in-memory-flow-store.js';
 export type { TransitionRecord } from './in-memory-flow-store.js';
 export { MermaidGenerator } from './mermaid-generator.js';
+export type { MermaidOptions } from './mermaid-generator.js';
 export { SkeletonGenerator } from './skeleton-generator.js';
 export type { TargetLanguage } from './skeleton-generator.js';
 export { DataFlowGraph } from './data-flow-graph.js';
