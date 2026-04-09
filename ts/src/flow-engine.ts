@@ -88,8 +88,23 @@ export class FlowEngine {
     }
 
     const currentState = flow.currentState;
-    const transition = definition.externalFrom(currentState);
-    if (!transition) throw FlowError.invalidTransition(currentState, currentState);
+
+    // Multi-external: select guard by requires matching
+    const externals = definition.externalsFrom(currentState);
+    if (externals.length === 0) throw FlowError.invalidTransition(currentState, currentState);
+
+    let transition: Transition<S> | undefined;
+    const dataKeys = externalData ? new Set(externalData.keys()) : new Set<string>();
+    for (const ext of externals) {
+      if (ext.guard && ext.guard.requires.every(r => dataKeys.has(r))) {
+        transition = ext;
+        break;
+      }
+    }
+    if (!transition) {
+      // Fallback: first external
+      transition = externals[0];
+    }
 
     // Per-state timeout check
     if (transition.timeout != null) {
@@ -114,7 +129,9 @@ export class FlowEngine {
           try {
             if (transition.processor) await transition.processor.process(flow.context);
             const from = flow.currentState;
+            this.fireExit(flow, from);
             flow.transitionTo(transition.to);
+            this.fireEnter(flow, transition.to);
             this.store.recordTransition(flow.id, from, transition.to, guard.name, flow.context);
             this.logTransition(flow, from, transition.to, guard.name);
           } catch (e: any) {
@@ -127,7 +144,7 @@ export class FlowEngine {
         }
         case 'rejected': {
           this.logGuard(flow, currentState, guard.name, 'rejected', output.reason);
-          flow.incrementGuardFailure();
+          flow.incrementGuardFailure(guard.name);
           if (flow.guardFailureCount >= definition.maxGuardRetries) {
             this.handleError(flow, currentState);
           }
@@ -143,7 +160,9 @@ export class FlowEngine {
       }
     } else {
       const from = flow.currentState;
+      this.fireExit(flow, from);
       flow.transitionTo(transition.to);
+      this.fireEnter(flow, transition.to);
       this.store.recordTransition(flow.id, from, transition.to, 'external', flow.context);
       this.logTransition(flow, from, transition.to, 'external');
     }
@@ -184,7 +203,9 @@ export class FlowEngine {
             this.verifyProduces(autoOrBranch.processor, flow.context);
           }
           const from = flow.currentState;
+          this.fireExit(flow, from);
           flow.transitionTo(autoOrBranch.to);
+          this.fireEnter(flow, autoOrBranch.to);
           const trigger = autoOrBranch.processor?.name ?? 'auto';
           this.store.recordTransition(flow.id, from, autoOrBranch.to, trigger, flow.context);
           this.logTransition(flow, from, autoOrBranch.to, trigger);
@@ -199,7 +220,9 @@ export class FlowEngine {
           const specific = transitions.find(t => t.type === 'branch' && t.to === target) ?? autoOrBranch;
           if (specific.processor) await specific.processor.process(flow.context);
           const from = flow.currentState;
+          this.fireExit(flow, from);
           flow.transitionTo(target);
+          this.fireEnter(flow, target);
           const trigger = `${branch.name}:${label}`;
           this.store.recordTransition(flow.id, from, target, trigger, flow.context);
           this.logTransition(flow, from, target, trigger);
@@ -234,7 +257,9 @@ export class FlowEngine {
       const target = exitMappings.get(subFlow.exitState!);
       if (target) {
         const from = parentFlow.currentState;
+        this.fireExit(parentFlow, from);
         parentFlow.transitionTo(target);
+        this.fireEnter(parentFlow, target);
         const trigger = `subFlow:${subDef.name}/${subFlow.exitState}`;
         this.store.recordTransition(parentFlow.id, from, target, trigger, parentFlow.context);
         this.logTransition(parentFlow, from, target, trigger);
@@ -297,7 +322,9 @@ export class FlowEngine {
         const target = subFlowT.exitMappings.get(subFlow.exitState!);
         if (target) {
           const from = parentFlow.currentState;
+          this.fireExit(parentFlow, from);
           parentFlow.transitionTo(target);
+          this.fireEnter(parentFlow, target);
           const trigger = `subFlow:${subDef.name}/${subFlow.exitState}`;
           this.store.recordTransition(parentFlow.id, from, target, trigger, parentFlow.context);
           this.logTransition(parentFlow, from, target, trigger);
@@ -318,6 +345,16 @@ export class FlowEngine {
           `Processor '${processor.name}' declares produces ${prod} but did not put it in context (strictMode)`);
       }
     }
+  }
+
+  private fireEnter<S extends string>(flow: FlowInstance<S>, state: S): void {
+    const action = flow.definition.enterAction(state);
+    if (action) action(flow.context);
+  }
+
+  private fireExit<S extends string>(flow: FlowInstance<S>, state: S): void {
+    const action = flow.definition.exitAction(state);
+    if (action) action(flow.context);
   }
 
   private logTransition<S extends string>(flow: FlowInstance<S>, from: string | null, to: string, trigger: string): void {

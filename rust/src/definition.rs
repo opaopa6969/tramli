@@ -15,12 +15,34 @@ pub struct FlowDefinition<S: FlowState> {
     initial_state: Option<S>,
     terminal_states: HashSet<S>,
     data_flow_graph: DataFlowGraph<S>,
+    enter_actions: HashMap<S, Box<dyn Fn(&mut crate::context::FlowContext) + Send + Sync>>,
+    exit_actions: HashMap<S, Box<dyn Fn(&mut crate::context::FlowContext) + Send + Sync>>,
+    pub exception_routes: HashMap<S, Vec<ExceptionRoute<S>>>,
+    warnings: Vec<String>,
+}
+
+/// Route to a specific state based on error predicate.
+pub struct ExceptionRoute<S: FlowState> {
+    pub predicate: Box<dyn Fn(&FlowError) -> bool + Send + Sync>,
+    pub label: String,
+    pub target: S,
 }
 
 impl<S: FlowState> FlowDefinition<S> {
     pub fn initial_state(&self) -> Option<S> { self.initial_state }
     pub fn terminal_states(&self) -> &HashSet<S> { &self.terminal_states }
     pub fn data_flow_graph(&self) -> &DataFlowGraph<S> { &self.data_flow_graph }
+    /// Structural warnings detected at build() time (e.g. liveness risks).
+    pub fn warnings(&self) -> &[String] { &self.warnings }
+
+    /// Get enter action for a state (or None).
+    pub fn enter_action(&self, state: S) -> Option<&(dyn Fn(&mut crate::context::FlowContext) + Send + Sync)> {
+        self.enter_actions.get(&state).map(|a| &**a)
+    }
+    /// Get exit action for a state (or None).
+    pub fn exit_action(&self, state: S) -> Option<&(dyn Fn(&mut crate::context::FlowContext) + Send + Sync)> {
+        self.exit_actions.get(&state).map(|a| &**a)
+    }
 
     pub fn transitions_from(&self, state: S) -> Vec<&Transition<S>> {
         self.transitions.iter().filter(|t| t.from == state).collect()
@@ -28,6 +50,11 @@ impl<S: FlowState> FlowDefinition<S> {
 
     pub fn external_from(&self, state: S) -> Option<&Transition<S>> {
         self.transitions.iter().find(|t| t.from == state && t.transition_type == TransitionType::External)
+    }
+
+    /// All external transitions from a state (for multi-external).
+    pub fn externals_from(&self, state: S) -> Vec<&Transition<S>> {
+        self.transitions.iter().filter(|t| t.from == state && t.transition_type == TransitionType::External).collect()
     }
 }
 
@@ -41,6 +68,9 @@ pub struct Builder<S: FlowState> {
     error_transitions: HashMap<S, S>,
     initially_available: Vec<TypeId>,
     perpetual: bool,
+    enter_actions: HashMap<S, Box<dyn Fn(&mut crate::context::FlowContext) + Send + Sync>>,
+    exit_actions: HashMap<S, Box<dyn Fn(&mut crate::context::FlowContext) + Send + Sync>>,
+    exception_routes: HashMap<S, Vec<(Box<dyn Fn(&FlowError) -> bool + Send + Sync>, String, S)>>,
 }
 
 impl<S: FlowState> Builder<S> {
@@ -49,6 +79,8 @@ impl<S: FlowState> Builder<S> {
             name: name.into(), ttl: Duration::from_secs(300), max_guard_retries: 3,
             transitions: Vec::new(), error_transitions: HashMap::new(),
             initially_available: Vec::new(), perpetual: false,
+            enter_actions: HashMap::new(), exit_actions: HashMap::new(),
+            exception_routes: HashMap::new(),
         }
     }
 
@@ -71,6 +103,24 @@ impl<S: FlowState> Builder<S> {
         self
     }
 
+    /// Callback when entering a state (pure data/metrics, no I/O).
+    pub fn on_state_enter(mut self, state: S, action: impl Fn(&mut crate::context::FlowContext) + Send + Sync + 'static) -> Self {
+        self.enter_actions.insert(state, Box::new(action));
+        self
+    }
+
+    /// Callback when exiting a state (pure data/metrics, no I/O).
+    pub fn on_state_exit(mut self, state: S, action: impl Fn(&mut crate::context::FlowContext) + Send + Sync + 'static) -> Self {
+        self.exit_actions.insert(state, Box::new(action));
+        self
+    }
+
+    /// Route specific error types to specific states. Checked before on_error.
+    pub fn on_step_error(mut self, from: S, predicate: impl Fn(&FlowError) -> bool + Send + Sync + 'static, label: impl Into<String>, to: S) -> Self {
+        self.exception_routes.entry(from).or_default().push((Box::new(predicate), label.into(), to));
+        self
+    }
+
     pub(crate) fn add_transition(&mut self, t: Transition<S>) { self.transitions.push(t); }
 
     pub fn build(self) -> Result<FlowDefinition<S>, FlowError> {
@@ -83,15 +133,42 @@ impl<S: FlowState> Builder<S> {
         let perpetual = self.perpetual;
         let initially_available = self.initially_available;
         let name = self.name;
+        let enter_actions = self.enter_actions;
+        let exit_actions = self.exit_actions;
+        let exception_routes: HashMap<S, Vec<ExceptionRoute<S>>> = self.exception_routes.into_iter()
+            .map(|(s, routes)| (s, routes.into_iter().map(|(pred, label, target)| ExceptionRoute { predicate: pred, label, target }).collect()))
+            .collect();
         let def = FlowDefinition {
             name: name.clone(), ttl: self.ttl, max_guard_retries: self.max_guard_retries,
             transitions: self.transitions, error_transitions: self.error_transitions,
             initial_state: initial, terminal_states: terminals,
             data_flow_graph: DataFlowGraph::empty(),
+            enter_actions: HashMap::new(), exit_actions: HashMap::new(),
+            exception_routes: HashMap::new(), warnings: Vec::new(),
         };
         validate::<S>(&def, &name, perpetual, &initially_available)?;
         let graph = DataFlowGraph::build(&def, &initially_available);
-        Ok(FlowDefinition { data_flow_graph: graph, ..def })
+
+        // Build warnings
+        let mut warnings = Vec::new();
+        let is_perpetual = def.terminal_states.is_empty();
+        let has_external = def.transitions.iter().any(|t| t.transition_type == TransitionType::External);
+        if is_perpetual && has_external {
+            warnings.push(format!("Perpetual flow '{}' has External transitions — ensure events are always delivered to avoid deadlock (liveness risk)", name));
+        }
+        // Dead data warning
+        let dead = graph.dead_data();
+        if !dead.is_empty() {
+            warnings.push(format!("Dead data detected: {:?} — produced but never required by any downstream processor", dead));
+        }
+        // Exception route ordering warning (broader predicates before narrower ones)
+        for (state, routes) in &exception_routes {
+            if routes.len() > 1 {
+                warnings.push(format!("onStepError at {:?}: {} routes registered — ensure broader predicates come after specific ones", state, routes.len()));
+            }
+        }
+
+        Ok(FlowDefinition { data_flow_graph: graph, enter_actions, exit_actions, exception_routes, warnings, ..def })
     }
 }
 
@@ -104,7 +181,7 @@ impl<S: FlowState> FromBuilder<S> {
         self.builder.add_transition(Transition {
             from: self.from, to, transition_type: TransitionType::Auto,
             processor: Some(Box::new(processor)), guard: None, branch: None,
-            branch_targets: HashMap::new(), sub_flow: None,
+            branch_targets: HashMap::new(), sub_flow: None, timeout: None,
         });
         self.builder
     }
@@ -113,7 +190,34 @@ impl<S: FlowState> FromBuilder<S> {
         self.builder.add_transition(Transition {
             from: self.from, to, transition_type: TransitionType::External,
             processor: None, guard: Some(Box::new(guard)), branch: None,
-            branch_targets: HashMap::new(), sub_flow: None,
+            branch_targets: HashMap::new(), sub_flow: None, timeout: None,
+        });
+        self.builder
+    }
+
+    pub fn external_with_processor(mut self, to: S, guard: impl TransitionGuard<S> + 'static, processor: impl StateProcessor<S> + 'static) -> Builder<S> {
+        self.builder.add_transition(Transition {
+            from: self.from, to, transition_type: TransitionType::External,
+            processor: Some(Box::new(processor)), guard: Some(Box::new(guard)), branch: None,
+            branch_targets: HashMap::new(), sub_flow: None, timeout: None,
+        });
+        self.builder
+    }
+
+    pub fn external_with_timeout(mut self, to: S, guard: impl TransitionGuard<S> + 'static, timeout: std::time::Duration) -> Builder<S> {
+        self.builder.add_transition(Transition {
+            from: self.from, to, transition_type: TransitionType::External,
+            processor: None, guard: Some(Box::new(guard)), branch: None,
+            branch_targets: HashMap::new(), sub_flow: None, timeout: Some(timeout),
+        });
+        self.builder
+    }
+
+    pub fn external_with_processor_and_timeout(mut self, to: S, guard: impl TransitionGuard<S> + 'static, processor: impl StateProcessor<S> + 'static, timeout: std::time::Duration) -> Builder<S> {
+        self.builder.add_transition(Transition {
+            from: self.from, to, transition_type: TransitionType::External,
+            processor: Some(Box::new(processor)), guard: Some(Box::new(guard)), branch: None,
+            branch_targets: HashMap::new(), sub_flow: None, timeout: Some(timeout),
         });
         self.builder
     }
@@ -155,7 +259,7 @@ impl<S: FlowState> BranchBuilder<S> {
                 from: self.from, to: *target, transition_type: TransitionType::Branch,
                 processor: None, guard: None,
                 branch: if first { self.branch.take() } else { None },
-                branch_targets: targets_clone.clone(), sub_flow: None,
+                branch_targets: targets_clone.clone(), sub_flow: None, timeout: None,
             });
             first = false;
         }
@@ -187,6 +291,7 @@ impl<S: FlowState> SubFlowBuilder<S> {
                 runner: self.runner,
                 exit_mappings: self.exit_mappings,
             }),
+            timeout: None,
         });
         self.builder
     }
@@ -201,7 +306,7 @@ fn validate<S: FlowState>(def: &FlowDefinition<S>, name: &str, perpetual: bool, 
     check_reachability(def, &mut errors);
     if !perpetual { check_path_to_terminal(def, &mut errors); }
     check_dag(def, &mut errors);
-    check_external_uniqueness(def, &mut errors);
+    // check_external_uniqueness removed (DD-020: multi-external allowed)
     check_branch_completeness(def, &mut errors);
     check_requires_produces(def, initially_available, &mut errors);
     check_auto_external_conflict(def, &mut errors);
@@ -293,12 +398,6 @@ fn has_cycle<S: FlowState>(graph: &HashMap<S, Vec<S>>, node: S, visited: &mut Ha
         }
     }
     in_stack.remove(&node); false
-}
-
-fn check_external_uniqueness<S: FlowState>(def: &FlowDefinition<S>, errors: &mut Vec<String>) {
-    let mut counts: HashMap<S, usize> = HashMap::new();
-    for t in &def.transitions { if t.transition_type == TransitionType::External { *counts.entry(t.from).or_default() += 1; } }
-    for (s, c) in counts { if c > 1 { errors.push(format!("State {:?} has {} external transitions (max 1)", s, c)); } }
 }
 
 fn check_branch_completeness<S: FlowState>(def: &FlowDefinition<S>, errors: &mut Vec<String>) {

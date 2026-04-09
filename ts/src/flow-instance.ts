@@ -8,6 +8,7 @@ export class FlowInstance<S extends string> {
   readonly context: FlowContext;
   private _currentState: S;
   private _guardFailureCount: number;
+  private _guardFailureCounts: Map<string, number> = new Map();
   private _version: number;
   readonly createdAt: Date;
   readonly expiresAt: Date;
@@ -58,6 +59,8 @@ export class FlowInstance<S extends string> {
 
   get currentState(): S { return this._currentState; }
   get guardFailureCount(): number { return this._guardFailureCount; }
+  /** Guard failure count for a specific guard (by name). */
+  guardFailureCountFor(guardName: string): number { return this._guardFailureCounts.get(guardName) ?? 0; }
   get version(): number { return this._version; }
   get exitState(): string | null { return this._exitState; }
   get isCompleted(): boolean { return this._exitState !== null; }
@@ -111,8 +114,16 @@ export class FlowInstance<S extends string> {
   }
 
   get stateEnteredAt(): Date { return this._stateEnteredAt; }
-  /** @internal */ transitionTo(state: S): void { this._currentState = state; this._stateEnteredAt = new Date(); }
-  /** @internal */ incrementGuardFailure(): void { this._guardFailureCount++; }
+  /** @internal */ transitionTo(state: S): void {
+    const stateChanged = this._currentState !== state;
+    this._currentState = state;
+    this._stateEnteredAt = new Date();
+    if (stateChanged) { this._guardFailureCount = 0; this._guardFailureCounts.clear(); }
+  }
+  /** @internal */ incrementGuardFailure(guardName?: string): void {
+    this._guardFailureCount++;
+    if (guardName) this._guardFailureCounts.set(guardName, (this._guardFailureCounts.get(guardName) ?? 0) + 1);
+  }
   /** @internal */ complete(exitState: string): void { this._exitState = exitState; }
   /** @internal */ setVersion(version: number): void { this._version = version; }
   /** @internal */ setActiveSubFlow(sub: FlowInstance<any> | null): void { this._activeSubFlow = sub; }

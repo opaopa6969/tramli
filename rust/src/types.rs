@@ -57,4 +57,6 @@ pub struct Transition<S: FlowState> {
     pub branch: Option<Box<dyn BranchProcessor<S>>>,
     pub branch_targets: HashMap<String, S>,
     pub sub_flow: Option<crate::sub_flow::SubFlowConfig<S>>,
+    /// Per-state timeout. If set, resumeAndExecute checks this before guard.
+    pub timeout: Option<std::time::Duration>,
 }

@@ -201,6 +201,7 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
         private final Set<Class<?>> initiallyAvailable = new HashSet<>();
         private final Map<S, java.util.function.Consumer<FlowContext>> enterActions = new LinkedHashMap<>();
         private final Map<S, java.util.function.Consumer<FlowContext>> exitActions = new LinkedHashMap<>();
+        private boolean perpetual = false;
 
         private Builder(String name, Class<S> stateClass) {
             this.name = name;
@@ -255,6 +256,12 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
             for (S s : stateClass.getEnumConstants()) {
                 if (!s.isTerminal()) errorTransitions.put(s, errorState);
             }
+            return this;
+        }
+
+        /** Allow perpetual flows (no terminal states). Skips path-to-terminal validation. */
+        public Builder<S> allowPerpetual() {
+            this.perpetual = true;
             return this;
         }
 
@@ -398,7 +405,7 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
                 errors.add("No initial state found (exactly one state must have isInitial()=true)");
             }
             checkReachability(def, errors);
-            checkPathToTerminal(def, errors);
+            if (!perpetual) checkPathToTerminal(def, errors);
             checkDag(def, errors);
             // checkExternalUniqueness removed (DD-020: multi-external allowed)
             checkBranchCompleteness(def, errors);

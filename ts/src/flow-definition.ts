@@ -15,6 +15,17 @@ export class FlowDefinition<S extends string> {
   readonly dataFlowGraph!: DataFlowGraph<S> | null;
   readonly warnings!: string[];
   readonly exceptionRoutes!: Map<S, Array<{ errorClass: new (...args: any[]) => Error; target: S }>>;
+  readonly enterActions!: Map<S, (ctx: import('./flow-context.js').FlowContext) => void>;
+  readonly exitActions!: Map<S, (ctx: import('./flow-context.js').FlowContext) => void>;
+
+  /** Get enter action for a state (or undefined). */
+  enterAction(state: S): ((ctx: import('./flow-context.js').FlowContext) => void) | undefined {
+    return this.enterActions?.get(state);
+  }
+  /** Get exit action for a state (or undefined). */
+  exitAction(state: S): ((ctx: import('./flow-context.js').FlowContext) => void) | undefined {
+    return this.exitActions?.get(state);
+  }
 
   private constructor(
     name: string, stateConfig: Record<S, StateConfig>, ttl: number,
@@ -43,6 +54,11 @@ export class FlowDefinition<S extends string> {
 
   externalFrom(state: S): Transition<S> | undefined {
     return this.transitions.find(t => t.from === state && t.type === 'external');
+  }
+
+  /** All external transitions from a state (for multi-external). */
+  externalsFrom(state: S): Transition<S>[] {
+    return this.transitions.filter(t => t.from === state && t.type === 'external');
   }
 
   allStates(): S[] {
@@ -80,6 +96,10 @@ export class FlowDefinition<S extends string> {
       initialState: this.initialState,
       terminalStates: this.terminalStates,
       dataFlowGraph: this.dataFlowGraph, // reuse parent's graph
+      warnings: this.warnings,
+      exceptionRoutes: this.exceptionRoutes ? new Map(this.exceptionRoutes) : new Map(),
+      enterActions: this.enterActions ? new Map(this.enterActions) : new Map(),
+      exitActions: this.exitActions ? new Map(this.exitActions) : new Map(),
     });
     return result;
   }
@@ -99,7 +119,10 @@ export class Builder<S extends string> {
   private readonly transitions: Transition<S>[] = [];
   private readonly errorTransitions = new Map<S, S>();
   private readonly _exceptionRoutes = new Map<S, Array<{ errorClass: new (...args: any[]) => Error; target: S }>>();
+  private readonly _enterActions = new Map<S, (ctx: import('./flow-context.js').FlowContext) => void>();
+  private readonly _exitActions = new Map<S, (ctx: import('./flow-context.js').FlowContext) => void>();
   private readonly initiallyAvailableKeys: string[] = [];
+  private _perpetual = false;
 
   constructor(name: string, stateConfig: Record<S, StateConfig>) {
     this.name = name;
@@ -136,6 +159,21 @@ export class Builder<S extends string> {
     }
     return this;
   }
+
+  /** Callback when entering a state (pure data/metrics, no I/O). */
+  onStateEnter(state: S, action: (ctx: import('./flow-context.js').FlowContext) => void): this {
+    this._enterActions.set(state, action);
+    return this;
+  }
+
+  /** Callback when exiting a state (pure data/metrics, no I/O). */
+  onStateExit(state: S, action: (ctx: import('./flow-context.js').FlowContext) => void): this {
+    this._exitActions.set(state, action);
+    return this;
+  }
+
+  /** Allow perpetual flows (no terminal states). Skips path-to-terminal validation. */
+  allowPerpetual(): this { this._perpetual = true; return this; }
 
   /** @internal */
   addTransition(t: Transition<S>): void { this.transitions.push(t); }
@@ -176,6 +214,8 @@ export class Builder<S extends string> {
     }
     (result as any).warnings = warnings;
     (result as any).exceptionRoutes = new Map(this._exceptionRoutes);
+    (result as any).enterActions = new Map(this._enterActions);
+    (result as any).exitActions = new Map(this._exitActions);
     return result;
   }
 
@@ -185,9 +225,9 @@ export class Builder<S extends string> {
       errors.push('No initial state found (exactly one state must have initial=true)');
     }
     this.checkReachability(def, errors);
-    this.checkPathToTerminal(def, errors);
+    if (!this._perpetual) this.checkPathToTerminal(def, errors);
     this.checkDag(def, errors);
-    this.checkExternalUniqueness(def, errors);
+    // checkExternalUniqueness removed (DD-020: multi-external allowed)
     this.checkBranchCompleteness(def, errors);
     this.checkRequiresProduces(def, errors);
     this.checkAutoExternalConflict(def, errors);
@@ -280,16 +320,6 @@ export class Builder<S extends string> {
     }
     inStack.delete(node);
     return false;
-  }
-
-  private checkExternalUniqueness(def: FlowDefinition<S>, errors: string[]): void {
-    const counts = new Map<S, number>();
-    for (const t of def.transitions) {
-      if (t.type === 'external') counts.set(t.from, (counts.get(t.from) ?? 0) + 1);
-    }
-    for (const [state, count] of counts) {
-      if (count > 1) errors.push(`State ${state} has ${count} external transitions (max 1)`);
-    }
   }
 
   private checkBranchCompleteness(def: FlowDefinition<S>, errors: string[]): void {

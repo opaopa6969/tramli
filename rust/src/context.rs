@@ -57,6 +57,16 @@ impl FlowContext {
         self.attrs.insert(type_id, value);
     }
 
+    /// Create a snapshot of the current context (for rollback on error).
+    pub fn snapshot(&self) -> HashMap<TypeId, Box<dyn CloneAny>> {
+        self.attrs.iter().map(|(k, v)| (*k, (**v).clone_box())).collect()
+    }
+
+    /// Restore context from a snapshot (for rollback on error).
+    pub fn restore_from(&mut self, snapshot: HashMap<TypeId, Box<dyn CloneAny>>) {
+        self.attrs = snapshot;
+    }
+
     // ─── Alias support (for serialization) ──────────────────
 
     /// Register a string alias for a type. Used for cross-language serialization.

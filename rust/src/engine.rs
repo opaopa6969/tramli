@@ -34,6 +34,15 @@ pub struct ErrorLogEntry {
     pub cause: Option<String>,
 }
 
+/// Log entry for state changes (context.put). Opt-in for debugging.
+pub struct StateLogEntry {
+    pub flow_id: String,
+    pub flow_name: String,
+    pub state: String,
+    pub key: String,
+    pub value: String,
+}
+
 /// Log entry for guard results.
 pub struct GuardLogEntry {
     pub flow_id: String,
@@ -47,21 +56,30 @@ pub struct GuardLogEntry {
 pub struct FlowEngine<S: FlowState> {
     pub store: InMemoryFlowStore<S>,
     pub strict_mode: bool,
+    max_chain_depth: usize,
     transition_logger: Option<Box<dyn Fn(&TransitionLogEntry) + Send + Sync>>,
+    state_logger: Option<Box<dyn Fn(&StateLogEntry) + Send + Sync>>,
     error_logger: Option<Box<dyn Fn(&ErrorLogEntry) + Send + Sync>>,
     guard_logger: Option<Box<dyn Fn(&GuardLogEntry) + Send + Sync>>,
 }
 
 impl<S: FlowState> FlowEngine<S> {
     pub fn new(store: InMemoryFlowStore<S>) -> Self {
-        Self { store, strict_mode: false, transition_logger: None, error_logger: None, guard_logger: None }
+        Self { store, strict_mode: false, max_chain_depth: MAX_CHAIN_DEPTH, transition_logger: None, state_logger: None, error_logger: None, guard_logger: None }
+    }
+    pub fn with_options(store: InMemoryFlowStore<S>, strict_mode: bool, max_chain_depth: usize) -> Self {
+        Self { store, strict_mode, max_chain_depth, transition_logger: None, state_logger: None, error_logger: None, guard_logger: None }
     }
     pub fn with_strict_mode(store: InMemoryFlowStore<S>) -> Self {
-        Self { store, strict_mode: true, transition_logger: None, error_logger: None, guard_logger: None }
+        Self { store, strict_mode: true, max_chain_depth: MAX_CHAIN_DEPTH, transition_logger: None, state_logger: None, error_logger: None, guard_logger: None }
     }
 
     pub fn set_transition_logger(&mut self, logger: impl Fn(&TransitionLogEntry) + Send + Sync + 'static) {
         self.transition_logger = Some(Box::new(logger));
+    }
+    /// Set state logger. Called on each context.put(). Opt-in for debugging.
+    pub fn set_state_logger(&mut self, logger: impl Fn(&StateLogEntry) + Send + Sync + 'static) {
+        self.state_logger = Some(Box::new(logger));
     }
     pub fn set_error_logger(&mut self, logger: impl Fn(&ErrorLogEntry) + Send + Sync + 'static) {
         self.error_logger = Some(Box::new(logger));
@@ -71,6 +89,7 @@ impl<S: FlowState> FlowEngine<S> {
     }
     pub fn remove_all_loggers(&mut self) {
         self.transition_logger = None;
+        self.state_logger = None;
         self.error_logger = None;
         self.guard_logger = None;
     }
@@ -98,6 +117,9 @@ impl<S: FlowState> FlowEngine<S> {
     ) -> Result<(), FlowError> {
         // Phase 1: operate on flow, collect transition info + guard info
         let mut guard_info: Option<(String, String, &'static str, Option<String>)> = None; // (state, guardName, result, reason)
+        // Collect external data TypeIds before consuming
+        let data_type_ids: std::collections::HashSet<std::any::TypeId> =
+            external_data.iter().map(|(tid, _)| *tid).collect();
         let transition_info = {
             let flow = self.store.get_mut(flow_id)
                 .ok_or_else(|| FlowError::new("FLOW_NOT_FOUND", format!("Flow {flow_id} not found or completed")))?;
@@ -111,8 +133,27 @@ impl<S: FlowState> FlowEngine<S> {
 
             let current = flow.current_state();
             let def = flow.definition.clone();
-            let transition = def.external_from(current)
-                .ok_or_else(|| FlowError::invalid_transition(&format!("{:?}", current), &format!("{:?}", current)))?;
+
+            // Multi-external: select guard by requires matching
+            let externals = def.externals_from(current);
+            if externals.is_empty() {
+                return Err(FlowError::invalid_transition(&format!("{:?}", current), &format!("{:?}", current)));
+            }
+            let transition = externals.iter()
+                .find(|ext| ext.guard.as_ref().map_or(false, |g| {
+                    g.requires().iter().all(|r| data_type_ids.contains(r))
+                }))
+                .copied()
+                .unwrap_or(externals[0]);
+
+            // Per-state timeout check
+            if let Some(timeout) = transition.timeout {
+                let deadline = flow.state_entered_at() + timeout;
+                if Instant::now() > deadline {
+                    flow.complete("EXPIRED");
+                    return Ok(());
+                }
+            }
 
             if let Some(guard) = &transition.guard {
                 let guard_name = guard.name().to_string();
@@ -120,26 +161,35 @@ impl<S: FlowState> FlowEngine<S> {
                 match output {
                     GuardOutput::Accepted { data } => {
                         guard_info = Some((format!("{:?}", current), guard_name.clone(), "accepted", None));
+                        let backup = flow.context.snapshot();
                         for (k, v) in data { flow.context.put_raw(k, v); }
                         let to = transition.to;
                         if let Some(proc) = &transition.processor {
-                            if proc.process(&mut flow.context).is_err() {
-                                Self::handle_error(flow, current, &def);
-                                Some((format!("{:?}", current), format!("{:?}", flow.current_state()), "error".to_string()))
-                            } else {
-                                let from_dbg = format!("{:?}", current);
-                                flow.transition_to(to);
-                                Some((from_dbg, format!("{:?}", to), guard.name().to_string()))
+                            match proc.process(&mut flow.context) {
+                                Err(ref e) => {
+                                    flow.context.restore_from(backup);
+                                    Self::handle_error_with_cause(flow, current, &def, Some(e));
+                                    Some((format!("{:?}", current), format!("{:?}", flow.current_state()), "error".to_string()))
+                                }
+                                Ok(()) => {
+                                    let from_dbg = format!("{:?}", current);
+                                    if let Some(action) = def.exit_action(current) { action(&mut flow.context); }
+                                    flow.transition_to(to);
+                                    if let Some(action) = def.enter_action(to) { action(&mut flow.context); }
+                                    Some((from_dbg, format!("{:?}", to), guard.name().to_string()))
+                                }
                             }
                         } else {
                             let from_dbg = format!("{:?}", current);
+                            if let Some(action) = def.exit_action(current) { action(&mut flow.context); }
                             flow.transition_to(to);
+                            if let Some(action) = def.enter_action(to) { action(&mut flow.context); }
                             Some((from_dbg, format!("{:?}", to), guard.name().to_string()))
                         }
                     }
                     GuardOutput::Rejected { ref reason } => {
                         guard_info = Some((format!("{:?}", current), guard_name.clone(), "rejected", Some(reason.clone())));
-                        flow.increment_guard_failure();
+                        flow.increment_guard_failure_named(&guard_name);
                         if flow.guard_failure_count() >= def.max_guard_retries {
                             Self::handle_error(flow, current, &def);
                             Some((format!("{:?}", current), format!("{:?}", flow.current_state()), "error".to_string()))
@@ -156,7 +206,9 @@ impl<S: FlowState> FlowEngine<S> {
             } else {
                 let from_dbg = format!("{:?}", current);
                 let to = transition.to;
+                if let Some(action) = def.exit_action(current) { action(&mut flow.context); }
                 flow.transition_to(to);
+                if let Some(action) = def.enter_action(to) { action(&mut flow.context); }
                 Some((from_dbg, format!("{:?}", to), "external".to_string()))
             }
         }; // flow borrow ends here
@@ -203,7 +255,8 @@ impl<S: FlowState> FlowEngine<S> {
 
     fn execute_auto_chain(&mut self, flow_id: &str) -> Result<(), FlowError> {
         let mut depth = 0;
-        while depth < MAX_CHAIN_DEPTH {
+        let max_depth = self.max_chain_depth;
+        while depth < max_depth {
             // Phase 1: operate on flow, collect result
             let step_result = {
                 let flow = match self.store.get_mut(flow_id) { Some(f) => f, None => break };
@@ -237,7 +290,7 @@ impl<S: FlowState> FlowEngine<S> {
             }
             depth += 1;
         }
-        if depth >= MAX_CHAIN_DEPTH { return Err(FlowError::max_chain_depth()); }
+        if depth >= max_depth { return Err(FlowError::max_chain_depth()); }
         Ok(())
     }
 
@@ -254,7 +307,9 @@ impl<S: FlowState> FlowEngine<S> {
                     SubFlowResult::Completed(exit_name) => {
                         if let Some(&target) = config.exit_mappings.get(&exit_name) {
                             let from_dbg = format!("{:?}", current);
+                            if let Some(action) = def.exit_action(current) { action(&mut flow.context); }
                             flow.transition_to(target);
+                            if let Some(action) = def.enter_action(target) { action(&mut flow.context); }
                             Ok(Some((from_dbg, format!("{:?}", target),
                                 format!("subFlow:{}/{}", config.runner.name(), exit_name), false)))
                         } else {
@@ -271,19 +326,26 @@ impl<S: FlowState> FlowEngine<S> {
         // 2. Auto
         if let Some(t) = def.transitions.iter().find(|t| t.from == current && t.transition_type == TransitionType::Auto) {
             if let Some(proc) = &t.processor {
+                let backup = flow.context.snapshot();
                 let result = proc.process(&mut flow.context);
                 let strict_fail = result.is_ok() && strict_mode &&
                     proc.produces().iter().any(|p| !flow.context.has_type_id(p));
                 if result.is_err() || strict_fail {
-                    Self::handle_error(flow, current, def);
+                    flow.context.restore_from(backup);
+                    let cause = result.err();
+                    Self::handle_error_with_cause(flow, current, def, cause.as_ref());
                     return Ok(Some((format!("{:?}", current), format!("{:?}", flow.current_state()), "error".to_string(), true)));
                 }
                 let from_dbg = format!("{:?}", current);
+                if let Some(action) = def.exit_action(current) { action(&mut flow.context); }
                 flow.transition_to(t.to);
+                if let Some(action) = def.enter_action(t.to) { action(&mut flow.context); }
                 return Ok(Some((from_dbg, format!("{:?}", t.to), proc.name().to_string(), false)));
             }
             let from_dbg = format!("{:?}", current);
+            if let Some(action) = def.exit_action(current) { action(&mut flow.context); }
             flow.transition_to(t.to);
+            if let Some(action) = def.enter_action(t.to) { action(&mut flow.context); }
             return Ok(Some((from_dbg, format!("{:?}", t.to), "auto".to_string(), false)));
         }
 
@@ -293,7 +355,9 @@ impl<S: FlowState> FlowEngine<S> {
                 let label = branch.decide(&flow.context);
                 if let Some(&target) = t.branch_targets.get(&label) {
                     let from_dbg = format!("{:?}", current);
+                    if let Some(action) = def.exit_action(current) { action(&mut flow.context); }
                     flow.transition_to(target);
+                    if let Some(action) = def.enter_action(target) { action(&mut flow.context); }
                     return Ok(Some((from_dbg, format!("{:?}", target), format!("{}:{}", branch.name(), label), false)));
                 }
                 Self::handle_error(flow, current, def);
@@ -306,6 +370,28 @@ impl<S: FlowState> FlowEngine<S> {
     }
 
     fn handle_error(flow: &mut FlowInstance<S>, from_state: S, def: &FlowDefinition<S>) {
+        Self::handle_error_with_cause(flow, from_state, def, None);
+    }
+
+    fn handle_error_with_cause(flow: &mut FlowInstance<S>, from_state: S, def: &FlowDefinition<S>, cause: Option<&FlowError>) {
+        if let Some(cause) = cause {
+            flow.set_last_error(format!("{}", cause));
+        }
+
+        // 1. Try exception-typed routes first (on_step_error)
+        if let Some(cause) = cause {
+            if let Some(routes) = def.exception_routes.get(&from_state) {
+                for route in routes {
+                    if (route.predicate)(cause) {
+                        flow.transition_to(route.target);
+                        if route.target.is_terminal() { flow.complete(format!("{:?}", route.target)); }
+                        return;
+                    }
+                }
+            }
+        }
+
+        // 2. Fall back to state-based error transition (on_error)
         if let Some(&err_target) = def.error_transitions.get(&from_state) {
             flow.transition_to(err_target);
             if err_target.is_terminal() { flow.complete(format!("{:?}", err_target)); }
