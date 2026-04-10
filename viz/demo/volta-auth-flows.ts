@@ -1,7 +1,7 @@
 // volta-auth-proxy state machine definitions for tramli-viz
 // Layout coordinates for the layered 2-tier visualization
 
-import { StateInfo, EdgeInfo } from '../shared/protocol';
+import { StateInfo, EdgeInfo } from '../shared/protocol.js';
 
 // ── Layer 1: Session SM ──
 
