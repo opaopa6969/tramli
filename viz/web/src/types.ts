@@ -22,6 +22,17 @@ export interface VizEvent {
   flowName: string;
   data: Record<string, unknown>;
   timestamp: number;
+  label?: string;
+  tenantSlug?: string;
+  layer?: 1 | 2;
+}
+
+/** Flow definition for multi-SM layout. */
+export interface FlowDefinitionInfo {
+  flowName: string;
+  layer: 1 | 2;
+  states: StateInfo[];
+  edges: EdgeInfo[];
 }
 
 export interface FlowSnapshot {
@@ -30,11 +41,16 @@ export interface FlowSnapshot {
   startedAt: number;
 }
 
+// ── Server → Client ──
+
 export type ServerMessage =
   | { type: 'init'; flowName: string; states: StateInfo[]; edges: EdgeInfo[] }
+  | { type: 'init-multi'; flows: FlowDefinitionInfo[] }
   | { type: 'event'; event: VizEvent }
   | { type: 'snapshot'; flows: FlowSnapshot[]; events: VizEvent[] }
   | { type: 'metric'; throughput: number; errorRate: number; avgLatencyMicros: number };
+
+// ── Client → Server ──
 
 export type ClientMessage =
   | { type: 'trigger'; action: 'start' | 'resume'; flowId?: string }

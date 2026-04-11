@@ -1,26 +1,32 @@
 import { useEffect, useRef, useReducer, useCallback } from 'react';
-import type { StateInfo, EdgeInfo, VizEvent, FlowSnapshot, ServerMessage, ClientMessage } from '../types';
+import type { StateInfo, EdgeInfo, VizEvent, FlowSnapshot, FlowDefinitionInfo, ServerMessage, ClientMessage } from '../types';
 
 export interface TransitAnimation {
   flowId: string;
   from: string;
   to: string;
+  flowName: string;
   startedAt: number;
 }
 
 export interface VizState {
   connected: boolean;
-  flowName: string;
-  states: StateInfo[];
-  edges: EdgeInfo[];
+  /** All SM definitions (multi-SM or single wrapped in array). */
+  flows: FlowDefinitionInfo[];
+  /** flowId → current state name */
   flowPositions: Map<string, string>;
+  /** flowId → flowName (which SM this instance belongs to) */
+  flowOwner: Map<string, string>;
+  /** flowId → started-at timestamp */
   flowStarted: Map<string, number>;
-  /** flowId → last transition timestamp (for stale cleanup) */
   flowLastActive: Map<string, number>;
   events: VizEvent[];
   transits: TransitAnimation[];
+  /** "flowName:from->to" → count */
   edgeCounts: Map<string, number>;
+  /** "flowName:state" → count */
   nodeCounts: Map<string, number>;
+  /** "flowName:from->to" → heat */
   edgeHeat: Map<string, number>;
   metrics: { throughput: number; errorRate: number; avgLatencyMicros: number };
 }
@@ -29,6 +35,7 @@ type Action =
   | { type: 'connected' }
   | { type: 'disconnected' }
   | { type: 'init'; flowName: string; states: StateInfo[]; edges: EdgeInfo[] }
+  | { type: 'init-multi'; flows: FlowDefinitionInfo[] }
   | { type: 'event'; event: VizEvent; now: number }
   | { type: 'snapshot'; flows: FlowSnapshot[]; events: VizEvent[] }
   | { type: 'metric'; throughput: number; errorRate: number; avgLatencyMicros: number }
@@ -37,10 +44,9 @@ type Action =
 
 const initialState: VizState = {
   connected: false,
-  flowName: '',
-  states: [],
-  edges: [],
+  flows: [],
   flowPositions: new Map(),
+  flowOwner: new Map(),
   flowStarted: new Map(),
   flowLastActive: new Map(),
   events: [],
@@ -51,9 +57,15 @@ const initialState: VizState = {
   metrics: { throughput: 0, errorRate: 0, avgLatencyMicros: 0 },
 };
 
-function applyEvent(positions: Map<string, string>, started: Map<string, number>, event: VizEvent) {
+function applyEvent(
+  positions: Map<string, string>,
+  started: Map<string, number>,
+  owner: Map<string, string>,
+  event: VizEvent,
+) {
   if (event.type === 'transition') {
     positions.set(event.flowId, event.data.to as string);
+    owner.set(event.flowId, event.flowName);
     if (!started.has(event.flowId)) started.set(event.flowId, event.timestamp);
   }
 }
@@ -65,28 +77,33 @@ function reducer(state: VizState, action: Action): VizState {
     case 'disconnected':
       return { ...state, connected: false };
     case 'init':
-      return { ...state, flowName: action.flowName, states: action.states, edges: action.edges };
+      // Backward compat: wrap single flow as multi
+      return { ...state, flows: [{ flowName: action.flowName, layer: 1, states: action.states, edges: action.edges }] };
+    case 'init-multi':
+      return { ...state, flows: action.flows };
     case 'event': {
       const positions = new Map(state.flowPositions);
       const started = new Map(state.flowStarted);
-      applyEvent(positions, started, action.event);
+      const owner = new Map(state.flowOwner);
+      applyEvent(positions, started, owner, action.event);
       let transits = state.transits;
       const edgeCounts = new Map(state.edgeCounts);
       const nodeCounts = new Map(state.nodeCounts);
       const edgeHeat = new Map(state.edgeHeat);
       const flowLastActive = new Map(state.flowLastActive);
       if (action.event.type === 'transition' && action.event.data.from) {
+        const fn = action.event.flowName;
         const from = action.event.data.from as string;
         const to = action.event.data.to as string;
         transits = [
           ...transits.filter(t => t.flowId !== action.event.flowId),
-          { flowId: action.event.flowId, from, to, startedAt: action.now },
+          { flowId: action.event.flowId, from, to, flowName: fn, startedAt: action.now },
         ];
-        const key = `${from}->${to}`;
-        edgeCounts.set(key, (edgeCounts.get(key) ?? 0) + 1);
-        nodeCounts.set(to, (nodeCounts.get(to) ?? 0) + 1);
-        // Cap heat to prevent unbounded growth with long trail durations
-        edgeHeat.set(key, Math.min((edgeHeat.get(key) ?? 0) + 1, 50));
+        const edgeKey = `${fn}:${from}->${to}`;
+        edgeCounts.set(edgeKey, (edgeCounts.get(edgeKey) ?? 0) + 1);
+        const nodeKey = `${fn}:${to}`;
+        nodeCounts.set(nodeKey, (nodeCounts.get(nodeKey) ?? 0) + 1);
+        edgeHeat.set(edgeKey, Math.min((edgeHeat.get(edgeKey) ?? 0) + 1, 50));
         flowLastActive.set(action.event.flowId, Date.now());
       }
       return {
@@ -94,6 +111,7 @@ function reducer(state: VizState, action: Action): VizState {
         events: [...state.events, action.event],
         flowPositions: positions,
         flowStarted: started,
+        flowOwner: owner,
         flowLastActive,
         transits,
         edgeCounts,
@@ -104,36 +122,38 @@ function reducer(state: VizState, action: Action): VizState {
     case 'snapshot': {
       const positions = new Map<string, string>();
       const started = new Map<string, number>();
+      const owner = new Map<string, string>();
       for (const f of action.flows) {
         positions.set(f.flowId, f.currentState);
         started.set(f.flowId, f.startedAt);
       }
-      for (const ev of action.events) applyEvent(positions, started, ev);
-      return { ...state, events: action.events, flowPositions: positions, flowStarted: started };
+      for (const ev of action.events) applyEvent(positions, started, owner, ev);
+      return { ...state, events: action.events, flowPositions: positions, flowStarted: started, flowOwner: owner };
     }
     case 'metric':
       return { ...state, metrics: { throughput: action.throughput, errorRate: action.errorRate, avgLatencyMicros: action.avgLatencyMicros } };
     case 'replay': {
       const positions = new Map<string, string>();
       const started = new Map<string, number>();
+      const owner = new Map<string, string>();
       for (let i = 0; i <= action.position && i < state.events.length; i++) {
-        applyEvent(positions, started, state.events[i]);
+        applyEvent(positions, started, owner, state.events[i]);
       }
-      return { ...state, flowPositions: positions, flowStarted: started, transits: [] };
+      return { ...state, flowPositions: positions, flowStarted: started, flowOwner: owner, transits: [] };
     }
     case 'tick': {
       const alive = state.transits.filter(t => action.now - t.startedAt < action.transitDuration);
-      // Decay edge heat
       let changed = alive.length !== state.transits.length;
       const edgeHeat = new Map<string, number>();
       for (const [key, val] of state.edgeHeat) {
         const next = val * action.heatDecay;
-        if (next > 0.05) { edgeHeat.set(key, next); }
+        if (next > 0.05) edgeHeat.set(key, next);
         if (Math.abs(next - val) > 0.01) changed = true;
       }
-      // Clean up stale flows: terminal for >5s OR inactive for >15s
+      // Clean up stale flows
+      const terminalNames = new Set<string>();
+      for (const f of state.flows) for (const s of f.states) if (s.terminal) terminalNames.add(s.name);
       const positions = new Map(state.flowPositions);
-      const terminalNames = new Set(state.states.filter(s => s.terminal).map(s => s.name));
       const now = Date.now();
       let posChanged = false;
       for (const [flowId, stateName] of positions) {
@@ -146,12 +166,7 @@ function reducer(state: VizState, action: Action): VizState {
         }
       }
       if (!changed && !posChanged) return state;
-      return {
-        ...state,
-        transits: alive,
-        edgeHeat,
-        ...(posChanged ? { flowPositions: positions } : {}),
-      };
+      return { ...state, transits: alive, edgeHeat, ...(posChanged ? { flowPositions: positions } : {}) };
     }
     default:
       return state;
@@ -160,10 +175,7 @@ function reducer(state: VizState, action: Action): VizState {
 
 export const TRANSIT_DURATION = 600;
 
-/** Convert a "trail seconds" value to a per-tick (100ms) decay factor. */
 export function trailSecondsToDecay(seconds: number): number {
-  // We want heat * decay^(seconds*10) ≈ 0.05 (threshold)
-  // So decay = 0.05^(1/(seconds*10))
   return Math.pow(0.05, 1 / (seconds * 10));
 }
 
@@ -183,10 +195,21 @@ export function useVizSocket(url = 'ws://localhost:3001') {
         try {
           const msg: ServerMessage = JSON.parse(e.data as string);
           switch (msg.type) {
-            case 'init': dispatch({ type: 'init', flowName: msg.flowName, states: msg.states, edges: msg.edges }); break;
-            case 'event': dispatch({ type: 'event', event: msg.event, now: performance.now() }); break;
-            case 'snapshot': dispatch({ type: 'snapshot', flows: msg.flows, events: msg.events }); break;
-            case 'metric': dispatch({ type: 'metric', throughput: msg.throughput, errorRate: msg.errorRate, avgLatencyMicros: msg.avgLatencyMicros }); break;
+            case 'init':
+              dispatch({ type: 'init', flowName: msg.flowName, states: msg.states, edges: msg.edges });
+              break;
+            case 'init-multi':
+              dispatch({ type: 'init-multi', flows: msg.flows });
+              break;
+            case 'event':
+              dispatch({ type: 'event', event: msg.event, now: performance.now() });
+              break;
+            case 'snapshot':
+              dispatch({ type: 'snapshot', flows: msg.flows, events: msg.events });
+              break;
+            case 'metric':
+              dispatch({ type: 'metric', throughput: msg.throughput, errorRate: msg.errorRate, avgLatencyMicros: msg.avgLatencyMicros });
+              break;
           }
         } catch { /* ignore */ }
       };

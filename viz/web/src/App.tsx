@@ -22,6 +22,8 @@ export default function App() {
     setHeatDecay(val);
   }, [setHeatDecay]);
 
+  const flowNames = state.flows.map(f => f.flowName).join(', ');
+
   return (
     <div style={{
       display: 'flex',
@@ -44,8 +46,8 @@ export default function App() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 16, fontWeight: 700 }}>tramli-viz</span>
-          {state.flowName && (
-            <span style={{ fontSize: 12, color: '#64748b' }}>/ {state.flowName}</span>
+          {flowNames && (
+            <span style={{ fontSize: 12, color: '#64748b' }}>/ {flowNames}</span>
           )}
 
           <button
@@ -120,9 +122,9 @@ export default function App() {
         <div style={{ flex: 1 }}>
           <ReactFlowProvider>
             <FlowBoard
-              states={state.states}
-              edges={state.edges}
+              flows={state.flows}
               flowPositions={state.flowPositions}
+              flowOwner={state.flowOwner}
               transits={state.transits}
               events={state.events}
               edgeCounts={state.edgeCounts}

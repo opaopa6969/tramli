@@ -2,10 +2,12 @@ import { Tramli, FlowEngine, InMemoryFlowStore } from '@unlaxer/tramli';
 import { ObservabilityEnginePlugin } from '@unlaxer/tramli-plugins';
 import { VizSink } from '../server/viz-sink.js';
 import { startVizServer } from '../server/index.js';
-import { oidcFlowDefinition, OidcRequest, OidcCallback, OIDC_STATES } from './oidc-flow.js';
+import { oidcFlowDefinition, OidcRequest, OIDC_STATES } from './oidc-flow.js';
+import { sessionFlowDefinition, AuthResult, SESSION_STATES, SESSION_LAYOUT, SESSION_EDGES } from './session-flow.js';
 import type { StateInfo, EdgeInfo } from '../shared/protocol.js';
+import type { VizFlowDef } from '../server/index.js';
 
-// ── Layout ──
+// ── OIDC Layout ──
 
 const OIDC_LAYOUT: Record<string, { x: number; y: number }> = {
   INIT:               { x: 400, y: 50 },
@@ -21,17 +23,14 @@ const OIDC_LAYOUT: Record<string, { x: number; y: number }> = {
   TERMINAL_ERROR:     { x: 700, y: 400 },
 };
 
-function buildStateInfos(): StateInfo[] {
-  return Object.entries(OIDC_STATES).map(([name, cfg]) => ({
+function buildOidcFlow(): VizFlowDef {
+  const states: StateInfo[] = Object.entries(OIDC_STATES).map(([name, cfg]) => ({
     name,
     initial: cfg.initial ?? false,
     terminal: cfg.terminal,
     ...OIDC_LAYOUT[name],
   }));
-}
-
-function buildEdgeInfos(): EdgeInfo[] {
-  return [
+  const edges: EdgeInfo[] = [
     { from: 'INIT', to: 'REDIRECTED', type: 'auto', label: 'OidcInitProcessor' },
     { from: 'REDIRECTED', to: 'CALLBACK_RECEIVED', type: 'external', label: 'OidcCallbackGuard' },
     { from: 'CALLBACK_RECEIVED', to: 'TOKEN_EXCHANGED', type: 'auto', label: 'OidcTokenExchangeProcessor' },
@@ -43,23 +42,31 @@ function buildEdgeInfos(): EdgeInfo[] {
     { from: 'CALLBACK_RECEIVED', to: 'RETRIABLE_ERROR', type: 'error', label: 'error' },
     { from: 'TOKEN_EXCHANGED', to: 'RETRIABLE_ERROR', type: 'error', label: 'error' },
     { from: 'RETRIABLE_ERROR', to: 'INIT', type: 'auto', label: 'RetryProcessor' },
-    // onAnyError → TERMINAL_ERROR (catch-all for unhandled errors)
     { from: 'INIT', to: 'TERMINAL_ERROR', type: 'error', label: 'error' },
     { from: 'REDIRECTED', to: 'TERMINAL_ERROR', type: 'error', label: 'error' },
     { from: 'USER_RESOLVED', to: 'TERMINAL_ERROR', type: 'error', label: 'error' },
     { from: 'RISK_CHECKED', to: 'TERMINAL_ERROR', type: 'error', label: 'error' },
     { from: 'RETRIABLE_ERROR', to: 'TERMINAL_ERROR', type: 'error', label: 'error' },
   ];
+  return { flowName: 'oidc-auth', layer: 2, states, edges };
+}
+
+function buildSessionFlow(): VizFlowDef {
+  const states: StateInfo[] = Object.entries(SESSION_STATES).map(([name, cfg]) => ({
+    name,
+    initial: cfg.initial ?? false,
+    terminal: cfg.terminal,
+    ...SESSION_LAYOUT[name],
+  }));
+  return { flowName: 'session', layer: 1, states, edges: SESSION_EDGES };
 }
 
 // ── Simulator ──
 
-class OidcSimulator {
+class MultiSmSimulator {
   private readonly store = new InMemoryFlowStore();
   private readonly engine: FlowEngine;
   private readonly sink: VizSink;
-  private interval: ReturnType<typeof setInterval> | null = null;
-  /** Flows waiting at REDIRECTED for a simulated callback. */
   private readonly pendingResumes = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor() {
@@ -70,34 +77,30 @@ class OidcSimulator {
   }
 
   start() {
-    const states = buildStateInfos();
-    const edges = buildEdgeInfos();
+    const definitions: VizFlowDef[] = [buildSessionFlow(), buildOidcFlow()];
 
     startVizServer(this.sink, {
       engine: this.engine,
-      definition: oidcFlowDefinition,
-      states,
-      edges,
-      onTrigger: (action, flowId) => {
-        if (action === 'start') this.spawnFlow();
-        if (action === 'resume' && flowId) this.resumeFlow(flowId);
+      definitions,
+      onTrigger: (action) => {
+        if (action === 'start') this.spawnOidcFlow();
       },
     });
 
-    // Auto-spawn flows every 2-4 seconds
+    // Auto-spawn OIDC flows
     this.scheduleNext();
-    console.log('[simulator] OIDC simulator started — spawning flows');
+    console.log('[simulator] Multi-SM simulator started (Session + OIDC)');
   }
 
   private scheduleNext() {
     const delayMs = 2000 + Math.random() * 2000;
-    this.interval = setTimeout(() => {
-      this.spawnFlow();
+    setTimeout(() => {
+      this.spawnOidcFlow();
       this.scheduleNext();
     }, delayMs);
   }
 
-  private async spawnFlow() {
+  private async spawnOidcFlow() {
     try {
       const flow = await this.engine.startFlow(
         oidcFlowDefinition,
@@ -105,45 +108,60 @@ class OidcSimulator {
         Tramli.data([OidcRequest, { provider: 'GOOGLE', returnTo: '/dashboard' }]),
       );
 
-      // If flow stopped at REDIRECTED, schedule a resume after delay
       if (!flow.isCompleted && flow.currentState === 'REDIRECTED') {
         const resumeDelay = 1500 + Math.random() * 3000;
         const timer = setTimeout(() => {
-          this.resumeFlow(flow.id);
+          this.resumeOidcFlow(flow.id);
           this.pendingResumes.delete(flow.id);
         }, resumeDelay);
         this.pendingResumes.set(flow.id, timer);
       }
+
+      // When OIDC completes → start a Session flow
+      if (flow.isCompleted && (flow.currentState === 'COMPLETE' || flow.currentState === 'COMPLETE_MFA')) {
+        this.spawnSessionFlow(flow.currentState === 'COMPLETE_MFA');
+      }
     } catch (e) {
-      console.error('[simulator] Error spawning flow:', e);
+      console.error('[simulator] Error spawning OIDC flow:', e);
     }
   }
 
-  private async resumeFlow(flowId: string) {
+  private async resumeOidcFlow(flowId: string) {
     try {
       const flow = await this.engine.resumeAndExecute(flowId, oidcFlowDefinition);
-      // If guard rejected and still at REDIRECTED, try again after delay
       if (!flow.isCompleted && flow.currentState === 'REDIRECTED') {
         const retryDelay = 1000 + Math.random() * 2000;
         const timer = setTimeout(() => {
-          this.resumeFlow(flowId);
+          this.resumeOidcFlow(flowId);
           this.pendingResumes.delete(flowId);
         }, retryDelay);
         this.pendingResumes.set(flowId, timer);
       }
-    } catch (e) {
-      // Flow may have been completed or expired
-    }
+      // OIDC complete → Session
+      if (flow.isCompleted && (flow.currentState === 'COMPLETE' || flow.currentState === 'COMPLETE_MFA')) {
+        this.spawnSessionFlow(flow.currentState === 'COMPLETE_MFA');
+      }
+    } catch { /* flow may have expired */ }
   }
 
-  stop() {
-    if (this.interval) clearTimeout(this.interval);
-    for (const timer of this.pendingResumes.values()) clearTimeout(timer);
-    this.pendingResumes.clear();
+  private async spawnSessionFlow(mfaRequired: boolean) {
+    try {
+      const flow = await this.engine.startFlow(
+        sessionFlowDefinition,
+        `sess-${Math.random().toString(36).slice(2, 8)}`,
+        Tramli.data([AuthResult, { method: 'oidc', userId: `u-${Math.random().toString(36).slice(2, 6)}` }]),
+      );
+
+      // If MFA required, the session should go to MFA_PENDING
+      // (Currently AUTHENTICATING auto-chains to FULLY_AUTHENTICATED)
+      // For demo purposes, session auto-completes immediately
+    } catch (e) {
+      console.error('[simulator] Error spawning Session flow:', e);
+    }
   }
 }
 
 // ── Main ──
 
-const sim = new OidcSimulator();
+const sim = new MultiSmSimulator();
 sim.start();

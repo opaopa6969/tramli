@@ -6,8 +6,14 @@ export class VizSink implements TelemetrySink {
   private readonly log: VizEvent[] = [];
   private seq = 0;
   private readonly clients = new Set<WebSocket>();
-  /** flowId → current state. Updated on every transition event. */
   private readonly flowStates = new Map<string, FlowSnapshot>();
+  /** flowName → layer mapping for enriching events. */
+  private readonly flowNameToLayer = new Map<string, 1 | 2>();
+
+  /** Register a flow name → layer mapping. */
+  registerLayer(flowName: string, layer: 1 | 2): void {
+    this.flowNameToLayer.set(flowName, layer);
+  }
 
   emit(event: TelemetryEvent): void {
     const vizEvent: VizEvent = {
@@ -17,10 +23,10 @@ export class VizSink implements TelemetrySink {
       flowName: event.flowName,
       data: event.data,
       timestamp: Date.now(),
+      layer: this.flowNameToLayer.get(event.flowName),
     };
     this.log.push(vizEvent);
 
-    // Track flow state
     if (event.type === 'transition') {
       const existing = this.flowStates.get(event.flowId);
       if (existing) {
@@ -49,11 +55,10 @@ export class VizSink implements TelemetrySink {
 
   addClient(ws: WebSocket): void {
     this.clients.add(ws);
-    // Send snapshot on connect
     const snapshot: ServerMessage = {
       type: 'snapshot',
       flows: [...this.flowStates.values()],
-      events: this.log.slice(-500), // last 500 events
+      events: this.log.slice(-500),
     };
     ws.send(JSON.stringify(snapshot));
   }
