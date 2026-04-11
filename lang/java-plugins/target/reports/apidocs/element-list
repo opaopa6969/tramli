@@ -1,0 +1,12 @@
+org.unlaxer.tramli.plugins.api
+org.unlaxer.tramli.plugins.audit
+org.unlaxer.tramli.plugins.diagram
+org.unlaxer.tramli.plugins.docs
+org.unlaxer.tramli.plugins.eventstore
+org.unlaxer.tramli.plugins.hierarchy
+org.unlaxer.tramli.plugins.idempotency
+org.unlaxer.tramli.plugins.lint
+org.unlaxer.tramli.plugins.observability
+org.unlaxer.tramli.plugins.resume
+org.unlaxer.tramli.plugins.subflow
+org.unlaxer.tramli.plugins.testing

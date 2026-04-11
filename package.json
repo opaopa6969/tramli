@@ -1,11 +1,11 @@
 {
   "private": true,
   "workspaces": [
-    "ts",
-    "ts-plugins",
-    "ts-react",
-    "viz",
-    "viz-server"
+    "lang/ts",
+    "lang/ts-plugins",
+    "lang/ts-react",
+    "tools/viz",
+    "tools/viz-server"
   ],
   "devDependencies": {
     "@unlaxer/dde-toolkit": "^0.1.8",

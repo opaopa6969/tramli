@@ -1,0 +1,57 @@
+-J-Duser.language=
+-J-Duser.country=
+@options
+@packages
+-classpath
+'/home/opa/.m2/repository/com/fasterxml/jackson/core/jackson-databind/2.18.4/jackson-databind-2.18.4.jar:/home/opa/.m2/repository/com/fasterxml/jackson/core/jackson-annotations/2.18.4/jackson-annotations-2.18.4.jar:/home/opa/.m2/repository/com/fasterxml/jackson/core/jackson-core/2.18.4/jackson-core-2.18.4.jar:/home/opa/.m2/repository/com/fasterxml/jackson/datatype/jackson-datatype-jsr310/2.18.4/jackson-datatype-jsr310-2.18.4.jar'
+-encoding
+'UTF-8'
+-protected
+--release
+21
+-sourcepath
+'/home/opa/work/AskOS-workspace/tramli/java/src/main/java:/home/opa/work/AskOS-workspace/tramli/java/target/generated-sources/annotations'
+-author
+-bottom
+'Copyright &#169; 2026. All rights reserved.'
+-charset
+'UTF-8'
+-d
+'/home/opa/work/AskOS-workspace/tramli/java/target/reports/apidocs'
+-docencoding
+'UTF-8'
+-Xdoclint:none
+-doctitle
+'tramli 3.7.1 API'
+-use
+-version
+-windowtitle
+'tramli 3.7.1 API'
+org.unlaxer.tramli
+/home/opa/.m2/repository/com/fasterxml/jackson/core/jackson-databind/2.18.4/jackson-databind-2.18.4.jar = 1746577772000
+/home/opa/.m2/repository/com/fasterxml/jackson/core/jackson-annotations/2.18.4/jackson-annotations-2.18.4.jar = 1746576101000
+/home/opa/.m2/repository/com/fasterxml/jackson/core/jackson-core/2.18.4/jackson-core-2.18.4.jar = 1746576842000
+/home/opa/.m2/repository/com/fasterxml/jackson/datatype/jackson-datatype-jsr310/2.18.4/jackson-datatype-jsr310-2.18.4.jar = 1746579619000
+/home/opa/work/AskOS-workspace/tramli/java/src/main/java = 1775667538314
+/home/opa/work/AskOS-workspace/tramli/java/target/generated-sources/annotations = 1775753661883
+/home/opa/work/AskOS-workspace/tramli/java/target/reports/apidocs/index.html = 1775753878322
+/home/opa/work/AskOS-workspace/tramli/java/target/reports/apidocs/element-list = 1775753878150
+/home/opa/work/AskOS-workspace/tramli/java/target/reports/apidocs/allclasses-index.html = 1775753878286
+/home/opa/work/AskOS-workspace/tramli/java/target/reports/apidocs/member-search-index.js = 1775753878298
+/home/opa/work/AskOS-workspace/tramli/java/target/reports/apidocs/search.js = 1775753878326
+/home/opa/work/AskOS-workspace/tramli/java/target/reports/apidocs/index-all.html = 1775753878318
+/home/opa/work/AskOS-workspace/tramli/java/target/reports/apidocs/tag-search-index.js = 1775753878298
+/home/opa/work/AskOS-workspace/tramli/java/target/reports/apidocs/serialized-form.html = 1775753878174
+/home/opa/work/AskOS-workspace/tramli/java/target/reports/apidocs/type-search-index.js = 1775753878290
+/home/opa/work/AskOS-workspace/tramli/java/target/reports/apidocs/constant-values.html = 1775753878166
+/home/opa/work/AskOS-workspace/tramli/java/target/reports/apidocs/package-search-index.js = 1775753878290
+/home/opa/work/AskOS-workspace/tramli/java/target/reports/apidocs/search.html = 1775753878318
+/home/opa/work/AskOS-workspace/tramli/java/target/reports/apidocs/allpackages-index.html = 1775753878290
+/home/opa/work/AskOS-workspace/tramli/java/target/reports/apidocs/copy.svg = 1775753878326
+/home/opa/work/AskOS-workspace/tramli/java/target/reports/apidocs/overview-tree.html = 1775753878262
+/home/opa/work/AskOS-workspace/tramli/java/target/reports/apidocs/link.svg = 1775753878326
+/home/opa/work/AskOS-workspace/tramli/java/target/reports/apidocs/script.js = 1775753878326
+/home/opa/work/AskOS-workspace/tramli/java/target/reports/apidocs/module-search-index.js = 1775753878290
+/home/opa/work/AskOS-workspace/tramli/java/target/reports/apidocs/search-page.js = 1775753878326
+/home/opa/work/AskOS-workspace/tramli/java/target/reports/apidocs/help-doc.html = 1775753878322
+/home/opa/work/AskOS-workspace/tramli/java/target/reports/apidocs/stylesheet.css = 1775753878326

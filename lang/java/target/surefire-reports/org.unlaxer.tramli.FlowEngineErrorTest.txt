@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: org.unlaxer.tramli.FlowEngineErrorTest
+-------------------------------------------------------------------------------
+Tests run: 14, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.044 s -- in org.unlaxer.tramli.FlowEngineErrorTest
