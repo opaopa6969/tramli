@@ -1,13 +1,15 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "outDir": "dist",
-    "rootDir": "."
+    "declaration": true,
+    "declarationDir": "dist",
+    "types": ["react", "react-dom"]
   },
-  "include": ["shared/**/*.ts", "server/**/*.ts", "demo/**/*.ts"]
+  "include": ["src"]
 }

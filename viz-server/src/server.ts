@@ -1,6 +1,6 @@
 import { WebSocketServer } from 'ws';
 import { VizSink } from './viz-sink.js';
-import type { ClientMessage, StateInfo, EdgeInfo } from '../shared/protocol.js';
+import type { ClientMessage, StateInfo, EdgeInfo } from './shared/protocol.js';
 import type { FlowEngine, FlowDefinition } from '@unlaxer/tramli';
 
 /** Single-SM options (backward compatible). */

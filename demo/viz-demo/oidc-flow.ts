@@ -1,5 +1,5 @@
-import { Tramli, flowKey } from '@unlaxer/tramli';
-import type { StateProcessor, TransitionGuard, BranchProcessor, GuardOutput, FlowContext, StateConfig } from '@unlaxer/tramli';
+import { Tramli, flowKey } from '../../ts/src/index.js';
+import type { StateProcessor, TransitionGuard, BranchProcessor, GuardOutput, FlowContext, StateConfig } from '../../ts/src/index.js';
 
 // ── States ──
 

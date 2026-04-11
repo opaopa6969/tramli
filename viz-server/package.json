@@ -1,0 +1,27 @@
+{
+  "name": "@unlaxer/tramli-viz-server",
+  "version": "0.2.0",
+  "description": "tramli-viz WebSocket server — VizSink + startVizServer",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc"
+  },
+  "peerDependencies": {
+    "@unlaxer/tramli": ">=3.7.0",
+    "@unlaxer/tramli-plugins": ">=3.7.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.5.0",
+    "ws": "^8.20.0"
+  },
+  "license": "MIT"
+}

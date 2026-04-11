@@ -1,11 +1,11 @@
-import { Tramli, FlowEngine, InMemoryFlowStore } from '@unlaxer/tramli';
-import { ObservabilityEnginePlugin } from '@unlaxer/tramli-plugins';
-import { VizSink } from '../server/viz-sink.js';
-import { startVizServer } from '../server/index.js';
+import { Tramli, FlowEngine, InMemoryFlowStore } from '../../ts/src/index.js';
+import { ObservabilityEnginePlugin } from '../../ts-plugins/src/index.js';
+import { VizSink } from '../../viz-server/src/viz-sink.js';
+import { startVizServer } from '../../viz-server/src/server.js';
 import { oidcFlowDefinition, OidcRequest, OIDC_STATES } from './oidc-flow.js';
 import { sessionFlowDefinition, AuthResult, SESSION_STATES, SESSION_LAYOUT, SESSION_EDGES } from './session-flow.js';
-import type { StateInfo, EdgeInfo } from '../shared/protocol.js';
-import type { VizFlowDef } from '../server/index.js';
+import type { StateInfo, EdgeInfo } from '../../viz-server/src/shared/protocol.js';
+import type { VizFlowDef } from '../../viz-server/src/server.js';
 
 // ── OIDC Layout ──
 

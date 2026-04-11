@@ -1,6 +1,6 @@
 import type { TelemetrySink, TelemetryEvent } from '@unlaxer/tramli-plugins';
 import type { WebSocket } from 'ws';
-import type { VizEvent, FlowSnapshot, ServerMessage } from '../shared/protocol.js';
+import type { VizEvent, FlowSnapshot, ServerMessage } from './shared/protocol.js';
 
 export class VizSink implements TelemetrySink {
   private readonly log: VizEvent[] = [];
