@@ -24,7 +24,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: cd lang/ts && npm ci && npm test
+      - run: npm ci
+      - run: npm test --workspace=lang/ts
 
   rust:
     runs-on: ubuntu-latest
