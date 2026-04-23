@@ -2998,5 +2998,292 @@ The pipeline is a specialization of the general DSL for strictly sequential flow
 
 ---
 
+# Appendix I. Mermaid Diagrams
+
+## I.1 Three-Language Binding Architecture
+
+```mermaid
+graph TB
+    subgraph core["tramli Core (shared semantics)"]
+        FD["FlowDefinition\n(immutable, validated)"]
+        FE["FlowEngine\n(zero-logic orchestrator)"]
+        FST["FlowStore\n(persistence boundary)"]
+        FC["FlowContext\n(typed key-value bag)"]
+        FI["FlowInstance\n(execution record)"]
+        FE -->|startFlow / resumeAndExecute| FD
+        FE -->|create / load / save| FST
+        FE -->|read / write| FC
+        FI -->|holds| FC
+        FST -->|stores| FI
+    end
+
+    subgraph java["Java Binding"]
+        JE["org.unlaxer:tramli\nMaven Central"]
+        JVM["JVM / Virtual Threads\n(sync core, I/O on vthreads)"]
+        JE --> JVM
+    end
+
+    subgraph ts["TypeScript Binding"]
+        TSE["@unlaxer/tramli\nnpm (ESM + CJS dual)"]
+        TSAS["Sync core\n(async allowed on External only)"]
+        TSE --> TSAS
+    end
+
+    subgraph rust["Rust Binding"]
+        RE["tramli\ncrates.io"]
+        RST["Sync (no async in SM)\ntokio outside engine"]
+        RE --> RST
+    end
+
+    core -->|"Java SPI\nClass<?> keys"| java
+    core -->|"TS SPI\nFlowKey<T> branded string"| ts
+    core -->|"Rust SPI\nTypeId + CloneAny"| rust
+
+    ST["shared-tests/\n125+ tests, 4+ YAML scenarios"]
+    java --- ST
+    ts  --- ST
+    rust --- ST
+```
+
+## I.2 DSL State Machine — OIDC Flow with SubFlow (3-tier nesting example)
+
+```mermaid
+stateDiagram-v2
+    direction LR
+
+    [*] --> INITIATED
+
+    INITIATED --> REDIRECTED : auto / BuildRedirect
+    REDIRECTED --> CALLBACK_RECEIVED : external / CallbackGuard
+
+    state CALLBACK_RECEIVED {
+        direction TB
+        [*] --> TOKEN_EXCHANGED_sub : auto / TokenExchange
+        TOKEN_EXCHANGED_sub --> USER_RESOLVED_sub : auto / ResolveUser
+
+        state USER_RESOLVED_sub {
+            direction TB
+            [*] --> risk_branch
+            risk_branch --> COMPLETE_sub    : low_risk
+            risk_branch --> MFA_REQUIRED_sub : high_risk
+            risk_branch --> BLOCKED_sub     : blocked
+        }
+    }
+
+    CALLBACK_RECEIVED --> COMPLETE      : subFlow terminal → COMPLETE
+    CALLBACK_RECEIVED --> MFA_REQUIRED  : subFlow terminal → MFA_REQUIRED
+    CALLBACK_RECEIVED --> BLOCKED       : subFlow terminal → BLOCKED
+
+    MFA_REQUIRED --> COMPLETE           : external / MfaGuard
+
+    COMPLETE       --> [*]
+    BLOCKED        --> [*]
+    RETRIABLE_ERROR --> [*]
+    GENERAL_ERROR  --> [*]
+
+    CALLBACK_RECEIVED --> RETRIABLE_ERROR : onStepError HttpTimeoutException
+    CALLBACK_RECEIVED --> GENERAL_ERROR   : onAnyError
+```
+
+## I.3 FlowEngine Sequence — startFlow / resumeAndExecute / executeAutoChain
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Caller
+    participant FE as FlowEngine
+    participant Store as FlowStore
+    participant Chain as executeAutoChain
+    participant Proc as StateProcessor
+    participant Guard as TransitionGuard
+
+    Caller->>FE: startFlow(definition, sessionId, initialData)
+    FE->>FE: flowId = UUID(); ctx = new FlowContext(flowId)
+    FE->>Store: create(FlowInstance)
+    FE->>Chain: executeAutoChain(flow)
+
+    loop depth < maxChainDepth
+        Chain->>Chain: dispatchStep(flow, currentState)
+        alt Auto transition
+            Chain->>Proc: process(ctx)
+            Proc-->>Chain: ok / throw
+            Chain->>Store: recordTransition(auto)
+        else Branch transition
+            Chain->>Proc: decide(ctx) → label
+            Chain->>Store: recordTransition(branch:<label>)
+        else SubFlow
+            Chain->>Chain: executeAutoChain(child)
+            Chain->>Store: recordTransition(subFlow:<name>/<terminal>)
+        else External → STOP
+            Chain-->>FE: STOP
+        end
+    end
+
+    FE->>Store: save(flow)
+    FE-->>Caller: FlowInstance
+
+    Note over Caller,FE: — later, external event arrives —
+
+    Caller->>FE: resumeAndExecute(flowId, definition, externalData)
+    FE->>Store: loadForUpdate(flowId, definition)
+    Store-->>FE: FlowInstance
+    FE->>FE: TTL check; activeSubFlow check
+    FE->>Guard: validate(ctx)
+    alt Accepted(data)
+        Guard-->>FE: Accepted
+        FE->>Proc: process(ctx)  [post-guard, optional]
+        FE->>Store: recordTransition(external)
+        FE->>Chain: executeAutoChain(flow)
+    else Rejected(reason)
+        Guard-->>FE: Rejected
+        FE->>FE: incrementGuardFailure
+    else Expired
+        Guard-->>FE: Expired
+        FE->>FE: flow.complete("EXPIRED")
+    end
+    FE->>Store: save(flow)
+    FE-->>Caller: FlowInstance
+```
+
+## I.4 Build Validation — 11 Checks Flowchart
+
+```mermaid
+flowchart TD
+    START([build&#40;&#41; called]) --> C1
+
+    C1{"#1 Initial state\nexists?"}
+    C1 -- No --> E1[/"Error: No initial state found"/]
+    C1 -- Yes --> C2
+
+    C2{"#2 All non-terminal\nstates reachable?"}
+    C2 -- No --> E2[/"Error: State X not reachable from Y"/]
+    C2 -- Yes --> C3
+
+    C3{"#3 Path to terminal\nexists?\n(skip if allowPerpetual)"}
+    C3 -- No --> E3[/"Error: No path from X to terminal"/]
+    C3 -- Yes --> C4
+
+    C4{"#4 Auto+Branch\nsubgraph is DAG?"}
+    C4 -- No --> E4[/"Error: Auto/Branch cycle detected"/]
+    C4 -- Yes --> C5
+
+    C5{"#5 All branch\nlabels have targets?"}
+    C5 -- No --> E5[/"Error: Branch target 'label' invalid"/]
+    C5 -- Yes --> C6
+
+    C6{"#6 requires/produces\nchain OK on all paths?"}
+    C6 -- No --> E6[/"Error: Guard 'X' requires Y but not available"/]
+    C6 -- Yes --> C7
+
+    C7{"#7 No state mixes\nAuto+Branch & External?"}
+    C7 -- No --> E7[/"Error: State X has both auto and external"/]
+    C7 -- Yes --> C8
+
+    C8{"#8 Terminal states\nhave no outgoing?"}
+    C8 -- No --> E8[/"Error: Terminal X has outgoing to Y"/]
+    C8 -- Yes --> C9
+
+    C9{"#9 Every SubFlow\nterminal has onExit?"}
+    C9 -- No --> E9[/"Error: SubFlow X terminal Y no onExit"/]
+    C9 -- Yes --> C10
+
+    C10{"#10 SubFlow nesting\ndepth ≤ 3?"}
+    C10 -- No --> E10[/"Error: SubFlow nesting depth > 3"/]
+    C10 -- Yes --> C11
+
+    C11{"#11 No SubFlow\ncircular reference?"}
+    C11 -- No --> E11[/"Error: Circular subFlow reference"/]
+    C11 -- Yes --> BUILD_DFG
+
+    BUILD_DFG["Build DataFlowGraph\n+ warnings list"]
+    BUILD_DFG --> OK([FlowDefinition returned\n&#40;immutable&#41;])
+```
+
+## I.5 Plugin SPI — Class Diagram
+
+```mermaid
+classDiagram
+    class PluginRegistry {
+        +register(plugin: EnginePlugin)
+        +register(plugin: StorePlugin)
+        +register(plugin: AnalysisPlugin)
+        +register(plugin: RuntimeAdapterPlugin)
+        +register(plugin: GenerationPlugin)
+        +register(plugin: DocumentationPlugin)
+        +applyEnginePlugins(engine): FlowEngine
+        +applyStorePlugins(store): FlowStore
+    }
+
+    class EnginePlugin {
+        <<interface Tier-2>>
+        +beforeTransition(flow, from, to, trigger)
+        +afterTransition(flow, from, to, trigger)
+        +onError(flow, from, cause)
+    }
+
+    class StorePlugin {
+        <<interface Tier-2>>
+        +wrap(inner: FlowStore) FlowStore
+    }
+
+    class AnalysisPlugin {
+        <<interface Tier-2>>
+        +analyze(definition: FlowDefinition) AnalysisReport
+    }
+
+    class RuntimeAdapterPlugin {
+        <<interface Tier-2>>
+        +adapt(engine: FlowEngine) FlowEngine
+    }
+
+    class GenerationPlugin {
+        <<interface Tier-3>>
+        +generate(definition: FlowDefinition) String
+    }
+
+    class DocumentationPlugin {
+        <<interface Tier-3>>
+        +document(definition: FlowDefinition) String
+    }
+
+    class ObservabilityPlugin {
+        +sink: TelemetrySink
+        +beforeTransition()
+        +afterTransition()
+    }
+
+    class PolicyLintPlugin {
+        +analyze(definition) warnings[]
+    }
+
+    class ScenarioTestPlugin {
+        +generateCode(scenario) String
+    }
+
+    class MermaidGenerator {
+        +generate(definition) String
+    }
+
+    class EventLogStorePlugin {
+        +wrap(inner) FlowStore
+        +replay(flowId) FlowInstance
+    }
+
+    PluginRegistry --> EnginePlugin
+    PluginRegistry --> StorePlugin
+    PluginRegistry --> AnalysisPlugin
+    PluginRegistry --> RuntimeAdapterPlugin
+    PluginRegistry --> GenerationPlugin
+    PluginRegistry --> DocumentationPlugin
+
+    ObservabilityPlugin ..|> EnginePlugin
+    PolicyLintPlugin    ..|> AnalysisPlugin
+    ScenarioTestPlugin  ..|> GenerationPlugin
+    MermaidGenerator    ..|> GenerationPlugin
+    EventLogStorePlugin ..|> StorePlugin
+```
+
+---
+
 *End of specification.*
 
