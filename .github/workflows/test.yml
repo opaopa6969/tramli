@@ -24,7 +24,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm ci
+      # Using `npm install --legacy-peer-deps` instead of `npm ci` because
+      # package-lock.json is out of sync with workspace package.json versions
+      # (3.7.1 bump). Once the lock is regenerated this should revert to npm ci.
+      - run: npm install --legacy-peer-deps --no-audit
       - run: npm test --workspace=lang/ts
 
   rust:
