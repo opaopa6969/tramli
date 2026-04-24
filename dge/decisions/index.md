@@ -37,7 +37,7 @@
 | [DD-039](DD-039-viz-layout-persistence.md) | tramli-viz レイアウト永続化 + UX 改善 | — | 2026-04-09 |
 | [DD-040](DD-040-issue33-appspec-feedback.md) | Issue #33 appspec フィードバック対応 | — | 2026-04-10 |
 | [DD-041](DD-041-issue37-38-viz-multi-sm.md) | Issue #37-38 multi-SM viz + BOM 判定 | — | 2026-04-11 |
-| [DD-042](DD-042-tramli-exemplar-completion.md) | tramli は state-machine + data-flow の exemplar として完結 | [DataFlow Mode](../sessions/2026-04-24-tramli-dataflow-mode.md), [Reactive & App Structure](../sessions/2026-04-24-tramli-reactive-and-app-structure.md) | 2026-04-24 |
-| [DD-043](DD-043-tramli-family-model.md) | アプリ全体は tramli ファミリー合成で（tramli-sdd は吸収） | [Reactive & App Structure](../sessions/2026-04-24-tramli-reactive-and-app-structure.md) | 2026-04-24 |
-| [DD-044](DD-044-manifest-integrity-rules.md) | マニフェスト 3 精度ルール（依存ツリー / DD 同期 / 期待値） | [Manifest Integrity](../sessions/2026-04-24-tramli-manifest-integrity.md) | 2026-04-24 |
-| [DD-045](DD-045-family-ideal-monorepo-manifest-implementation.md) | 家族最終形・monorepo 段階戦略・マニフェスト実装ルール | [Family Ideal](../sessions/2026-04-24-tramli-family-ideal-and-monorepo.md), [Coverage & Migration](../sessions/2026-04-24-tramli-family-coverage-and-migration.md) | 2026-04-24 |
+
+---
+
+**DD-042 以降は [tramli-family](https://github.com/opaopa6969/tramli-family) repo に移行しました** — 2026-04-24 の家族モデル採用（DD-043）以降は、家族全体の議論として umbrella repo で管理されます（[DD-045 Part 3](https://github.com/opaopa6969/tramli-family/blob/main/decisions/DD-045-family-ideal-monorepo-manifest-implementation.md) 時系列分割戦略）。
