@@ -1,5 +1,8 @@
 # DGE Session: ファミリーマニフェストの 3 Gap — G7 期待値 / G8 DD 同期 / G9 ツリー矛盾
 
+**Decisions:**
+- [DD-044](../decisions/DD-044-manifest-integrity-rules.md) — マニフェスト 3 精度ルール（依存ツリー / DD 同期 / 期待値調整）
+
 - **Date**: 2026-04-24
 - **Flow**: 💡 brainstorm
 - **Structure**: 🗣 座談会（roundtable）
