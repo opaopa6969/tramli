@@ -1564,6 +1564,15 @@ return produced \ required
 
 `MermaidGenerator.generate(def)` produces a state-transition diagram; `generateDataFlow(def)` produces a bipartite data-flow diagram. Both are deterministic and stable — useful for CI pinning ("commit the .mmd, fail on drift"). Generation runs in the same language as the definition; the output is identical across languages for the same definition.
 
+Since v3.8.0 (Issue #47), a unified `view` parameter selects either diagram via the primary `generate()` entry point:
+
+| View | TypeScript | Java | Rust |
+|------|-----------|------|------|
+| State (default) | `generate(def)` or `generate(def, { view: 'state' })` | `generate(def)` or `generate(def, View.STATE)` | `generate(&def)` or `generate_with_view(&def, MermaidView::State)` |
+| DataFlow | `generate(def, { view: 'dataflow' })` | `generate(def, View.DATAFLOW)` | `generate_with_view(&def, MermaidView::DataFlow)` |
+
+`view: 'dataflow'` is exactly equivalent to `generateDataFlow(def)` — both paths are retained for compatibility.
+
 Sample state diagram (OIDC example in §2.11):
 
 ```mermaid

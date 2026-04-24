@@ -11,10 +11,33 @@ import java.util.Set;
  */
 public final class MermaidGenerator {
 
+    /**
+     * Which diagram to generate.
+     *
+     * <ul>
+     *   <li>{@link #STATE}: state transitions (stateDiagram-v2)</li>
+     *   <li>{@link #DATAFLOW}: data-flow graph (nodes = processors/guards, edges = FlowKey types)</li>
+     * </ul>
+     *
+     * Corresponds to Issue #47. See also DD-042 Implication.
+     */
+    public enum View { STATE, DATAFLOW }
+
     private MermaidGenerator() {}
 
     public static <S extends Enum<S> & FlowState> String generate(FlowDefinition<S> definition) {
         return generate(definition, false);
+    }
+
+    /**
+     * Generate Mermaid diagram with view selection.
+     * <p>Equivalent to {@link #generateDataFlow(FlowDefinition)} when view is DATAFLOW.
+     */
+    public static <S extends Enum<S> & FlowState> String generate(FlowDefinition<S> definition, View view) {
+        return switch (view) {
+            case DATAFLOW -> generateDataFlow(definition);
+            case STATE -> generate(definition, false);
+        };
     }
 
     public static <S extends Enum<S> & FlowState> String generate(FlowDefinition<S> definition, boolean excludeErrorTransitions) {

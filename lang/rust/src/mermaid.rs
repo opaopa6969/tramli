@@ -3,6 +3,18 @@ use std::collections::HashSet;
 use crate::definition::FlowDefinition;
 use crate::types::*;
 
+/// Which diagram to generate.
+///
+/// - `State`: state transitions (stateDiagram-v2)
+/// - `DataFlow`: data-flow graph (nodes = processors/guards, edges = FlowKey types)
+///
+/// Corresponds to Issue #47. See also DD-042 Implication.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MermaidView {
+    State,
+    DataFlow,
+}
+
 /// Generates Mermaid diagrams from FlowDefinition.
 pub struct MermaidGenerator;
 
@@ -10,6 +22,15 @@ impl MermaidGenerator {
     /// Generate Mermaid stateDiagram-v2 (state transitions).
     pub fn generate<S: FlowState>(def: &FlowDefinition<S>) -> String {
         Self::generate_with_options(def, false)
+    }
+
+    /// Generate Mermaid diagram with view selection.
+    /// Equivalent to [`Self::generate_data_flow`] when view is `DataFlow`.
+    pub fn generate_with_view<S: FlowState>(def: &FlowDefinition<S>, view: MermaidView) -> String {
+        match view {
+            MermaidView::DataFlow => Self::generate_data_flow(def),
+            MermaidView::State => Self::generate(def),
+        }
     }
 
     /// Generate Mermaid stateDiagram-v2 with options.

@@ -1,12 +1,25 @@
 import type { FlowDefinition } from './flow-definition.js';
 import type { Transition } from './types.js';
 
+export type MermaidView = 'state' | 'dataflow';
+
 export interface MermaidOptions {
   excludeErrorTransitions?: boolean;
+  /**
+   * Which diagram to generate.
+   * - `'state'` (default): state transitions (stateDiagram-v2)
+   * - `'dataflow'`: data-flow graph (nodes = processors/guards, edges = FlowKey types)
+   *
+   * Corresponds to Issue #47. See also [DD-042 Implication].
+   */
+  view?: MermaidView;
 }
 
 export class MermaidGenerator {
   static generate<S extends string>(def: FlowDefinition<S>, options?: MermaidOptions): string {
+    if (options?.view === 'dataflow') {
+      return this.generateDataFlow(def);
+    }
     const lines: string[] = ['stateDiagram-v2'];
     if (def.initialState) lines.push(`  [*] --> ${def.initialState}`);
 
