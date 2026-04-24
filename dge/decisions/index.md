@@ -37,3 +37,5 @@
 | [DD-039](DD-039-viz-layout-persistence.md) | tramli-viz レイアウト永続化 + UX 改善 | — | 2026-04-09 |
 | [DD-040](DD-040-issue33-appspec-feedback.md) | Issue #33 appspec フィードバック対応 | — | 2026-04-10 |
 | [DD-041](DD-041-issue37-38-viz-multi-sm.md) | Issue #37-38 multi-SM viz + BOM 判定 | — | 2026-04-11 |
+| [DD-042](DD-042-tramli-exemplar-completion.md) | tramli は state-machine + data-flow の exemplar として完結 | [DataFlow Mode](../sessions/2026-04-24-tramli-dataflow-mode.md), [Reactive & App Structure](../sessions/2026-04-24-tramli-reactive-and-app-structure.md) | 2026-04-24 |
+| [DD-043](DD-043-tramli-family-model.md) | アプリ全体は tramli ファミリー合成で（tramli-sdd は吸収） | [Reactive & App Structure](../sessions/2026-04-24-tramli-reactive-and-app-structure.md) | 2026-04-24 |
