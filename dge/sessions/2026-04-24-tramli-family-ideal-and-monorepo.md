@@ -1,5 +1,8 @@
 # DGE Session: ファミリーの最終形 — 検証可能・再現性・宣言的フレームワークと monorepo
 
+**Decisions:**
+- [DD-045](../decisions/DD-045-family-ideal-monorepo-manifest-implementation.md) — 家族最終形・monorepo 段階戦略・マニフェスト実装ルール
+
 - **Date**: 2026-04-24
 - **Flow**: 💡 brainstorm
 - **Structure**: 🗣 座談会（roundtable）

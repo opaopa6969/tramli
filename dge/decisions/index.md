@@ -40,3 +40,4 @@
 | [DD-042](DD-042-tramli-exemplar-completion.md) | tramli は state-machine + data-flow の exemplar として完結 | [DataFlow Mode](../sessions/2026-04-24-tramli-dataflow-mode.md), [Reactive & App Structure](../sessions/2026-04-24-tramli-reactive-and-app-structure.md) | 2026-04-24 |
 | [DD-043](DD-043-tramli-family-model.md) | アプリ全体は tramli ファミリー合成で（tramli-sdd は吸収） | [Reactive & App Structure](../sessions/2026-04-24-tramli-reactive-and-app-structure.md) | 2026-04-24 |
 | [DD-044](DD-044-manifest-integrity-rules.md) | マニフェスト 3 精度ルール（依存ツリー / DD 同期 / 期待値） | [Manifest Integrity](../sessions/2026-04-24-tramli-manifest-integrity.md) | 2026-04-24 |
+| [DD-045](DD-045-family-ideal-monorepo-manifest-implementation.md) | 家族最終形・monorepo 段階戦略・マニフェスト実装ルール | [Family Ideal](../sessions/2026-04-24-tramli-family-ideal-and-monorepo.md), [Coverage & Migration](../sessions/2026-04-24-tramli-family-coverage-and-migration.md) | 2026-04-24 |
