@@ -1,6 +1,6 @@
 # DRE manifest — DO NOT EDIT manually
-version=4.0.0
-installed_at=2026-04-06T22:58:57Z
+version=4.2.0
+installed_at=2026-04-10T01:54:01Z
 rules/dre-skill-control.md=20872141db2608f752d534293b39dfe99341191c481830e84ffbdef37cad5335
 skills/architect-to-task.md=24cf4520160be0d7b2f3dac3d514a71cd40c4ea74ad09516a3f723019aad7346
 skills/backlog-management.md=f4f05260b85f0fcf3b1bf0dc032161401456793eba9e0221484bae040e9bf036

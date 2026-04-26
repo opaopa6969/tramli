@@ -36,3 +36,10 @@
 | [DD-038](DD-038-viz-heatmap-polish.md) | tramli-viz ヒートマップ軌跡 + 表示改善 | — | 2026-04-09 |
 | [DD-039](DD-039-viz-layout-persistence.md) | tramli-viz レイアウト永続化 + UX 改善 | — | 2026-04-09 |
 | [DD-040](DD-040-issue33-appspec-feedback.md) | Issue #33 appspec フィードバック対応 | — | 2026-04-10 |
+| [DD-041](DD-041-flowcontext-snapshot-visibility.md) | FlowContext ミューテーション可視性 — snapshot 案B 採用 | [Issue #30 DGE](../sessions/2026-04-10-issue30-33-8-dge.md) | 2026-04-10 |
+| [DD-042](DD-042-flowprovider-single-engine.md) | FlowProvider — 1アプリ=1エンジン前提、ネスト禁止 | [Issue #30 DGE](../sessions/2026-04-10-issue30-33-8-dge.md) | 2026-04-10 |
+| [DD-043](DD-043-flowchain-react-vs-core.md) | useFlowChain — React 層に置く（コア additive 追加は保留） | [Issue #30 DGE](../sessions/2026-04-10-issue30-33-8-dge.md) | 2026-04-10 |
+| [DD-044](DD-044-flowprovider-unmount-sessionid.md) | FlowProvider アンマウント時のフロー消失 — sessionId 注入で復元可能にする | [Issue #30 DGE](../sessions/2026-04-10-issue30-33-8-dge.md) | 2026-04-10 |
+| [DD-045](DD-045-flowprovider-resume-mutex.md) | FlowProvider — resume 同時呼び出し排他制御 | [Issue #30 DGE](../sessions/2026-04-10-issue30-33-8-dge.md) | 2026-04-10 |
+| [DD-046](DD-046-tramli-react-ui-update-timing.md) | tramli-react — UI 更新タイミングの仕様明文化 | [Issue #30 DGE](../sessions/2026-04-10-issue30-33-8-dge.md) | 2026-04-10 |
+| [DD-047](DD-047-hierarchy-plugin-freeze.md) | hierarchy plugin — LCA ランタイム実装を凍結、ユースケース待ち | [Issue #30 DGE](../sessions/2026-04-10-issue30-33-8-dge.md) | 2026-04-10 |
