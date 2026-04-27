@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.unlaxer.tramli.*;
 import org.unlaxer.tramli.plugins.api.PluginRegistry;
 import org.unlaxer.tramli.plugins.audit.AuditStorePlugin;
+import org.unlaxer.tramli.plugins.hierarchy.*;
 import org.unlaxer.tramli.plugins.audit.AuditingFlowStore;
 import org.unlaxer.tramli.plugins.diagram.DiagramGenerationPlugin;
 import org.unlaxer.tramli.plugins.docs.FlowDocumentationPlugin;
@@ -297,5 +298,180 @@ class PluginIntegrationTest {
         // Second call with same commandId should be deduplicated
         assertNotNull(r1);
         assertNotNull(r2);
+    }
+
+    // ─── Hierarchy LCA ──────────────────────────────────
+
+    @Test
+    void lcaCalculation() {
+        var spec = new HierarchicalFlowSpec("UserLifecycle", "UserState");
+
+        var active = new HierarchicalStateSpec("Active", false, false);
+        active.entryProduces("SessionToken");
+        active.exitProduces("AuditLog");
+
+        var browsing = new HierarchicalStateSpec("Browsing", false, false);
+        browsing.entryProduces("BrowseCtx");
+        var shopping = new HierarchicalStateSpec("Shopping", false, false);
+        shopping.entryProduces("CartCtx");
+        shopping.exitProduces("CartSnapshot");
+
+        active.child(browsing);
+        active.child(shopping);
+
+        var idle = new HierarchicalStateSpec("Idle", true, false);
+        spec.state(idle).state(active);
+
+        var compiler = new EntryExitCompiler();
+
+        // Sibling LCA → parent
+        var lca1 = compiler.lca(spec, "Browsing", "Shopping");
+        assertNotNull(lca1);
+        assertEquals("Active", lca1.name());
+
+        // Self LCA
+        var lca2 = compiler.lca(spec, "Active", "Active");
+        assertNotNull(lca2);
+        assertEquals("Active", lca2.name());
+
+        // Cross-subtree LCA → null (different roots)
+        var lca3 = compiler.lca(spec, "Idle", "Browsing");
+        assertNull(lca3);
+    }
+
+    @Test
+    void compileTransitionExitEntryOrder() {
+        var spec = new HierarchicalFlowSpec("UserLifecycle", "UserState");
+
+        var active = new HierarchicalStateSpec("Active", false, false);
+        active.entryProduces("SessionToken");
+        active.exitProduces("AuditLog");
+
+        var browsing = new HierarchicalStateSpec("Browsing", false, false);
+        browsing.entryProduces("BrowseCtx");
+        var shopping = new HierarchicalStateSpec("Shopping", false, false);
+        shopping.entryProduces("CartCtx");
+        shopping.exitProduces("CartSnapshot");
+
+        active.child(browsing);
+        active.child(shopping);
+        spec.state(active);
+
+        var compiler = new EntryExitCompiler();
+
+        // Sibling transition: Browsing → Shopping — LCA is Active
+        var chain = compiler.compileTransition(spec, "Browsing", "Shopping");
+        // Browsing has no exitProduces, Shopping has entryProduces
+        assertEquals(1, chain.size());
+        assertEquals("__entry__Shopping", chain.get(0).trigger());
+        assertEquals("Active", chain.get(0).from());
+
+        // Shopping → Browsing — exit Shopping, enter Browsing
+        var chain2 = compiler.compileTransition(spec, "Shopping", "Browsing");
+        assertEquals(2, chain2.size());
+        assertEquals("__exit__Shopping", chain2.get(0).trigger());
+        assertEquals("__entry__Browsing", chain2.get(1).trigger());
+    }
+
+    @Test
+    void eventBubblingGeneratesFallbacks() {
+        var spec = new HierarchicalFlowSpec("UserLifecycle", "UserState");
+
+        var active = new HierarchicalStateSpec("Active", false, false);
+        var browsing = new HierarchicalStateSpec("Browsing", false, false);
+        var shopping = new HierarchicalStateSpec("Shopping", false, false);
+        active.child(browsing);
+        active.child(shopping);
+
+        var suspended = new HierarchicalStateSpec("Suspended", false, true);
+        spec.state(active).state(suspended);
+
+        // Parent-level transition: Active → Suspended via "suspend"
+        spec.transition(new HierarchicalTransitionSpec("Active", "Suspended", "suspend"));
+
+        var compiler = new EntryExitCompiler();
+        var bubbled = compiler.synthesizeBubbling(spec);
+
+        // Both children should get fallback "suspend" transitions
+        assertTrue(bubbled.stream().anyMatch(t -> t.from().equals("Browsing") && t.trigger().equals("suspend")));
+        assertTrue(bubbled.stream().anyMatch(t -> t.from().equals("Shopping") && t.trigger().equals("suspend")));
+        // All fallbacks should target Suspended
+        bubbled.forEach(t -> assertEquals("Suspended", t.to()));
+    }
+
+    @Test
+    void userLifecycleScenario() {
+        // Full UserLifecycle hierarchy matching carta's test shape
+        var spec = new HierarchicalFlowSpec("UserLifecycle", "UserLifecycleState");
+
+        var anonymous = new HierarchicalStateSpec("Anonymous", true, false);
+
+        var registered = new HierarchicalStateSpec("Registered", false, false);
+        registered.entryProduces("WelcomeEmail");
+
+        var active = new HierarchicalStateSpec("Active", false, false);
+        active.entryProduces("SessionToken");
+        active.exitProduces("AuditLog");
+
+        var browsing = new HierarchicalStateSpec("Browsing", false, false);
+        browsing.entryProduces("BrowseCtx");
+        var shopping = new HierarchicalStateSpec("Shopping", false, false);
+        shopping.entryProduces("CartCtx");
+        shopping.exitProduces("CartSnapshot");
+        var checkout = new HierarchicalStateSpec("Checkout", false, false);
+
+        active.child(browsing);
+        active.child(shopping);
+        active.child(checkout);
+
+        var suspended = new HierarchicalStateSpec("Suspended", false, false);
+        var terminated = new HierarchicalStateSpec("Terminated", false, true);
+
+        spec.state(anonymous).state(registered).state(active).state(suspended).state(terminated);
+
+        spec.transition(new HierarchicalTransitionSpec("Anonymous", "Registered", "register"));
+        spec.transition(new HierarchicalTransitionSpec("Registered", "Active", "activate"));
+        spec.transition(new HierarchicalTransitionSpec("Active", "Suspended", "suspend"));
+        spec.transition(new HierarchicalTransitionSpec("Suspended", "Active", "reactivate"));
+        spec.transition(new HierarchicalTransitionSpec("Suspended", "Terminated", "terminate"));
+        spec.transition(new HierarchicalTransitionSpec("Browsing", "Shopping", "addToCart"));
+        spec.transition(new HierarchicalTransitionSpec("Shopping", "Checkout", "checkout"));
+
+        var compiler = new EntryExitCompiler();
+
+        // LCA: Browsing → Shopping (siblings under Active)
+        var lca = compiler.lca(spec, "Browsing", "Shopping");
+        assertNotNull(lca);
+        assertEquals("Active", lca.name());
+
+        // LCA: Shopping → Suspended (cross-subtree, no common ancestor below root)
+        var lca2 = compiler.lca(spec, "Shopping", "Suspended");
+        assertNull(lca2);
+
+        // Compile transition: Shopping → Checkout (siblings, LCA=Active)
+        var chain = compiler.compileTransition(spec, "Shopping", "Checkout");
+        // Shopping exits (CartSnapshot), Checkout has no entryProduces
+        assertEquals(1, chain.size());
+        assertEquals("__exit__Shopping", chain.get(0).trigger());
+
+        // Event bubbling: "suspend" on Active propagates to Browsing, Shopping, Checkout
+        var bubbled = compiler.synthesizeBubbling(spec);
+        var suspendBubbles = bubbled.stream().filter(t -> t.trigger().equals("suspend")).toList();
+        assertEquals(3, suspendBubbles.size());
+
+        // Code generation: flat enum should contain all states
+        var gen = new HierarchyCodeGenerator();
+        var enumSrc = gen.generateEnumSource(spec, "org.unlaxer.tramli.example");
+        assertTrue(enumSrc.contains("ANONYMOUS"));
+        assertTrue(enumSrc.contains("ACTIVE_BROWSING"));
+        assertTrue(enumSrc.contains("ACTIVE_SHOPPING"));
+        assertTrue(enumSrc.contains("ACTIVE_CHECKOUT"));
+        assertTrue(enumSrc.contains("TERMINATED"));
+
+        // Builder skeleton includes all transitions
+        var skeleton = gen.generateBuilderSkeleton(spec, "org.unlaxer.tramli.example");
+        assertTrue(skeleton.contains("register"));
+        assertTrue(skeleton.contains("addToCart"));
+        assertTrue(skeleton.contains("checkout"));
     }
 }
