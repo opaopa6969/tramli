@@ -155,6 +155,38 @@ describe('useFlow', () => {
     expect(result.current.flowId).toBeTruthy();
   });
 
+  it('resume accepts [FlowKey, value] pairs (P3)', async () => {
+    const def = buildDef();
+    const { result } = renderHook(() =>
+      useFlow(def, { initialData: [[InputKey, { value: 'pairs' }]] }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.state).toBe('WAITING');
+    });
+
+    await act(async () => {
+      await result.current.resume([[ResultKey, { ok: true }]]);
+    });
+
+    expect(result.current.state).toBe('DONE');
+    expect(result.current.error).toBeNull();
+  });
+
+  it('initialData accepts [FlowKey, value] pairs (P3)', async () => {
+    const def = buildDef();
+    const { result } = renderHook(() =>
+      useFlow(def, { initialData: [[InputKey, { value: 'pair-init' }]] }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    expect(result.current.state).toBe('WAITING');
+    expect(result.current.context!.get(InputKey)).toEqual({ value: 'pair-init' });
+  });
+
   it('context contains produced data', async () => {
     const def = buildDef();
     const { result } = renderHook(() =>

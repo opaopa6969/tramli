@@ -6,10 +6,11 @@ import {
   type FlowDefinition,
   type FlowContext,
 } from '@unlaxer/tramli';
+import { resolveData, type DataInput } from './data-input.js';
 
 export interface UseFlowOptions {
-  /** Initial data to seed the flow context. */
-  initialData?: Map<string, unknown>;
+  /** Initial data to seed the flow context. Accepts Map or [FlowKey, value] pairs. */
+  initialData?: DataInput;
   /** Session ID for the flow instance. Defaults to crypto.randomUUID(). */
   sessionId?: string;
 }
@@ -25,8 +26,8 @@ export interface UseFlowResult<S extends string> {
   error: Error | null;
   /** True while startFlow or resume is in progress. */
   isLoading: boolean;
-  /** Resume the flow with optional external data. */
-  resume: (externalData?: Map<string, unknown>) => Promise<void>;
+  /** Resume the flow with optional external data. Accepts Map or [FlowKey, value] pairs. */
+  resume: (externalData?: DataInput) => Promise<void>;
 }
 
 /**
@@ -72,7 +73,7 @@ export function useFlow<S extends string>(
         setIsLoading(true);
         setError(null);
         const sessionId = options?.sessionId ?? crypto.randomUUID();
-        const initialData = options?.initialData ?? new Map<string, unknown>();
+        const initialData = resolveData(options?.initialData) ?? new Map<string, unknown>();
         const instance = await engineRef.current!.startFlow(
           definition,
           sessionId,
@@ -103,7 +104,7 @@ export function useFlow<S extends string>(
 
   // Stable resume callback
   const resume = useCallback(
-    async (externalData?: Map<string, unknown>) => {
+    async (externalData?: DataInput) => {
       const currentFlowId = flowIdRef.current;
       if (!currentFlowId || !engineRef.current) {
         throw new Error('Flow not started yet — cannot resume');
@@ -114,7 +115,7 @@ export function useFlow<S extends string>(
         const instance = await engineRef.current.resumeAndExecute(
           currentFlowId,
           definition,
-          externalData,
+          resolveData(externalData),
         );
         syncFromInstance(instance as FlowInstance<S>);
       } catch (e) {
