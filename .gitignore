@@ -1,20 +1,20 @@
 # Java
-java/target/
-java-plugins/target/
+lang/java/target/
+lang/java-plugins/target/
 *.class
 *.jar
 .idea/
 *.iml
 
 # TypeScript
-ts/node_modules/
-ts/dist/
-ts-plugins/node_modules/
-ts-plugins/dist/
+lang/ts/node_modules/
+lang/ts/dist/
+lang/ts-plugins/node_modules/
+lang/ts-plugins/dist/
 
 # Rust
-rust/target/
-rust-plugins/target/
+lang/rust/target/
+lang/rust-plugins/target/
 
 # OS
 .DS_Store
