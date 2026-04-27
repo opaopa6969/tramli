@@ -89,29 +89,22 @@ Every SM transition is recorded in `InMemoryFlowStore`. Got per-request observab
 
 ## What could be better
 
-### 1. GuardOutput::Accepted boilerplate
+### 1. ~~GuardOutput::Accepted boilerplate~~ (resolved in v3.8)
 
-Building the `HashMap<TypeId, Box<dyn CloneAny>>` for Accepted data is verbose:
-
-```rust
-// Current: 4 lines for 1 field
-GuardOutput::Accepted {
-    data: {
-        let mut m = HashMap::new();
-        m.insert(TypeId::of::<AuthData>(), Box::new(data.clone()) as Box<dyn CloneAny>);
-        m
-    },
-}
-```
-
-A macro would help:
+**Fixed.** tramli now provides helper methods and a `guard_data!` macro:
 
 ```rust
-// Ideal
-GuardOutput::accepted![AuthData => data.clone()]
+// Single item — accept_with
+GuardOutput::accept_with(AuthData { token: tok.clone() })
 
-// Or a helper method
-GuardOutput::accept_one::<AuthData>(data.clone())
+// Multiple items — guard_data! macro
+GuardOutput::accepted(guard_data![AuthData { token: tok.clone() }, UserId(42)])
+
+// No data
+GuardOutput::accepted_empty()
+
+// Rejection shorthand
+GuardOutput::rejected("invalid token")
 ```
 
 ### 2. Per-request FlowEngine allocation
