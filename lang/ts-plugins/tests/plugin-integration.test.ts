@@ -371,6 +371,146 @@ describe('Plugin Integration', () => {
     expect(files.get('TestFlowGenerated.ts')).toBeDefined();
   });
 
+  it('hierarchy LCA calculation', () => {
+    const spec = flowSpec('UserLifecycle', 'UserState');
+
+    const active = stateSpec('Active');
+    active.entryProduces.push('SessionToken');
+    active.exitProduces.push('AuditLog');
+
+    const browsing = stateSpec('Browsing');
+    browsing.entryProduces.push('BrowseCtx');
+    const shopping = stateSpec('Shopping');
+    shopping.entryProduces.push('CartCtx');
+    shopping.exitProduces.push('CartSnapshot');
+
+    active.children.push(browsing, shopping);
+
+    const idle = stateSpec('Idle', { initial: true });
+    spec.rootStates.push(idle, active);
+
+    const compiler = new EntryExitCompiler();
+
+    const lca1 = compiler.lca(spec, 'Browsing', 'Shopping');
+    expect(lca1).not.toBeNull();
+    expect(lca1!.name).toBe('Active');
+
+    const lca2 = compiler.lca(spec, 'Active', 'Active');
+    expect(lca2).not.toBeNull();
+    expect(lca2!.name).toBe('Active');
+
+    const lca3 = compiler.lca(spec, 'Idle', 'Browsing');
+    expect(lca3).toBeNull();
+  });
+
+  it('hierarchy compileTransition exit-entry order', () => {
+    const spec = flowSpec('UserLifecycle', 'UserState');
+    const active = stateSpec('Active');
+    active.entryProduces.push('SessionToken');
+    active.exitProduces.push('AuditLog');
+
+    const browsing = stateSpec('Browsing');
+    browsing.entryProduces.push('BrowseCtx');
+    const shopping = stateSpec('Shopping');
+    shopping.entryProduces.push('CartCtx');
+    shopping.exitProduces.push('CartSnapshot');
+    active.children.push(browsing, shopping);
+    spec.rootStates.push(active);
+
+    const compiler = new EntryExitCompiler();
+
+    const chain = compiler.compileTransition(spec, 'Browsing', 'Shopping');
+    expect(chain.length).toBe(1);
+    expect(chain[0].trigger).toBe('__entry__Shopping');
+    expect(chain[0].from).toBe('Active');
+
+    const chain2 = compiler.compileTransition(spec, 'Shopping', 'Browsing');
+    expect(chain2.length).toBe(2);
+    expect(chain2[0].trigger).toBe('__exit__Shopping');
+    expect(chain2[1].trigger).toBe('__entry__Browsing');
+  });
+
+  it('hierarchy event bubbling generates fallbacks', () => {
+    const spec = flowSpec('UserLifecycle', 'UserState');
+
+    const active = stateSpec('Active');
+    const browsing = stateSpec('Browsing');
+    const shopping = stateSpec('Shopping');
+    active.children.push(browsing, shopping);
+
+    const suspended = stateSpec('Suspended', { terminal: true });
+    spec.rootStates.push(active, suspended);
+
+    spec.transitions.push(transitionSpec('Active', 'Suspended', 'suspend'));
+
+    const compiler = new EntryExitCompiler();
+    const bubbled = compiler.synthesizeBubbling(spec);
+
+    expect(bubbled.find(t => t.from === 'Browsing' && t.trigger === 'suspend')).toBeDefined();
+    expect(bubbled.find(t => t.from === 'Shopping' && t.trigger === 'suspend')).toBeDefined();
+    bubbled.forEach(t => expect(t.to).toBe('Suspended'));
+  });
+
+  it('hierarchy UserLifecycle full scenario', () => {
+    const spec = flowSpec('UserLifecycle', 'UserLifecycleState');
+
+    const anonymous = stateSpec('Anonymous', { initial: true });
+    const registered = stateSpec('Registered');
+    registered.entryProduces.push('WelcomeEmail');
+
+    const active = stateSpec('Active');
+    active.entryProduces.push('SessionToken');
+    active.exitProduces.push('AuditLog');
+
+    const browsing = stateSpec('Browsing');
+    browsing.entryProduces.push('BrowseCtx');
+    const shopping = stateSpec('Shopping');
+    shopping.entryProduces.push('CartCtx');
+    shopping.exitProduces.push('CartSnapshot');
+    const checkout = stateSpec('Checkout');
+    active.children.push(browsing, shopping, checkout);
+
+    const suspended = stateSpec('Suspended');
+    const terminated = stateSpec('Terminated', { terminal: true });
+
+    spec.rootStates.push(anonymous, registered, active, suspended, terminated);
+
+    spec.transitions.push(transitionSpec('Anonymous', 'Registered', 'register'));
+    spec.transitions.push(transitionSpec('Registered', 'Active', 'activate'));
+    spec.transitions.push(transitionSpec('Active', 'Suspended', 'suspend'));
+    spec.transitions.push(transitionSpec('Suspended', 'Active', 'reactivate'));
+    spec.transitions.push(transitionSpec('Suspended', 'Terminated', 'terminate'));
+    spec.transitions.push(transitionSpec('Browsing', 'Shopping', 'addToCart'));
+    spec.transitions.push(transitionSpec('Shopping', 'Checkout', 'checkout'));
+
+    const compiler = new EntryExitCompiler();
+
+    const lca = compiler.lca(spec, 'Browsing', 'Shopping');
+    expect(lca).not.toBeNull();
+    expect(lca!.name).toBe('Active');
+
+    const chain = compiler.compileTransition(spec, 'Shopping', 'Checkout');
+    expect(chain.length).toBe(1);
+    expect(chain[0].trigger).toBe('__exit__Shopping');
+
+    const bubbled = compiler.synthesizeBubbling(spec);
+    const suspendBubbles = bubbled.filter(t => t.trigger === 'suspend');
+    expect(suspendBubbles.length).toBe(3);
+
+    const gen = new HierarchyCodeGenerator();
+    const stateConfigSrc = gen.generateStateConfig(spec);
+    expect(stateConfigSrc).toContain('ANONYMOUS');
+    expect(stateConfigSrc).toContain('ACTIVE_BROWSING');
+    expect(stateConfigSrc).toContain('ACTIVE_SHOPPING');
+    expect(stateConfigSrc).toContain('ACTIVE_CHECKOUT');
+    expect(stateConfigSrc).toContain('TERMINATED');
+
+    const skeleton = gen.generateBuilderSkeleton(spec);
+    expect(skeleton).toContain('register');
+    expect(skeleton).toContain('addToCart');
+    expect(skeleton).toContain('checkout');
+  });
+
   it('diagram generation plugin via registry', () => {
     const def = buildDef(true);
     const plugin = new DiagramGenerationPlugin<S>();
