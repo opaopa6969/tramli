@@ -34,7 +34,7 @@ export class SkeletonGenerator {
       return `static final StateProcessor ${name.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase()} = new StateProcessor() {\n    @Override public String name() { return "${name}"; }\n    @Override public Set<Class<?>> requires() { return Set.of(${reqs.map(r => r + '.class').join(', ')}); }\n    @Override public Set<Class<?>> produces() { return Set.of(${prods.map(p => p + '.class').join(', ')}); }\n    @Override public void process(FlowContext ctx) {\n        // TODO: implement\n    }\n};\n`;
     }
     // rust
-    return `struct ${name};\nimpl StateProcessor<S> for ${name} {\n    fn name(&self) -> &str { "${name}" }\n    fn requires(&self) -> Vec<TypeId> { requires![${reqs.join(', ')}] }\n    fn produces(&self) -> Vec<TypeId> { requires![${prods.join(', ')}] }\n    fn process(&self, ctx: &mut FlowContext) -> Result<(), FlowError> {\n        todo!()\n    }\n}\n`;
+    return `struct ${name};\nimpl StateProcessor<S> for ${name} {\n    fn name(&self) -> &str { "${name}" }\n    fn requires(&self) -> Vec<TypeId> { requires![${reqs.join(', ')}] }\n    fn produces(&self) -> Vec<TypeId> { produces![${prods.join(', ')}] }\n    fn process(&self, ctx: &mut FlowContext) -> Result<(), FlowError> {\n        todo!()\n    }\n}\n`;
   }
 
   private static genGuard(name: string, reqs: string[], prods: string[], lang: TargetLanguage): string {
@@ -44,7 +44,7 @@ export class SkeletonGenerator {
     if (lang === 'java') {
       return `static final TransitionGuard ${name.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase()} = new TransitionGuard() {\n    @Override public String name() { return "${name}"; }\n    @Override public Set<Class<?>> requires() { return Set.of(${reqs.map(r => r + '.class').join(', ')}); }\n    @Override public Set<Class<?>> produces() { return Set.of(${prods.map(p => p + '.class').join(', ')}); }\n    @Override public int maxRetries() { return 3; }\n    @Override public GuardOutput validate(FlowContext ctx) {\n        return new GuardOutput.Accepted();\n    }\n};\n`;
     }
-    return `struct ${name};\nimpl TransitionGuard<S> for ${name} {\n    fn name(&self) -> &str { "${name}" }\n    fn requires(&self) -> Vec<TypeId> { requires![${reqs.join(', ')}] }\n    fn produces(&self) -> Vec<TypeId> { requires![${prods.join(', ')}] }\n    fn validate(&self, ctx: &FlowContext) -> GuardOutput {\n        GuardOutput::Accepted { data: HashMap::new() }\n    }\n}\n`;
+    return `struct ${name};\nimpl TransitionGuard<S> for ${name} {\n    fn name(&self) -> &str { "${name}" }\n    fn requires(&self) -> Vec<TypeId> { requires![${reqs.join(', ')}] }\n    fn produces(&self) -> Vec<TypeId> { produces![${prods.join(', ')}] }\n    fn validate(&self, ctx: &FlowContext) -> GuardOutput {\n        GuardOutput::Accepted { data: HashMap::new() }\n    }\n}\n`;
   }
 }
 

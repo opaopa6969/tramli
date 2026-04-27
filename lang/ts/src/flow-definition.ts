@@ -10,6 +10,8 @@ export interface ValidationError {
   state?: string;
   transition?: string;
   missingTypes?: string[];
+  component?: string;
+  availableTypes?: string[];
 }
 
 /** Parse a raw error message into a structured ValidationError. */
@@ -21,9 +23,33 @@ function parseValidationError(msg: string): ValidationError {
   // "No path from X to any terminal"
   const path = msg.match(/No path from (\S+) to/);
   if (path) { result.code = 'NO_PATH_TO_TERMINAL'; result.state = path[1]; return result; }
-  // "Processor 'X' at A -> B requires Y but it may not be available"
-  const req = msg.match(/Processor '([^']+)' at (\S+) -> (\S+) requires (\S+)/);
-  if (req) { result.code = 'MISSING_REQUIRES'; result.transition = `${req[2]}->${req[3]}`; result.missingTypes = [req[4]]; return result; }
+  // "Processor 'X' at A -> B requires Y but it may not be available (available: [...])"
+  const procReq = msg.match(/Processor '([^']+)' at (\S+) -> (\S+) requires (\S+) but it may not be available/);
+  if (procReq) {
+    result.code = 'MISSING_REQUIRES'; result.component = 'processor';
+    result.transition = `${procReq[2]}->${procReq[3]}`; result.missingTypes = [procReq[4]];
+    const avail = msg.match(/\(available: \[([^\]]*)\]\)/);
+    if (avail) result.availableTypes = avail[1] ? avail[1].split(', ') : [];
+    return result;
+  }
+  // "Guard 'X' at A requires Y but it may not be available (available: [...])"
+  const guardReq = msg.match(/Guard '([^']+)' at (\S+) requires (\S+) but it may not be available/);
+  if (guardReq) {
+    result.code = 'MISSING_REQUIRES'; result.component = 'guard';
+    result.state = guardReq[2]; result.missingTypes = [guardReq[3]];
+    const avail = msg.match(/\(available: \[([^\]]*)\]\)/);
+    if (avail) result.availableTypes = avail[1] ? avail[1].split(', ') : [];
+    return result;
+  }
+  // "Branch 'X' at A requires Y but it may not be available (available: [...])"
+  const branchReq = msg.match(/Branch '([^']+)' at (\S+) requires (\S+) but it may not be available/);
+  if (branchReq) {
+    result.code = 'MISSING_REQUIRES'; result.component = 'branch';
+    result.state = branchReq[2]; result.missingTypes = [branchReq[3]];
+    const avail = msg.match(/\(available: \[([^\]]*)\]\)/);
+    if (avail) result.availableTypes = avail[1] ? avail[1].split(', ') : [];
+    return result;
+  }
   // "Auto/Branch transitions contain a cycle"
   if (msg.includes('cycle')) { result.code = 'DAG_CYCLE'; return result; }
   // "State X has both auto/branch and external"
@@ -233,16 +259,22 @@ export class Builder<S extends string> {
     return def;
   }
 
-  /** Build without throwing. Returns definition (if valid) + structured errors. */
-  buildAndValidate(): { definition: FlowDefinition<S> | null; errors: ValidationError[] } {
+  /** Build without throwing. Returns definition (if valid) + structured errors + diagnostic graph. */
+  buildAndValidate(): { definition: FlowDefinition<S> | null; errors: ValidationError[]; diagnosticGraph: DataFlowGraph<S> | null } {
     try {
       const def = this.buildInternal();
       const errors = this.collectErrors(def);
-      if (errors.length > 0) return { definition: null, errors };
+      if (errors.length > 0) {
+        let diagnosticGraph: DataFlowGraph<S> | null = null;
+        try {
+          diagnosticGraph = DataFlowGraph.build(def, this.initiallyAvailableKeys, this.externallyProvidedKeys);
+        } catch { /* best-effort */ }
+        return { definition: null, errors, diagnosticGraph };
+      }
       this.finalize(def);
-      return { definition: def, errors: [] };
+      return { definition: def, errors: [], diagnosticGraph: def.dataFlowGraph };
     } catch (e: any) {
-      return { definition: null, errors: [{ code: 'BUILD_ERROR', message: e.message }] };
+      return { definition: null, errors: [{ code: 'BUILD_ERROR', message: e.message }], diagnosticGraph: null };
     }
   }
 
@@ -426,23 +458,24 @@ export class Builder<S extends string> {
       if (t.type === 'external') {
         for (const k of this.externallyProvidedKeys) newAvailable.add(k);
       }
+      const availList = () => `(available: [${[...newAvailable].sort().join(', ')}])`;
       if (t.guard) {
         for (const req of t.guard.requires) {
           if (!newAvailable.has(req))
-            errors.push(`Guard '${t.guard.name}' at ${t.from} requires ${req} but it may not be available`);
+            errors.push(`Guard '${t.guard.name}' at ${t.from} requires ${req} but it may not be available ${availList()}`);
         }
         for (const p of t.guard.produces) newAvailable.add(p);
       }
       if (t.branch) {
         for (const req of t.branch.requires) {
           if (!newAvailable.has(req))
-            errors.push(`Branch '${t.branch.name}' at ${t.from} requires ${req} but it may not be available`);
+            errors.push(`Branch '${t.branch.name}' at ${t.from} requires ${req} but it may not be available ${availList()}`);
         }
       }
       if (t.processor) {
         for (const req of t.processor.requires) {
           if (!newAvailable.has(req))
-            errors.push(`Processor '${t.processor.name}' at ${t.from} -> ${t.to} requires ${req} but it may not be available`);
+            errors.push(`Processor '${t.processor.name}' at ${t.from} -> ${t.to} requires ${req} but it may not be available ${availList()}`);
         }
         for (const p of t.processor.produces) newAvailable.add(p);
       }

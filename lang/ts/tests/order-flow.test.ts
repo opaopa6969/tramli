@@ -230,6 +230,7 @@ describe('OrderFlow', () => {
     const md = def.dataFlowGraph!.toMarkdown();
     expect(md).toContain('# Migration Checklist');
     expect(md).toContain('OrderInit');
+    expect(md).not.toMatch(/\n{3,}/);
   });
 
   it('crossFlowMap', () => {
@@ -260,6 +261,8 @@ describe('OrderFlow', () => {
     expect(java).toContain('OrderInit');
     const rust = SkeletonGenerator.generate(def, 'rust');
     expect(rust).toContain('OrderInit');
+    expect(rust).toContain('fn produces(&self) -> Vec<TypeId> { produces![');
+    expect(rust).not.toMatch(/fn produces\(&self\).*requires!\[/);
   });
 
   it('generateExternalContract', () => {

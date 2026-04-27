@@ -331,7 +331,7 @@ export class DataFlowGraph<S extends string> {
 
   /** Generate Markdown migration checklist. */
   toMarkdown(): string {
-    const lines = ['# Migration Checklist\n'];
+    const lines = ['# Migration Checklist'];
     const order = this.migrationOrder();
     for (let i = 0; i < order.length; i++) {
       const name = order[i];
@@ -346,7 +346,7 @@ export class DataFlowGraph<S extends string> {
     }
     const dead = this.deadData();
     if (dead.size > 0) {
-      lines.push('\n## Dead Data\n');
+      lines.push('', '## Dead Data');
       for (const d of dead) lines.push(`- ${d}`);
     }
     return lines.join('\n') + '\n';
