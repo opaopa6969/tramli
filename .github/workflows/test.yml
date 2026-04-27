@@ -35,4 +35,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - run: cd lang/rust && cargo fmt --all -- --check
+      - run: cd lang/rust && cargo clippy --all-targets -- -D warnings
       - run: cd lang/rust && cargo test
+      - run: cd lang/rust-plugins && cargo fmt --all -- --check
+      - run: cd lang/rust-plugins && cargo clippy --all-targets -- -D warnings
+      - run: cd lang/rust-plugins && cargo test
+
+  rust-msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.75.0
+      - run: cd lang/rust && cargo build
+      - run: cd lang/rust-plugins && cargo build

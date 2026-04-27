@@ -11,3 +11,9 @@ categories = ["data-structures", "rust-patterns"]
 
 [dependencies]
 tramli = { version = "3.6.1", path = "../rust" }
+
+[lints.clippy]
+result_large_err = "allow"
+type_complexity = "allow"
+too_many_arguments = "allow"
+
