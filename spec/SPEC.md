@@ -380,23 +380,21 @@ Parity is guaranteed empirically by the shared-test suite: 125+ tests and 4+ YAM
 
 The following worked example shows every engine algorithm in play. States:
 
-```
-INITIATED (initial)
-  → (auto: BuildRedirect)              → REDIRECTED
-REDIRECTED
-  → (external: CallbackGuard)           → CALLBACK_RECEIVED
-CALLBACK_RECEIVED
-  → (auto: TokenExchange)               → TOKEN_EXCHANGED
-TOKEN_EXCHANGED
-  → (auto: ResolveUser)                 → USER_RESOLVED
-USER_RESOLVED
-  → (branch: RiskBranch)                → COMPLETE | MFA_REQUIRED | BLOCKED
-COMPLETE (terminal)
-MFA_REQUIRED (non-terminal)
-  → (external: MfaGuard)                → COMPLETE
-BLOCKED (terminal)
-RETRIABLE_ERROR (terminal)
-GENERAL_ERROR (terminal)
+```mermaid
+stateDiagram-v2
+    [*] --> INITIATED
+    INITIATED --> REDIRECTED : auto(BuildRedirect)
+    REDIRECTED --> CALLBACK_RECEIVED : external(CallbackGuard)
+    CALLBACK_RECEIVED --> TOKEN_EXCHANGED : auto(TokenExchange)
+    TOKEN_EXCHANGED --> USER_RESOLVED : auto(ResolveUser)
+    USER_RESOLVED --> COMPLETE : branch(RiskBranch)[low_risk]
+    USER_RESOLVED --> MFA_REQUIRED : branch(RiskBranch)[high_risk]
+    USER_RESOLVED --> BLOCKED : branch(RiskBranch)[blocked]
+    MFA_REQUIRED --> COMPLETE : external(MfaGuard)
+    COMPLETE --> [*]
+    BLOCKED --> [*]
+    RETRIABLE_ERROR --> [*]
+    GENERAL_ERROR --> [*]
 ```
 
 With:
@@ -899,23 +897,24 @@ A guard participates in a three-step sequence:
 
 `GuardOutput` has exactly three outcomes. The following state diagram shows how each maps to engine behavior:
 
-```
-resume() starts:
-  + merge externalData into context
-  + select transition
-  + invoke guard.validate(ctx)
-       ├── Accepted(data)
-       │     ├── merge data into context
-       │     ├── post-guard processor (optional)
-       │     ├── transition state
-       │     └── continue auto-chain
-       ├── Rejected(reason)
-       │     ├── incrementGuardFailure(guardName)
-       │     ├── if count >= maxRetries: handleError(…)
-       │     └── return (no state change)
-       └── Expired
-             ├── flow.complete("EXPIRED")
-             └── return
+```mermaid
+flowchart TD
+    START([resume&#40;&#41; starts]) --> MERGE[merge externalData into context]
+    MERGE --> SELECT[select transition]
+    SELECT --> GUARD[invoke guard.validate&#40;ctx&#41;]
+
+    GUARD -->|Accepted| ACC_MERGE[merge data into context]
+    ACC_MERGE --> ACC_PROC[post-guard processor<br/>optional]
+    ACC_PROC --> ACC_TXN[transition state]
+    ACC_TXN --> ACC_CHAIN[continue auto-chain]
+
+    GUARD -->|Rejected| REJ_INC[incrementGuardFailure&#40;guardName&#41;]
+    REJ_INC --> REJ_CHK{count >= maxRetries?}
+    REJ_CHK -->|Yes| REJ_ERR[handleError]
+    REJ_CHK -->|No| REJ_RET[return — no state change]
+
+    GUARD -->|Expired| EXP_COMP[flow.complete&#40;&quot;EXPIRED&quot;&#41;]
+    EXP_COMP --> EXP_RET[return]
 ```
 
 The engine MUST log every guard outcome to `guardLogger` (if installed) — even expired / rejected paths. `guardLogger` entries are a complete audit of guard behavior.
@@ -3014,11 +3013,11 @@ The pipeline is a specialization of the general DSL for strictly sequential flow
 ```mermaid
 graph TB
     subgraph core["tramli Core (shared semantics)"]
-        FD["FlowDefinition\n(immutable, validated)"]
-        FE["FlowEngine\n(zero-logic orchestrator)"]
-        FST["FlowStore\n(persistence boundary)"]
-        FC["FlowContext\n(typed key-value bag)"]
-        FI["FlowInstance\n(execution record)"]
+        FD["FlowDefinition<br/>(immutable, validated)"]
+        FE["FlowEngine<br/>(zero-logic orchestrator)"]
+        FST["FlowStore<br/>(persistence boundary)"]
+        FC["FlowContext<br/>(typed key-value bag)"]
+        FI["FlowInstance<br/>(execution record)"]
         FE -->|startFlow / resumeAndExecute| FD
         FE -->|create / load / save| FST
         FE -->|read / write| FC
@@ -3027,28 +3026,28 @@ graph TB
     end
 
     subgraph java["Java Binding"]
-        JE["org.unlaxer:tramli\nMaven Central"]
-        JVM["JVM / Virtual Threads\n(sync core, I/O on vthreads)"]
+        JE["org.unlaxer:tramli<br/>Maven Central"]
+        JVM["JVM / Virtual Threads<br/>(sync core, I/O on vthreads)"]
         JE --> JVM
     end
 
     subgraph ts["TypeScript Binding"]
-        TSE["@unlaxer/tramli\nnpm (ESM + CJS dual)"]
-        TSAS["Sync core\n(async allowed on External only)"]
+        TSE["@unlaxer/tramli<br/>npm (ESM + CJS dual)"]
+        TSAS["Sync core<br/>(async allowed on External only)"]
         TSE --> TSAS
     end
 
     subgraph rust["Rust Binding"]
-        RE["tramli\ncrates.io"]
-        RST["Sync (no async in SM)\ntokio outside engine"]
+        RE["tramli<br/>crates.io"]
+        RST["Sync (no async in SM)<br/>tokio outside engine"]
         RE --> RST
     end
 
-    core -->|"Java SPI\nClass<?> keys"| java
-    core -->|"TS SPI\nFlowKey<T> branded string"| ts
-    core -->|"Rust SPI\nTypeId + CloneAny"| rust
+    core -->|"Java SPI<br/>Class<?> keys"| java
+    core -->|"TS SPI<br/>FlowKey<T> branded string"| ts
+    core -->|"Rust SPI<br/>TypeId + CloneAny"| rust
 
-    ST["shared-tests/\n125+ tests, 4+ YAML scenarios"]
+    ST["shared-tests/<br/>125+ tests, 4+ YAML scenarios"]
     java --- ST
     ts  --- ST
     rust --- ST
@@ -3160,52 +3159,52 @@ sequenceDiagram
 flowchart TD
     START([build&#40;&#41; called]) --> C1
 
-    C1{"#1 Initial state\nexists?"}
+    C1{"#1 Initial state<br/>exists?"}
     C1 -- No --> E1[/"Error: No initial state found"/]
     C1 -- Yes --> C2
 
-    C2{"#2 All non-terminal\nstates reachable?"}
+    C2{"#2 All non-terminal<br/>states reachable?"}
     C2 -- No --> E2[/"Error: State X not reachable from Y"/]
     C2 -- Yes --> C3
 
-    C3{"#3 Path to terminal\nexists?\n(skip if allowPerpetual)"}
+    C3{"#3 Path to terminal<br/>exists?<br/>(skip if allowPerpetual)"}
     C3 -- No --> E3[/"Error: No path from X to terminal"/]
     C3 -- Yes --> C4
 
-    C4{"#4 Auto+Branch\nsubgraph is DAG?"}
+    C4{"#4 Auto+Branch<br/>subgraph is DAG?"}
     C4 -- No --> E4[/"Error: Auto/Branch cycle detected"/]
     C4 -- Yes --> C5
 
-    C5{"#5 All branch\nlabels have targets?"}
+    C5{"#5 All branch<br/>labels have targets?"}
     C5 -- No --> E5[/"Error: Branch target 'label' invalid"/]
     C5 -- Yes --> C6
 
-    C6{"#6 requires/produces\nchain OK on all paths?"}
+    C6{"#6 requires/produces<br/>chain OK on all paths?"}
     C6 -- No --> E6[/"Error: Guard 'X' requires Y but not available"/]
     C6 -- Yes --> C7
 
-    C7{"#7 No state mixes\nAuto+Branch & External?"}
+    C7{"#7 No state mixes<br/>Auto+Branch & External?"}
     C7 -- No --> E7[/"Error: State X has both auto and external"/]
     C7 -- Yes --> C8
 
-    C8{"#8 Terminal states\nhave no outgoing?"}
+    C8{"#8 Terminal states<br/>have no outgoing?"}
     C8 -- No --> E8[/"Error: Terminal X has outgoing to Y"/]
     C8 -- Yes --> C9
 
-    C9{"#9 Every SubFlow\nterminal has onExit?"}
+    C9{"#9 Every SubFlow<br/>terminal has onExit?"}
     C9 -- No --> E9[/"Error: SubFlow X terminal Y no onExit"/]
     C9 -- Yes --> C10
 
-    C10{"#10 SubFlow nesting\ndepth ≤ 3?"}
+    C10{"#10 SubFlow nesting<br/>depth ≤ 3?"}
     C10 -- No --> E10[/"Error: SubFlow nesting depth > 3"/]
     C10 -- Yes --> C11
 
-    C11{"#11 No SubFlow\ncircular reference?"}
+    C11{"#11 No SubFlow<br/>circular reference?"}
     C11 -- No --> E11[/"Error: Circular subFlow reference"/]
     C11 -- Yes --> BUILD_DFG
 
-    BUILD_DFG["Build DataFlowGraph\n+ warnings list"]
-    BUILD_DFG --> OK([FlowDefinition returned\n&#40;immutable&#41;])
+    BUILD_DFG["Build DataFlowGraph<br/>+ warnings list"]
+    BUILD_DFG --> OK([FlowDefinition returned<br/>&#40;immutable&#41;])
 ```
 
 ## I.5 Plugin SPI — Class Diagram
