@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "issue-broker": {
+      "command": "node",
+      "args": [
+        "/home/opa/work/AskOS-workspace/issue-broker/index.js"
+      ],
+      "env": {
+        "GITHUB_OWNER": "opaopa6969",
+        "CURRENT_REPO": "tramli"
+      }
+    }
+  }
+}
