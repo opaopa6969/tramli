@@ -5,13 +5,13 @@ Async I/O (HTTP calls, DB queries) happens **outside** the SM engine.
 
 ## The Pattern: sync judgment + async execution
 
-```
-┌─────────────┐     ┌──────────────┐     ┌─────────────┐
-│  SM start() │────►│  async I/O   │────►│ SM resume()  │
-│  (sync, μs) │     │ (volta HTTP) │     │  (sync, μs)  │
-│  RECEIVED → │     │              │     │ AUTH_CHECKED →│
-│  → ROUTED   │     │              │     │ → FORWARDED  │
-└─────────────┘     └──────────────┘     └─────────────┘
+```mermaid
+flowchart LR
+    Start["SM start()<br/>(sync, μs)<br/>RECEIVED →<br/>→ ROUTED"]
+    Async["async I/O<br/>(volta HTTP)"]
+    Resume["SM resume()<br/>(sync, μs)<br/>AUTH_CHECKED →<br/>→ FORWARDED"]
+
+    Start --> Async --> Resume
 ```
 
 ### Why TypeScript has optional async — and Java/Rust don't

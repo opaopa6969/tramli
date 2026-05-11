@@ -257,24 +257,18 @@ FlowStore を HTTP/gRPC サービスとして独立させ、どの言語の Flow
 
 ### アーキテクチャ
 
-```
-┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-│ Java Engine  │  │ Rust Engine  │  │  TS Engine   │
-│ (tramli-java)│  │ (tramli-rust)│  │ (tramli-ts)  │
-└──────┬───────┘  └──────┬───────┘  └──────┬───────┘
-       │                 │                  │
-       └────────┬────────┴──────────────────┘
-                │  gRPC / HTTP
-       ┌────────▼────────┐
-       │  FlowStore      │
-       │  Service         │
-       │  (単一実装)      │
-       └────────┬────────┘
-                │
-       ┌────────▼────────┐
-       │  PostgreSQL      │
-       │  (JSONB + locks) │
-       └─────────────────┘
+```mermaid
+flowchart TD
+    Java["Java Engine<br/>(tramli-java)"]
+    Rust["Rust Engine<br/>(tramli-rust)"]
+    TS["TS Engine<br/>(tramli-ts)"]
+    Store["FlowStore Service<br/>（単一実装）"]
+    PG["PostgreSQL<br/>(JSONB + locks)"]
+
+    Java -- "gRPC / HTTP" --> Store
+    Rust -- "gRPC / HTTP" --> Store
+    TS -- "gRPC / HTTP" --> Store
+    Store --> PG
 ```
 
 ### API 案

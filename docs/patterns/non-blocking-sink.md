@@ -6,14 +6,15 @@ decouple the engine from the I/O path.
 
 ## Pattern
 
-```
-Engine thread            Channel              I/O thread
-    │                      │                      │
-    │  emit(event)         │                      │
-    │──send(event)────────>│                      │
-    │  (returns ~μs)       │   recv()             │
-    │                      │─────────────────────>│
-    │                      │                      │  HTTP POST / gRPC / DB write
+```mermaid
+sequenceDiagram
+    participant Engine as Engine thread
+    participant Channel
+    participant IO as I/O thread
+
+    Engine->>Channel: emit(event) / send(event)<br/>(returns ~μs)
+    Channel->>IO: recv()
+    IO->>IO: HTTP POST / gRPC / DB write
 ```
 
 `emit()` stays sync. The channel send is non-blocking. The I/O thread drains the channel

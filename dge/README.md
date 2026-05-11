@@ -66,10 +66,15 @@ Claude Code で話しかけるだけ:
 
 ## DGE のフロー
 
-```
-会話劇で Gap 発見 → Spec 自動生成 → レビュー → 実装
-      ↑                                    |
-      └── もう一回回す / 自動反復 ──────────┘
+```mermaid
+flowchart LR
+    Gap[会話劇で Gap 発見]
+    Spec[Spec 自動生成]
+    Review[レビュー]
+    Impl[実装]
+
+    Gap --> Spec --> Review --> Impl
+    Impl -- "もう一回回す / 自動反復" --> Gap
 ```
 
 ## フォルダ構成

@@ -10,18 +10,12 @@ tramli は**検証カーネル** — フラットなセマンティクス、`req
 
 ## アーキテクチャ
 
-```
-┌─────────────────────────────────────────┐
-│          プラグイン層                     │
-│  audit · eventstore · observability     │
-│  hierarchy · resume · lint · testing    │
-│  diagram · docs · idempotency          │
-├─────────────────────────────────────────┤
-│          tramli コア (凍結)              │
-│  FlowDefinition · FlowEngine           │
-│  requires/produces · build() · 8検査    │
-│  DataFlowGraph · Pipeline              │
-└─────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Plugin["プラグイン層<br/>audit · eventstore · observability<br/>hierarchy · resume · lint · testing<br/>diagram · docs · idempotency"]
+    Core["tramli コア (凍結)<br/>FlowDefinition · FlowEngine<br/>requires/produces · build() · 8検査<br/>DataFlowGraph · Pipeline"]
+
+    Plugin --> Core
 ```
 
 コアは `FlowDefinition` と `FlowEngine` の検証セマンティクスだけを担う。

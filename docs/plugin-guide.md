@@ -10,18 +10,12 @@ Everything else is a plugin.
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────┐
-│          Plugin Layer                    │
-│  audit · eventstore · observability     │
-│  hierarchy · resume · lint · testing    │
-│  diagram · docs · idempotency          │
-├─────────────────────────────────────────┤
-│          tramli core (frozen)           │
-│  FlowDefinition · FlowEngine           │
-│  requires/produces · build() · 8 checks │
-│  DataFlowGraph · Pipeline              │
-└─────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Plugin["Plugin Layer<br/>audit · eventstore · observability<br/>hierarchy · resume · lint · testing<br/>diagram · docs · idempotency"]
+    Core["tramli core (frozen)<br/>FlowDefinition · FlowEngine<br/>requires/produces · build() · 8 checks<br/>DataFlowGraph · Pipeline"]
+
+    Plugin --> Core
 ```
 
 ## Plugin Types (SPI)
