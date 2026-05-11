@@ -61,7 +61,7 @@ Carta+:  requires/produces は遷移の属性
 
 ```mermaid
 stateDiagram-v2
-    PaymentPending --> PaymentConfirmed : paymentReceived\n[requires: PaymentResult]\n{produces: ConfirmedPayment}
+    PaymentPending --> PaymentConfirmed : paymentReceived<br/>[requires: PaymentResult]<br/>{produces: ConfirmedPayment}
 ```
 
 **リヴァイ:** tramliでは processor.requires() をビルド時にintrospectしてる。Cartaでは宣言だから**processor実装と宣言の不一致**が起きうる。
