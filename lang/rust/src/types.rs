@@ -30,6 +30,20 @@ pub trait StateProcessor<S: FlowState>: Send + Sync {
     fn requires(&self) -> Vec<TypeId>;
     fn produces(&self) -> Vec<TypeId>;
     fn process(&self, ctx: &mut FlowContext) -> Result<(), FlowError>;
+
+    /// Like `requires()` but also returns a human-readable name for each TypeId.
+    /// Override this alongside `requires()` using the `requires_named!` macro.
+    /// Default implementation returns empty names.
+    fn requires_named(&self) -> Vec<(TypeId, &'static str)> {
+        self.requires().into_iter().map(|id| (id, "")).collect()
+    }
+
+    /// Like `produces()` but also returns a human-readable name for each TypeId.
+    /// Override this alongside `produces()` using the `data_types_named!` macro.
+    /// Default implementation returns empty names.
+    fn produces_named(&self) -> Vec<(TypeId, &'static str)> {
+        self.produces().into_iter().map(|id| (id, "")).collect()
+    }
 }
 
 /// Guards an external transition. Must not mutate FlowContext.
@@ -38,6 +52,16 @@ pub trait TransitionGuard<S: FlowState>: Send + Sync {
     fn requires(&self) -> Vec<TypeId>;
     fn produces(&self) -> Vec<TypeId>;
     fn validate(&self, ctx: &FlowContext) -> GuardOutput;
+
+    /// Like `requires()` but also returns a human-readable name for each TypeId.
+    fn requires_named(&self) -> Vec<(TypeId, &'static str)> {
+        self.requires().into_iter().map(|id| (id, "")).collect()
+    }
+
+    /// Like `produces()` but also returns a human-readable name for each TypeId.
+    fn produces_named(&self) -> Vec<(TypeId, &'static str)> {
+        self.produces().into_iter().map(|id| (id, "")).collect()
+    }
 }
 
 /// Decides which branch to take.
@@ -45,6 +69,11 @@ pub trait BranchProcessor<S: FlowState>: Send + Sync {
     fn name(&self) -> &str;
     fn requires(&self) -> Vec<TypeId>;
     fn decide(&self, ctx: &FlowContext) -> String;
+
+    /// Like `requires()` but also returns a human-readable name for each TypeId.
+    fn requires_named(&self) -> Vec<(TypeId, &'static str)> {
+        self.requires().into_iter().map(|id| (id, "")).collect()
+    }
 }
 
 /// A single transition in the flow definition.

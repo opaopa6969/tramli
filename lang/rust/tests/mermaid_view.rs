@@ -21,6 +21,8 @@ impl StateProcessor<S> for P1 {
     fn name(&self) -> &str { "p1" }
     fn requires(&self) -> Vec<TypeId> { vec![] }
     fn produces(&self) -> Vec<TypeId> { requires![Num] }
+    fn requires_named(&self) -> Vec<(TypeId, &'static str)> { vec![] }
+    fn produces_named(&self) -> Vec<(TypeId, &'static str)> { requires_named![Num] }
     fn process(&self, ctx: &mut FlowContext) -> Result<(), FlowError> {
         ctx.put(Num(1));
         Ok(())
@@ -32,6 +34,8 @@ impl StateProcessor<S> for P2 {
     fn name(&self) -> &str { "p2" }
     fn requires(&self) -> Vec<TypeId> { requires![Num] }
     fn produces(&self) -> Vec<TypeId> { requires![Str] }
+    fn requires_named(&self) -> Vec<(TypeId, &'static str)> { requires_named![Num] }
+    fn produces_named(&self) -> Vec<(TypeId, &'static str)> { requires_named![Str] }
     fn process(&self, ctx: &mut FlowContext) -> Result<(), FlowError> {
         let n = ctx.get::<Num>()?;
         ctx.put(Str(format!("n={}", n.0)));
@@ -75,9 +79,10 @@ fn view_dataflow_produces_flowchart() {
     assert!(out.contains("produces"), "got: {out}");
     assert!(out.contains("requires"), "got: {out}");
     assert!(!out.contains("stateDiagram"), "got: {out}");
-    // NOTE: Rust DataFlowGraph currently renders type nodes as "unknown" because
-    // TypeId → name resolution is not implemented. This is a separate gap (not in scope
-    // for Issue #47). Java/TS do resolve type names correctly (see respective tests).
+    // Issue #48: type names must resolve to the actual short name, not "unknown"
+    assert!(!out.contains("unknown"), "type names must not render as 'unknown'; got: {out}");
+    assert!(out.contains("Num"), "type 'Num' must appear in data-flow diagram; got: {out}");
+    assert!(out.contains("Str"), "type 'Str' must appear in data-flow diagram; got: {out}");
 }
 
 #[test]

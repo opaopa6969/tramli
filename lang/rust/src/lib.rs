@@ -44,6 +44,23 @@ macro_rules! requires {
     }
 }
 
+/// Like `data_types!` but returns `Vec<(TypeId, &'static str)>` carrying the type name.
+/// Use in `requires_named()` and `produces_named()` implementations.
+#[macro_export]
+macro_rules! data_types_named {
+    ($($t:ty),* $(,)?) => {
+        vec![$((std::any::TypeId::of::<$t>(), std::any::type_name::<$t>())),*]
+    }
+}
+
+/// Alias for `data_types_named!`.
+#[macro_export]
+macro_rules! requires_named {
+    ($($t:ty),* $(,)?) => {
+        vec![$((std::any::TypeId::of::<$t>(), std::any::type_name::<$t>())),*]
+    }
+}
+
 /// Build a `HashMap<TypeId, Box<dyn CloneAny>>` from values.
 /// Use in `GuardOutput::accepted(guard_data![val1, val2])`.
 #[macro_export]
