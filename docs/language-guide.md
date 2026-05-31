@@ -150,3 +150,22 @@ tramli/
 | Node.js / Deno / Bun | `ts/` — optional async for External transitions |
 | Rust / systems programming | `rust/` — zero-cost sync, async outside |
 | Multi-language | All three share the same design. Pick per service |
+
+---
+
+## Sync vs. Async — Summary Table
+
+The following table documents which callbacks are sync vs. async in each language.
+The authoritative reference is `spec/SPEC.md §1.3a` (DD-006, DD-012, DD-013).
+
+| Callback | Java | Rust | TypeScript |
+|---|---|---|---|
+| `StateProcessor.process` | sync | sync | sync (Auto) / async `Promise<void>` (External only) |
+| `TransitionGuard.validate` | sync | sync | sync / async `Promise<GuardOutput>` (External only) |
+| `BranchProcessor.decide` | sync | sync | sync |
+| `FlowEngine.startFlow` | sync | sync | async (`Promise<FlowInstance>`) |
+| `FlowEngine.resumeAndExecute` | sync | sync | async (`Promise<FlowInstance>`) |
+
+**Key rule for TypeScript:** Auto-chain processors **must** remain sync. Only processors and guards on External transitions may be async.
+
+See `docs/async-integration.md` for detailed I/O integration patterns.
