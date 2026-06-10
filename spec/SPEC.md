@@ -79,6 +79,76 @@ Design decisions governing multi-language parity:
 - **DD-022**: Plugin API must be 3-language symmetric.
 - **DD-026**: Systematic parity audit closed all known behavioral drift (P0–P2, plus P1+ edge cases).
 
+## 1.3a Sync vs. Async — Per-Language Processor Support
+
+> **Note for users coming from an async-first background.** Java and Rust processors are **always synchronous**. TypeScript allows async processors, but only on External transitions. This is a deliberate design decision (DD-013 / DD-012 / DD-006) — see below for the rationale and recommended I/O patterns.
+
+The table below summarises which core callbacks are sync vs. async in each language. "sync" means the method returns a plain value / void; "async (Promise)" means the method may return `Promise<void>` in addition to plain void.
+
+| Callback | Java | Rust | TypeScript |
+|---|---|---|---|
+| `StateProcessor.process` | sync | sync | sync (Auto) / async `Promise<void>` (External only) |
+| `TransitionGuard.validate` | sync | sync | sync / async `Promise<GuardOutput>` (External only) |
+| `BranchProcessor.decide` | sync | sync | sync |
+| `FlowEngine.startFlow` | sync | sync | async (`Promise<FlowInstance>`) |
+| `FlowEngine.resumeAndExecute` | sync | sync | async (`Promise<FlowInstance>`) |
+
+**Rule:** in TypeScript, Auto-chain processors **must** be sync. Only processors and guards attached to External transitions may be async (`AsyncStateProcessor` / `AsyncTransitionGuard`). Auto-chain runs multiple transitions in sequence; introducing `await` per step adds unnecessary microtask overhead.
+
+**Why Java and Rust are sync-only (DD-013 / DD-012):**
+- Java 21 virtual threads (`Thread.startVirtualThread`) handle blocking I/O without async syntax. The engine finishes in ~1–2 μs; there is no benefit in making it async.
+- In Rust, `async fn` compiles to a `Future` state machine. Embedding the SM engine inside a `Future` captures `&mut FlowEngine` + `FlowContext` + all processor state across `.await` points, causing stack overflow with 3+ states (documented in `rust/ASYNC_STACK_ISSUE.md`). DD-012 retracted Rust async for this reason.
+
+**Why TypeScript allows async on External (DD-006 / DD-013):**
+- TypeScript `Promise` is heap-allocated (~1 μs overhead). No stack-size issues, no ownership complexity.
+- External transitions already represent an async boundary (the engine suspends and waits for `resumeAndExecute`). Allowing the post-guard processor to be async is natural and adds negligible cost.
+
+### 1.3a.1 Recommended I/O Pattern for Java and Rust
+
+If a processor needs the result of an I/O operation (network call, DB query), perform the I/O **outside** the state machine and inject the result into `FlowContext` before calling `resumeAndExecute`. The External transition is the natural async boundary:
+
+```
+SM startFlow()   (sync, ~1 μs)   → flow stops at first External state
+  ↓
+Async I/O        (HTTP / DB)
+  ↓
+SM resumeAndExecute()  (sync, ~300 ns)  ← inject I/O result as externalData
+```
+
+**Java example:**
+
+```java
+// 1. Start flow — SM runs auto-chain, stops at External state PAYMENT_PENDING
+FlowInstance<OrderState> flow = engine.startFlow(def, null,
+    Map.of(OrderRequest.class, req));
+// flow.currentState() == PAYMENT_PENDING
+
+// 2. Async I/O outside the SM (virtual thread or CompletableFuture)
+PaymentCallback cb = paymentClient.initiate(req.orderId()).get();  // blocking on vthread
+
+// 3. Resume — inject result; SM transitions PAYMENT_PENDING → PAYMENT_CONFIRMED
+engine.resumeAndExecute(flow.id(), def, Map.of(PaymentCallback.class, cb));
+```
+
+**Rust example (tokio):**
+
+```rust
+// 1. Start flow (sync — microseconds)
+let flow_id = engine.start_flow(&def, None, initial_data)?;
+// SM auto-chains: RECEIVED → VALIDATED → stops at External PAYMENT_PENDING
+
+// 2. Async I/O outside the SM
+let cb: PaymentCallback = payment_client.initiate(order_id).await?;
+
+// 3. Resume — inject result (sync — microseconds)
+engine.resume_and_execute(&flow_id, &def,
+    context_data! { PaymentCallback => cb })?;
+```
+
+> **TTL guidance.** Long-running async operations (minutes, hours) should be expressed as separate External states with a generous TTL rather than blocking inside a single resume call. See `docs/patterns/long-lived-flows.md` for the recommended pattern.
+
+Cross-references: `docs/async-integration.md`, `docs/language-guide.md`, DD-006, DD-012, DD-013.
+
 ## 1.4 API Stability Tiers
 
 Three tiers (authoritative source: `docs/api-stability.md`):

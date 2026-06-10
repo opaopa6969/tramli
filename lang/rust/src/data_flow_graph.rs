@@ -498,50 +498,52 @@ impl<S: FlowState> DataFlowGraph<S> {
             }
 
             if let Some(guard) = &t.guard {
-                for req in guard.requires() {
-                    consumers.entry(req).or_default().push(NodeInfo {
+                let named_reqs = guard.requires_named();
+                let named_prods = guard.produces_named();
+                Self::collect_type_names(&named_reqs, type_names);
+                Self::collect_type_names(&named_prods, type_names);
+                for (req, _) in &named_reqs {
+                    consumers.entry(*req).or_default().push(NodeInfo {
                         name: guard.name().to_string(), from_state: t.from, to_state: t.to, kind: "guard",
                     });
-                    all_consumed.insert(req);
+                    all_consumed.insert(*req);
                 }
-                for prod in guard.produces() {
-                    producers.entry(prod).or_default().push(NodeInfo {
+                for (prod, _) in &named_prods {
+                    producers.entry(*prod).or_default().push(NodeInfo {
                         name: guard.name().to_string(), from_state: t.from, to_state: t.to, kind: "guard",
                     });
-                    all_produced.insert(prod);
-                    new_avail.insert(prod);
+                    all_produced.insert(*prod);
+                    new_avail.insert(*prod);
                 }
             }
             if let Some(branch) = &t.branch {
-                for req in branch.requires() {
-                    consumers.entry(req).or_default().push(NodeInfo {
+                let named_reqs = branch.requires_named();
+                Self::collect_type_names(&named_reqs, type_names);
+                for (req, _) in &named_reqs {
+                    consumers.entry(*req).or_default().push(NodeInfo {
                         name: branch.name().to_string(), from_state: t.from, to_state: t.to, kind: "branch",
                     });
-                    all_consumed.insert(req);
+                    all_consumed.insert(*req);
                 }
             }
             if let Some(proc) = &t.processor {
-                for req in proc.requires() {
-                    consumers.entry(req).or_default().push(NodeInfo {
+                let named_reqs = proc.requires_named();
+                let named_prods = proc.produces_named();
+                Self::collect_type_names(&named_reqs, type_names);
+                Self::collect_type_names(&named_prods, type_names);
+                for (req, _) in &named_reqs {
+                    consumers.entry(*req).or_default().push(NodeInfo {
                         name: proc.name().to_string(), from_state: t.from, to_state: t.to, kind: "processor",
                     });
-                    all_consumed.insert(req);
+                    all_consumed.insert(*req);
                 }
-                for prod in proc.produces() {
-                    producers.entry(prod).or_default().push(NodeInfo {
+                for (prod, _) in &named_prods {
+                    producers.entry(*prod).or_default().push(NodeInfo {
                         name: proc.name().to_string(), from_state: t.from, to_state: t.to, kind: "processor",
                     });
-                    all_produced.insert(prod);
-                    new_avail.insert(prod);
+                    all_produced.insert(*prod);
+                    new_avail.insert(*prod);
                 }
-            }
-
-            // Collect type names from requires/produces
-            if let Some(proc) = &t.processor {
-                Self::collect_type_names(proc.requires(), proc.produces(), type_names);
-            }
-            if let Some(guard) = &t.guard {
-                Self::collect_type_names(guard.requires(), guard.produces(), type_names);
             }
 
             Self::traverse(def, t.to, &new_avail, externally_provided, state_avail, producers, consumers,
@@ -549,9 +551,12 @@ impl<S: FlowState> DataFlowGraph<S> {
         }
     }
 
-    fn collect_type_names(_requires: Vec<TypeId>, _produces: Vec<TypeId>, _type_names: &mut HashMap<TypeId, String>) {
-        // TypeId doesn't carry names at runtime in Rust.
-        // Names are registered separately via register_type_name().
+    fn collect_type_names(named: &[(TypeId, &'static str)], type_names: &mut HashMap<TypeId, String>) {
+        for &(id, name) in named {
+            if !name.is_empty() {
+                type_names.entry(id).or_insert_with(|| name.to_string());
+            }
+        }
     }
 
     /// Register a human-readable name for a TypeId (for Mermaid output).

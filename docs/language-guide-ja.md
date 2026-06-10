@@ -94,3 +94,34 @@ let auth_result = volta_client.check_auth(&req).await;
 | Node.js / Deno / Bun | `ts/` — External 遷移に optional async |
 | Rust / システムプログラミング | `rust/` — ゼロコスト sync, async は外側 |
 | マルチ言語 | 3つとも同じ設計。サービスごとに選択 |
+
+---
+
+## Sync vs. Async — 言語別サポート一覧
+
+各言語で sync / async が適用されるコールバックの一覧。
+正規リファレンスは `spec/SPEC.md §1.3a`（DD-006、DD-012、DD-013）。
+
+| コールバック | Java | Rust | TypeScript |
+|---|---|---|---|
+| `StateProcessor.process` | sync | sync | sync（Auto）/ async `Promise<void>`（External のみ） |
+| `TransitionGuard.validate` | sync | sync | sync / async `Promise<GuardOutput>`（External のみ） |
+| `BranchProcessor.decide` | sync | sync | sync |
+| `FlowEngine.startFlow` | sync | sync | async（`Promise<FlowInstance>`） |
+| `FlowEngine.resumeAndExecute` | sync | sync | async（`Promise<FlowInstance>`） |
+
+**TypeScript の重要ルール:** Auto-chain の processor は**必ず sync** にすること。async を使用できるのは External 遷移に付属する processor / guard のみ。
+
+**Java / Rust で I/O が必要な場合のパターン:**
+I/O の結果をステートマシンの外で取得し、`resumeAndExecute` の `externalData` として注入する。
+External 遷移が async 境界として機能する:
+
+```
+SM startFlow()          (sync, ~1 μs) → External state で停止
+  ↓
+Async I/O               (HTTP / DB)
+  ↓
+SM resumeAndExecute()   (sync, ~300 ns) ← I/O 結果を externalData として注入
+```
+
+詳細なパターンは `docs/async-integration.md` を参照。
