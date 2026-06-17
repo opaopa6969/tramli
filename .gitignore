@@ -19,3 +19,12 @@ lang/rust-plugins/target/
 # OS
 .DS_Store
 node_modules/
+target/
+build/
+out/
+__pycache__/
+dist/
+.gradle/
+.next/
+.nuxt/
+bower_components/
