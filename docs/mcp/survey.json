@@ -1,0 +1,136 @@
+{
+  "repo": "tramli",
+  "surveyed_at": "2026-08-21T22:56:26Z",
+  "kind": "library",
+  "summary": "3言語（Java/TypeScript/Rust）で実装された制約付きフローエンジン。ステートマシンの不正な遷移をビルド時8項目検証で構造的に排除し、requires/produces 契約でデータフローを静的検証する。npm/crates.io/Maven Central で公開中のライブラリ。",
+  "decision": "skill-only",
+  "decision_reason": "tramli は import して使うライブラリであり、起動1秒以内の純粋関数の集合（build()検証、Mermaid生成、DataFlowGraph分析、SkeletonGenerator）が中心。常駐プロセスを立てる意義が薄い（状態を持たず、重いモデル読み込みも不要）。ただしエージェントが tramli コードを正しく書くための設計知識（8項目検証の意味、3種遷移の使い分け、requires/produces契約、Pipeline vs FlowDefinition の選択）は手続き知識として配る価値が高い。既存の viz-server（WebSocket）は開発時デバッグ用であり独立サービス化されていない。",
+  "existing": {
+    "http_api": false,
+    "cli": false,
+    "mcp": false,
+    "healthz": false,
+    "volta_manifest": false,
+    "hosted_url": null
+  },
+  "proposed_namespace": "tramli",
+  "capabilities": [
+    {
+      "verb": "FlowDefinition を8項目検証する",
+      "kind": "skill",
+      "name": "validate-flow",
+      "locality": "repo",
+      "note": "エージェントが tramli コードを書く際、build() が何をチェックするか、どんなエラーが出るかを知っている必要がある。tool 化（JSON定義→検証結果）は TS/Rust のランタイムを呼ぶ必要があるが、 skill としては『定義を読んで検証可能性を判断する手順』を配る"
+    },
+    {
+      "verb": "フロー定義からMermaid図を生成する",
+      "kind": "skill",
+      "name": "generate-diagram",
+      "locality": "repo",
+      "note": "MermaidGenerator.generate() / generateDataFlow() の使い方。tool 化するには TS/Rust ランタイム実行が必要だが、コード生成ガイドとして skill で十分"
+    },
+    {
+      "verb": "DataFlowGraph でデータ依存を分析する",
+      "kind": "skill",
+      "name": "analyze-dataflow",
+      "locality": "repo",
+      "note": "availableAt/producersOf/consumersOf/deadData/lifetime/pruningHints/impactOf 等の豊富な API。エージェントが tramli コードを書く・レビューする際に有用な分析知識"
+    },
+    {
+      "verb": "3言語でProcessorスケルトンを生成する",
+      "kind": "skill",
+      "name": "generate-skeleton",
+      "locality": "repo",
+      "note": "SkeletonGenerator.generate(def, lang) で Java/TS/Rust のひな形生成。エージェントが新規フローを書くときの最初のステップとして配る"
+    },
+    {
+      "verb": "FlowDefinition と Pipeline を選択する",
+      "kind": "skill",
+      "name": "choose-flow-pattern",
+      "locality": "repo",
+      "note": "外部イベントがあるかないかで FlowDefinition vs Pipeline を選ぶ判断基準、3種遷移（Auto/External/Branch）の使い分け"
+    },
+    {
+      "verb": "能力の仕様",
+      "kind": "resource",
+      "name": "spec",
+      "uri": "tramli://spec"
+    },
+    {
+      "verb": "使い方ガイド",
+      "kind": "resource",
+      "name": "guide",
+      "uri": "tramli://guide"
+    },
+    {
+      "verb": "APIクックブック",
+      "kind": "resource",
+      "name": "cookbook",
+      "uri": "tramli://cookbook"
+    },
+    {
+      "verb": "3言語対応表",
+      "kind": "resource",
+      "name": "compat-matrix",
+      "uri": "tramli://compat-matrix"
+    },
+    {
+      "verb": "非同期統合パターン",
+      "kind": "resource",
+      "name": "async-patterns",
+      "uri": "tramli://async-patterns"
+    }
+  ],
+  "composition_examples": [
+    "エージェントが tramli skill で設計 → tramli__generate-skeleton でコード骨組み生成 → エージェントが processor を埋める → build() で検証",
+    "volta-gateway の要求仕様 → tramli skill で FlowDefinition 設計 → Rust コード生成 → volta__svc_deploy でデプロイ",
+    "tramli DataFlowGraph 分析知識 → 他サービスのデータパイプライン設計レビューに適用"
+  ],
+  "dependencies": [
+    {
+      "repo": "volta-gateway",
+      "direction": "provides_to",
+      "capability": "tramli-rust (crates.io) — ステートマシンエンジンとして request lifecycle を駆動",
+      "exists_now": true,
+      "note": "volta-gateway は tramli v0.1.0 (crates.io) を使用。review-volta-gateway.md に実績記録あり"
+    },
+    {
+      "repo": "tramli-appspec",
+      "direction": "provides_to",
+      "capability": "tramli Java ライブラリ — spec-driven flow design の基盤",
+      "exists_now": true,
+      "note": "tramli-appspec は tramli 上に構築された spec-driven 設計ツール"
+    },
+    {
+      "repo": "tramli-rust",
+      "direction": "provides_to",
+      "capability": "tramli Rust 実装 — 別リポジトリとして crates.io 公開",
+      "exists_now": true,
+      "note": "lang/rust/ 配下の実装。volta-gateway 等が依存"
+    },
+    {
+      "repo": "carta",
+      "direction": "depends_on",
+      "capability": "階層状態機械 with data-flow verification — tramli は flat enum を意図的に選択(DG-021)、carta は階層を許容",
+      "exists_now": true,
+      "note": "設計思想が対照的。DGE セッション dge-session-harel-carta.md で両者の対比あり"
+    }
+  ],
+  "library_serve": {
+    "needed": false,
+    "new_work": [],
+    "runtime": "node",
+    "estimated_effort": "S"
+  },
+  "risks": [
+    "tramli は3言語実装のため、MCP サーバ化する場合は TS 実装をホストする形になるが、Rust/Java ユーザーに同一体験を提供できない",
+    "build() 検証や Mermaid 生成を tool 化するにはランタイムで FlowDefinition を構築する必要があり、JSON→FlowDefinition のデシリアライズ層が新規に必要",
+    "viz-server は WebSocket のみで /healthz も /mcp もない。独立サービス化には HTTP レイヤの追加が必要",
+    "API は Tier-1 (安定) と Tier-2/3 (発展中) があり、tool/resource で公開する範囲の安定性判断が必要"
+  ],
+  "open_questions": [
+    "tramli-appspec は既に MCP 化されているか？（catalog には library として登録されているが backend=null）",
+    "エージェントが tramli コード生成を支援するうえで、build() の検証結果をプログラム的に取得できる API はあるか？（ValidationError の構造化は TS に見えるが Rust/Java ではどうか）",
+    "viz-server を独立サービスとして volta に参加させる計画はあるか？（DD-027 で complete 扱いだが hosted URL はない）"
+  ]
+}

@@ -28,3 +28,6 @@ dist/
 .next/
 .nuxt/
 bower_components/
+
+# MCP server config (contains personal absolute paths)
+.mcp.json

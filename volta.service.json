@@ -1,0 +1,20 @@
+{
+  "id": "tramli",
+  "name": "Tramli",
+  "description": "Constrained flow engine — state machines that prevent invalid transitions (Java, TypeScript, Rust). Skill-only: design knowledge distributed via volta-mcp skills.",
+  "type": "library",
+  "hostname": "tramli.unlaxer.org",
+  "port": 9299,
+  "runtime": "systemd",
+  "exec_start": "/bin/true",
+  "auth": "public",
+  "tags": ["flow-engine", "state-machine", "java", "typescript", "rust", "library", "mcp", "skill-only", "opa"],
+  "repo_url": "https://github.com/opaopa6969/tramli",
+  "icon": "si-openjdk",
+  "mcp": {
+    "enabled": false,
+    "namespace": "tramli",
+    "min_role": "VIEWER",
+    "description": "skill-only: tramli design knowledge via volta-mcp skills (validate-flow, generate-diagram, analyze-dataflow, generate-skeleton, choose-flow-pattern)"
+  }
+}
