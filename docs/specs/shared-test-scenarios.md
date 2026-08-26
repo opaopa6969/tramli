@@ -442,3 +442,16 @@
 - pluginDef.name = "validation"
 - extended = mainDef.withPlugin(A, B, pluginDef)
 - Expect: extended.name = "order+plugin:validation"
+
+---
+
+## S31: SubFlow Exit Completeness
+
+**Main states**: A(initial) → DONE(terminal)
+**SubFlow states**: INIT(initial) → DONE(terminal)
+**Setup**: Attach the SubFlow at A without an `onExit` mapping; add A→DONE auto so all other structural checks pass.
+
+**Test: s31_subflow_exit_missing_build_fails**
+- Build the parent definition
+- Expect: build fails with `SubFlow 'sub-incomplete' at A has terminal state DONE/Done with no onExit mapping`
+- Expect: structured validation reports `SUB_FLOW_EXIT_INCOMPLETE` where structured error codes are exposed

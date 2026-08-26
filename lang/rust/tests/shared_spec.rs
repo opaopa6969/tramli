@@ -757,3 +757,72 @@ mod s30 {
         assert_eq!(adapter.name(), "validation", "SubFlowAdapter name should match definition name");
     }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// S31: SubFlow exit mappings must cover every terminal state
+// ═══════════════════════════════════════════════════════════════
+
+mod s31 {
+    use super::*;
+    use tramli::sub_flow::SubFlowAdapter;
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    enum M { A, Done }
+    impl FlowState for M {
+        fn is_terminal(&self) -> bool { matches!(self, Self::Done) }
+        fn is_initial(&self) -> bool { matches!(self, Self::A) }
+        fn all_states() -> &'static [Self] { &[Self::A, Self::Done] }
+    }
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    enum Sub { Init, Done }
+    impl FlowState for Sub {
+        fn is_terminal(&self) -> bool { matches!(self, Self::Done) }
+        fn is_initial(&self) -> bool { matches!(self, Self::Init) }
+        fn all_states() -> &'static [Self] { &[Self::Init, Self::Done] }
+    }
+
+    fn sub_definition() -> Arc<FlowDefinition<Sub>> {
+        Arc::new(
+            Builder::<Sub>::new("sub-incomplete")
+                .from(Sub::Init).auto(Sub::Done, Noop)
+                .build()
+                .unwrap(),
+        )
+    }
+
+    #[test]
+    fn s31_subflow_exit_missing_build_fails() {
+        let result = Builder::<M>::new("bad")
+            .from(M::A)
+                .sub_flow(Box::new(SubFlowAdapter::new(sub_definition())))
+                .end_sub_flow()
+            .from(M::A).auto(M::Done, Noop)
+            .build();
+
+        match result {
+            Ok(_) => panic!("build should reject a missing SubFlow on_exit mapping"),
+            Err(error) => assert!(
+                error.message.contains(
+                    "SubFlow 'sub-incomplete' at A has terminal state Done with no onExit mapping"
+                ),
+                "unexpected error: {}",
+                error.message,
+            ),
+        }
+
+        let validation = Builder::<M>::new("bad-structured")
+            .from(M::A)
+                .sub_flow(Box::new(SubFlowAdapter::new(sub_definition())))
+                .end_sub_flow()
+            .from(M::A).auto(M::Done, Noop)
+            .build_and_validate();
+        assert!(validation.definition.is_none());
+        assert!(validation.errors.iter().any(|error| {
+            error.code == "SUB_FLOW_EXIT_INCOMPLETE"
+                && error.message.contains(
+                    "SubFlow 'sub-incomplete' at A has terminal state Done with no onExit mapping"
+                )
+        }));
+    }
+}

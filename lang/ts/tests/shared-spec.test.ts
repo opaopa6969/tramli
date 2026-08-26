@@ -649,3 +649,34 @@ describe('S23: withPlugin Preserves Exception Routes', () => {
     expect(flow.isCompleted).toBe(true);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════
+// S31: SubFlow Exit Completeness
+// ═══════════════════════════════════════════════════════════════
+
+describe('S31: SubFlow Exit Completeness', () => {
+  type Main = 'A' | 'DONE';
+  const mainConfig: Record<Main, StateConfig> = {
+    A: { initial: true },
+    DONE: { terminal: true },
+  };
+
+  type Sub = 'INIT' | 'DONE';
+  const subConfig: Record<Sub, StateConfig> = {
+    INIT: { initial: true },
+    DONE: { terminal: true },
+  };
+
+  it('s31_subflow_exit_missing_build_fails', () => {
+    const subDef = Tramli.define<Sub>('sub-incomplete', subConfig)
+      .from('INIT').auto('DONE', noop('SubNoop'))
+      .build();
+
+    expect(() =>
+      Tramli.define<Main>('bad', mainConfig)
+        .from('A').subFlow(subDef).endSubFlow()
+        .from('A').auto('DONE', noop('MainNoop'))
+        .build()
+    ).toThrow("SubFlow 'sub-incomplete' at A has terminal state DONE with no onExit mapping");
+  });
+});

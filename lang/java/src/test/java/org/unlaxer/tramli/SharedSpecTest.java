@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Shared test scenarios from docs/specs/shared-test-scenarios.md.
- * Covers S06, S08, S09, S10, S11, S14, S15, S17, S21, S22, S23, S30.
+ * Covers S06, S08, S09, S10, S11, S14, S15, S17, S21, S22, S23, S30, S31.
  */
 class SharedSpecTest {
 
@@ -72,6 +72,22 @@ class SharedSpecTest {
         PL_INIT(false, true), PL_DONE(true, false);
         private final boolean terminal, initial;
         PluginSub(boolean t, boolean i) { terminal = t; initial = i; }
+        @Override public boolean isTerminal() { return terminal; }
+        @Override public boolean isInitial() { return initial; }
+    }
+
+    enum SubFlowValidationMain implements FlowState {
+        A(false, true), DONE(true, false);
+        private final boolean terminal, initial;
+        SubFlowValidationMain(boolean t, boolean i) { terminal = t; initial = i; }
+        @Override public boolean isTerminal() { return terminal; }
+        @Override public boolean isInitial() { return initial; }
+    }
+
+    enum SubFlowValidationSub implements FlowState {
+        INIT(false, true), DONE(true, false);
+        private final boolean terminal, initial;
+        SubFlowValidationSub(boolean t, boolean i) { terminal = t; initial = i; }
         @Override public boolean isTerminal() { return terminal; }
         @Override public boolean isInitial() { return initial; }
     }
@@ -663,6 +679,30 @@ class SharedSpecTest {
         var extended = mainDef.withPlugin(PluginMain.CREATED, PluginMain.PAYMENT, pluginDef);
 
         assertEquals("order+plugin:validation", extended.name());
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  S31: SubFlow Exit Completeness
+    // ═══════════════════════════════════════════════════════════
+
+    @Test
+    void s31_subflow_exit_missing_build_fails() {
+        var subDef = Tramli.define("sub-incomplete", SubFlowValidationSub.class)
+                .from(SubFlowValidationSub.INIT)
+                .auto(SubFlowValidationSub.DONE, noop("SubNoop"))
+                .build();
+
+        var error = assertThrows(FlowException.class, () ->
+                Tramli.define("bad", SubFlowValidationMain.class)
+                        .from(SubFlowValidationMain.A)
+                            .subFlow(subDef)
+                            .endSubFlow()
+                        .from(SubFlowValidationMain.A)
+                            .auto(SubFlowValidationMain.DONE, noop("MainNoop"))
+                        .build());
+
+        assertTrue(error.getMessage().contains(
+                "SubFlow 'sub-incomplete' at A has terminal state DONE with no onExit mapping"));
     }
 
     // ═══════════════════════════════════════════════════════════
