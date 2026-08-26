@@ -96,12 +96,20 @@ describe('S08: onStateEnter / onStateExit', () => {
   };
 
   it('s08_enter_exit_actions', async () => {
+    const chooseB = {
+      name: 'ChooseB',
+      requires: [],
+      decide: () => 'to-b',
+    };
+
     const def = Tramli.define<S08>('s08', s08Config)
       .onStateExit('A', (ctx) => ctx.put(ExitedA, true))
       .onStateEnter('B', (ctx) => ctx.put(EnteredB, true))
       .onStateExit('B', (ctx) => ctx.put(ExitedB, true))
       .onStateEnter('C', (ctx) => ctx.put(EnteredC, true))
-      .from('A').auto('B', noop('Noop1'))
+      .from('A').branch(chooseB)
+        .to('B', 'to-b')
+        .endBranch()
       .from('B').auto('C', noop('Noop2'))
       .build();
 

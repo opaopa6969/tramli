@@ -388,10 +388,8 @@ executeAutoChain(flow):
 Three dispatchers:
 
 - `dispatchAuto(flow)`: snapshot context → run processor → verifyProduces (if `strictMode`) → on error restore + `handleError` → fireExit → `transitionTo` → fireEnter → `recordTransition`. Returns 1 on success; ERROR on exception.
-- `dispatchBranch(flow)`: snapshot context → `branch.decide(ctx)` → look up `branchTargets[label]` (else `UNKNOWN_BRANCH`) → run branch-target processor (if present) → on error restore + `handleError` → `transitionTo` → `recordTransition`. Returns 1.
+- `dispatchBranch(flow)`: snapshot context → `branch.decide(ctx)` → look up `branchTargets[label]` (else `UNKNOWN_BRANCH`) → run branch-target processor (if present) → on error restore + `handleError` → fireExit → `transitionTo` → fireEnter → `recordTransition`. Returns 1.
 - `dispatchSubFlow(flow)`: start the sub-flow's own auto-chain; stop if the sub-flow stops on External. On sub-flow completion, map its terminal via `onExit(terminalName, parentState)` and continue parent chain.
-
-> **DD-026 #17 note.** Java does **not** fire enter / exit actions on branch transitions. TypeScript and Rust do. This is considered a Java-side bug awaiting a future parity fix; current behavior is documented here so test suites can account for it.
 
 ## 2.8 handleError — Algorithm
 
@@ -442,7 +440,6 @@ Internal additional checks: SubFlow exit completeness (#9), SubFlow nesting dept
 
 Parity is guaranteed empirically by the shared-test suite: 125+ tests and 4+ YAML scenarios exercise the same inputs and compare the same observable outputs (`currentState`, `isCompleted`, `exitState`, `context[T]`, `guardFailureCount`, `guardFailureCountFor(name)`) across Java, TS, and Rust. Known deviations are exactly:
 
-- Java does not fire enter / exit actions on branch transitions (DD-026 #17, §2.7).
 - TS `FlowEngine.startFlow` / `resumeAndExecute` may be awaited on External transitions with async processors (§6.2).
 - Rust treats `store.clear()` as capacity-preserving (see §3.5); Java / TS may differ.
 
@@ -1001,8 +998,6 @@ store.recordTransition(…)
 ```
 
 Actions are pure-data operations (metrics emission, context tagging). They must not throw — a thrown action is equivalent to a processor throwing (caught by the engine's snapshot / restore path).
-
-Parity note: Java currently omits enter / exit actions on branch transitions (§2.7, DD-026 #17).
 
 ## 4.7.1 Reserved Names and Sentinels
 
@@ -2618,7 +2613,6 @@ When a change is proposed, assess impact using this matrix:
 
 ## 12.9 Known Issues / Caveats (As of v3.6+)
 
-- **DD-026 #17**: Java does not fire enter / exit actions on Branch transitions. Awaiting parity fix.
 - **Rust `SubFlowRunner` breaking change** at v1.8.0: runner is a stateless factory; state moves to `SubFlowInstance`. Migration notes in CHANGELOG.
 - **TS ESM + CJS dual export** (v1.5.3+): some tooling cache Node's `require.resolve` stale — restart after upgrade.
 - **Per-state timeout accuracy on restored flows** depends on `stateEnteredAt` persistence in the store (§3.7).
@@ -3364,4 +3358,3 @@ classDiagram
 ---
 
 *End of specification.*
-

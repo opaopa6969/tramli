@@ -209,8 +209,16 @@ class SharedSpecTest {
 
     @Test
     void s08_enter_exit_actions() {
+        BranchProcessor chooseB = new BranchProcessor() {
+            @Override public String name() { return "ChooseB"; }
+            @Override public Set<Class<?>> requires() { return Set.of(); }
+            @Override public String decide(FlowContext ctx) { return "to-b"; }
+        };
+
         var def = Tramli.define("s08", ThreeState.class)
-                .from(ThreeState.A).auto(ThreeState.B, noop("Noop1"))
+                .from(ThreeState.A).branch(chooseB)
+                    .to(ThreeState.B, "to-b")
+                    .endBranch()
                 .from(ThreeState.B).auto(ThreeState.C, noop("Noop2"))
                 .onStateExit(ThreeState.A, ctx -> ctx.put(ExitedA.class, new ExitedA(true)))
                 .onStateEnter(ThreeState.B, ctx -> ctx.put(EnteredB.class, new EnteredB(true)))

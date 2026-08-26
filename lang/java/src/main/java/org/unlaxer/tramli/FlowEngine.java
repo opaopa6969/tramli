@@ -308,7 +308,9 @@ public final class FlowEngine {
                 .orElse(t);
         if (specific.processor() != null) specific.processor().process(flow.context());
         S from = flow.currentState();
+        fireExit(flow, from);
         flow.transitionTo(target);
+        fireEnter(flow, target);
         store.recordTransition(flow.id(), from, target, branch.name() + ":" + label, flow.context());
         logTransition(flow.id(), flow.definition().name(), from, target, branch.name() + ":" + label, start);
         return 1;

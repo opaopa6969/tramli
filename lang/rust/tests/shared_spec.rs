@@ -84,6 +84,13 @@ mod s08 {
     #[derive(Clone)] struct ExitedB(bool);
     #[derive(Clone)] struct EnteredC(bool);
 
+    struct ChooseB;
+    impl BranchProcessor<S> for ChooseB {
+        fn name(&self) -> &str { "ChooseB" }
+        fn requires(&self) -> Vec<TypeId> { vec![] }
+        fn decide(&self, _ctx: &FlowContext) -> String { "to-b".into() }
+    }
+
     #[test]
     fn s08_enter_exit_actions() {
         let def = Arc::new(
@@ -92,7 +99,9 @@ mod s08 {
                 .on_state_enter(S::B, |ctx| { ctx.put(EnteredB(true)); })
                 .on_state_exit(S::B, |ctx| { ctx.put(ExitedB(true)); })
                 .on_state_enter(S::C, |ctx| { ctx.put(EnteredC(true)); })
-                .from(S::A).auto(S::B, Noop)
+                .from(S::A).branch(ChooseB)
+                    .to(S::B, "to-b")
+                    .end_branch()
                 .from(S::B).auto(S::C, Noop)
                 .build()
                 .unwrap(),
