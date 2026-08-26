@@ -96,12 +96,20 @@ describe('S08: onStateEnter / onStateExit', () => {
   };
 
   it('s08_enter_exit_actions', async () => {
+    const chooseB = {
+      name: 'ChooseB',
+      requires: [],
+      decide: () => 'to-b',
+    };
+
     const def = Tramli.define<S08>('s08', s08Config)
       .onStateExit('A', (ctx) => ctx.put(ExitedA, true))
       .onStateEnter('B', (ctx) => ctx.put(EnteredB, true))
       .onStateExit('B', (ctx) => ctx.put(ExitedB, true))
       .onStateEnter('C', (ctx) => ctx.put(EnteredC, true))
-      .from('A').auto('B', noop('Noop1'))
+      .from('A').branch(chooseB)
+        .to('B', 'to-b')
+        .endBranch()
       .from('B').auto('C', noop('Noop2'))
       .build();
 
@@ -639,5 +647,36 @@ describe('S23: withPlugin Preserves Exception Routes', () => {
 
     expect(flow.currentState).toBe('SPECIAL_ERR');
     expect(flow.isCompleted).toBe(true);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// S31: SubFlow Exit Completeness
+// ═══════════════════════════════════════════════════════════════
+
+describe('S31: SubFlow Exit Completeness', () => {
+  type Main = 'A' | 'DONE';
+  const mainConfig: Record<Main, StateConfig> = {
+    A: { initial: true },
+    DONE: { terminal: true },
+  };
+
+  type Sub = 'INIT' | 'DONE';
+  const subConfig: Record<Sub, StateConfig> = {
+    INIT: { initial: true },
+    DONE: { terminal: true },
+  };
+
+  it('s31_subflow_exit_missing_build_fails', () => {
+    const subDef = Tramli.define<Sub>('sub-incomplete', subConfig)
+      .from('INIT').auto('DONE', noop('SubNoop'))
+      .build();
+
+    expect(() =>
+      Tramli.define<Main>('bad', mainConfig)
+        .from('A').subFlow(subDef).endSubFlow()
+        .from('A').auto('DONE', noop('MainNoop'))
+        .build()
+    ).toThrow("SubFlow 'sub-incomplete' at A has terminal state DONE with no onExit mapping");
   });
 });

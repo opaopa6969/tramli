@@ -391,6 +391,7 @@ fn validate<S: FlowState>(def: &FlowDefinition<S>, name: &str, perpetual: bool, 
     check_branch_completeness(def, &mut errors);
     check_requires_produces(def, initially_available, externally_provided, &mut errors);
     check_auto_external_conflict(def, &mut errors);
+    check_sub_flow_exit_completeness(def, &mut errors);
     check_sub_flow_nesting_depth(def, &mut errors, 0);
     check_sub_flow_circular_ref(def, &mut errors, &mut Vec::new());
     check_terminal_no_outgoing(def, &mut errors);
@@ -460,6 +461,14 @@ fn collect_errors<S: FlowState>(def: &FlowDefinition<S>, _name: &str, perpetual:
         for msg in errs {
             let st = parse_state_from_msg(&msg);
             result.push(ValidationError { code: "AUTO_EXTERNAL_CONFLICT".into(), message: msg, state: st });
+        }
+    }
+
+    {
+        let mut errs = Vec::new();
+        check_sub_flow_exit_completeness(def, &mut errs);
+        for msg in errs {
+            result.push(ValidationError { code: "SUB_FLOW_EXIT_INCOMPLETE".into(), message: msg, state: None });
         }
     }
 
@@ -706,6 +715,20 @@ fn check_terminal_no_outgoing<S: FlowState>(def: &FlowDefinition<S>, errors: &mu
     for t in &def.transitions {
         if t.from.is_terminal() && t.transition_type != TransitionType::SubFlow {
             errors.push(format!("Terminal state {:?} has outgoing transition to {:?}", t.from, t.to));
+        }
+    }
+}
+
+fn check_sub_flow_exit_completeness<S: FlowState>(def: &FlowDefinition<S>, errors: &mut Vec<String>) {
+    for transition in &def.transitions {
+        let Some(sub_flow) = transition.sub_flow.as_ref() else { continue };
+        for terminal in sub_flow.runner.terminal_names() {
+            if !sub_flow.exit_mappings.contains_key(&terminal) {
+                errors.push(format!(
+                    "SubFlow '{}' at {:?} has terminal state {} with no onExit mapping",
+                    sub_flow.runner.name(), transition.from, terminal,
+                ));
+            }
         }
     }
 }
