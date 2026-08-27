@@ -1,9 +1,7 @@
 use std::any::TypeId;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tramli::*;
-use tramli::sub_flow::{SubFlowRunner, SubFlowInstance};
 
 // ─── Error Path states ─────────────────────────────────
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -251,32 +249,100 @@ fn sub_flow_with_external_resume() {
     let f = engine.store.get(&fid).unwrap();
     assert_eq!(f.current_state(), M2::Start); // parent still at Start
     assert!(!f.is_completed());
+    assert_eq!(f.state_path(), vec!["Start", "Wait"]);
+    assert_eq!(f.state_path_string(), "Start/Wait");
+    assert_eq!(f.waiting_for(), requires![WaitData]);
 
-    // Resume — need to call sub-flow's resume through engine
-    // Currently engine doesn't delegate resume to sub-flow automatically,
-    // so we test the SubFlowAdapter directly
-    let sub_adapter = tramli::sub_flow::SubFlowAdapter::new(
-        Arc::new(Builder::<SubExt>::new("sub-ext-2")
-            .ttl(Duration::from_secs(60))
-            .initially_available(requires![D])
-            .from(SubExt::Init).auto(SubExt::Wait, WaitProc)
-            .from(SubExt::Wait).external(SubExt::Done, WaitGuard)
-            .build().unwrap()));
+    engine.resume_and_execute(&fid, vec![]).unwrap();
 
-    let mut ctx = FlowContext::new("test".into());
-    ctx.put(D("hello".into()));
+    let f = engine.store.get(&fid).unwrap();
+    assert_eq!(f.current_state(), M2::Done);
+    assert!(f.is_completed());
+    assert_eq!(f.state_path(), vec!["Done"]);
+    assert!(f.waiting_for().is_empty());
+}
 
-    // Create instance (stateless runner → stateful instance)
-    let mut instance = sub_adapter.create_instance();
+#[test]
+fn nested_sub_flow_state_path_and_resume() {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    enum Inner { Init, Wait, Done }
+    impl FlowState for Inner {
+        fn is_terminal(&self) -> bool { matches!(self, Self::Done) }
+        fn is_initial(&self) -> bool { matches!(self, Self::Init) }
+        fn all_states() -> &'static [Self] { &[Self::Init, Self::Wait, Self::Done] }
+    }
 
-    // Start
-    let result = instance.start(&mut ctx).unwrap();
-    assert!(matches!(result, tramli::sub_flow::SubFlowResult::WaitingAtExternal));
-    assert_eq!(instance.current_state_name(), Some("Wait".to_string()));
+    #[derive(Clone)] struct NestedInput(String);
 
-    // Resume
-    let result = instance.resume(&mut ctx).unwrap();
-    assert!(matches!(result, tramli::sub_flow::SubFlowResult::Completed(ref s) if s == "Done"));
+    struct InnerNoop;
+    impl StateProcessor<Inner> for InnerNoop {
+        fn name(&self) -> &str { "InnerNoop" }
+        fn requires(&self) -> Vec<TypeId> { vec![] }
+        fn produces(&self) -> Vec<TypeId> { vec![] }
+        fn process(&self, _ctx: &mut FlowContext) -> Result<(), FlowError> { Ok(()) }
+    }
+
+    struct NestedGuard;
+    impl TransitionGuard<Inner> for NestedGuard {
+        fn name(&self) -> &str { "NestedGuard" }
+        fn requires(&self) -> Vec<TypeId> { requires![NestedInput] }
+        fn produces(&self) -> Vec<TypeId> { vec![] }
+        fn validate(&self, _ctx: &FlowContext) -> GuardOutput {
+            GuardOutput::Accepted { data: std::collections::HashMap::new() }
+        }
+    }
+
+    let inner = Arc::new(Builder::<Inner>::new("inner")
+        .externally_provided(requires![NestedInput])
+        .from(Inner::Init).auto(Inner::Wait, InnerNoop)
+        .from(Inner::Wait).external(Inner::Done, NestedGuard)
+        .build().unwrap());
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    enum Outer { Init, Done }
+    impl FlowState for Outer {
+        fn is_terminal(&self) -> bool { matches!(self, Self::Done) }
+        fn is_initial(&self) -> bool { matches!(self, Self::Init) }
+        fn all_states() -> &'static [Self] { &[Self::Init, Self::Done] }
+    }
+
+    let outer = Arc::new(Builder::<Outer>::new("outer")
+        .from(Outer::Init)
+        .sub_flow(Box::new(tramli::sub_flow::SubFlowAdapter::new(inner)))
+        .on_exit("Done", Outer::Done)
+        .end_sub_flow()
+        .build().unwrap());
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    enum Root { Start, Done }
+    impl FlowState for Root {
+        fn is_terminal(&self) -> bool { matches!(self, Self::Done) }
+        fn is_initial(&self) -> bool { matches!(self, Self::Start) }
+        fn all_states() -> &'static [Self] { &[Self::Start, Self::Done] }
+    }
+
+    let root = Arc::new(Builder::<Root>::new("root")
+        .from(Root::Start)
+        .sub_flow(Box::new(tramli::sub_flow::SubFlowAdapter::new(outer)))
+        .on_exit("Done", Root::Done)
+        .end_sub_flow()
+        .build().unwrap());
+
+    let mut engine = FlowEngine::new(InMemoryFlowStore::new());
+    let fid = engine.start_flow(root, "nested", vec![]).unwrap();
+    let flow = engine.store.get(&fid).unwrap();
+    assert_eq!(flow.state_path(), vec!["Start", "Init", "Wait"]);
+    assert_eq!(flow.waiting_for(), requires![NestedInput]);
+
+    engine.resume_and_execute(&fid, vec![(
+        TypeId::of::<NestedInput>(),
+        Box::new(NestedInput("ready".into())) as Box<dyn CloneAny>,
+    )]).unwrap();
+
+    let flow = engine.store.get(&fid).unwrap();
+    assert_eq!(flow.current_state(), Root::Done);
+    assert!(flow.is_completed());
+    assert_eq!(flow.state_path_string(), "Done");
 }
 
 #[test]
