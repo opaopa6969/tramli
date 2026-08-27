@@ -1949,4 +1949,4 @@ tramli は3つの言語実装を持つ **monorepo**:
 
 ## ライセンス
 
-MIT
+MIT License — Copyright (c) 2026 unlaxer. [`LICENSE`](LICENSE) を参照。
