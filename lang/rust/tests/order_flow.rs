@@ -1,5 +1,5 @@
 use std::any::TypeId;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -26,6 +26,8 @@ impl StateProcessor<OrderState> for OrderInit {
     fn name(&self) -> &str { "OrderInit" }
     fn requires(&self) -> Vec<TypeId> { requires![OrderRequest] }
     fn produces(&self) -> Vec<TypeId> { requires![PaymentIntent] }
+    fn requires_named(&self) -> Vec<(TypeId, &'static str)> { requires_named![OrderRequest] }
+    fn produces_named(&self) -> Vec<(TypeId, &'static str)> { data_types_named![PaymentIntent] }
     fn process(&self, ctx: &mut FlowContext) -> Result<(), FlowError> {
         let req = ctx.get::<OrderRequest>()?;
         ctx.put(PaymentIntent { transaction_id: format!("txn-{}", req.item_id) });
@@ -38,6 +40,8 @@ impl StateProcessor<OrderState> for ShipProcessor {
     fn name(&self) -> &str { "ShipProcessor" }
     fn requires(&self) -> Vec<TypeId> { requires![PaymentResult] }
     fn produces(&self) -> Vec<TypeId> { requires![ShipmentInfo] }
+    fn requires_named(&self) -> Vec<(TypeId, &'static str)> { requires_named![PaymentResult] }
+    fn produces_named(&self) -> Vec<(TypeId, &'static str)> { data_types_named![ShipmentInfo] }
     fn process(&self, ctx: &mut FlowContext) -> Result<(), FlowError> {
         ctx.put(ShipmentInfo { tracking_id: "TRACK-001".into() });
         Ok(())
@@ -49,6 +53,8 @@ impl TransitionGuard<OrderState> for PaymentGuard {
     fn name(&self) -> &str { "PaymentGuard" }
     fn requires(&self) -> Vec<TypeId> { requires![PaymentIntent] }
     fn produces(&self) -> Vec<TypeId> { requires![PaymentResult] }
+    fn requires_named(&self) -> Vec<(TypeId, &'static str)> { requires_named![PaymentIntent] }
+    fn produces_named(&self) -> Vec<(TypeId, &'static str)> { data_types_named![PaymentResult] }
     fn validate(&self, _ctx: &FlowContext) -> GuardOutput {
         if self.accept {
             let mut data = HashMap::new();
@@ -217,6 +223,26 @@ fn generate_invariant_assertions() {
     let def = order_def(true);
     let assertions = def.data_flow_graph().generate_invariant_assertions();
     assert!(!assertions.is_empty());
+}
+
+#[test]
+fn cross_flow_map() {
+    let def1 = order_def(true);
+    let def2 = order_def(true);
+    let actual: HashSet<String> = DataFlowGraph::cross_flow_map(&[
+        def1.data_flow_graph(),
+        def2.data_flow_graph(),
+    ]).into_iter().collect();
+    let expected: HashSet<String> = [
+        "OrderRequest: flow 0 produces → flow 1 consumes",
+        "PaymentIntent: flow 0 produces → flow 1 consumes",
+        "PaymentResult: flow 0 produces → flow 1 consumes",
+        "OrderRequest: flow 1 produces → flow 0 consumes",
+        "PaymentIntent: flow 1 produces → flow 0 consumes",
+        "PaymentResult: flow 1 produces → flow 0 consumes",
+    ].into_iter().map(str::to_string).collect();
+
+    assert_eq!(actual, expected);
 }
 
 #[test]

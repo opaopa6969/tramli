@@ -437,6 +437,40 @@ impl<S: FlowState> DataFlowGraph<S> {
         assertions
     }
 
+    /// Cross-flow data-flow map: types produced by one flow and consumed by another.
+    /// Each ordered flow pair is reported independently, matching the Java and
+    /// TypeScript `crossFlowMap` semantics.
+    pub fn cross_flow_map(graphs: &[&DataFlowGraph<S>]) -> Vec<String> {
+        let mut results = Vec::new();
+        for (producer_index, producer_graph) in graphs.iter().enumerate() {
+            for (consumer_index, consumer_graph) in graphs.iter().enumerate() {
+                if producer_index == consumer_index { continue; }
+
+                let mut shared_types: Vec<(String, TypeId)> = producer_graph.all_produced
+                    .intersection(&consumer_graph.all_consumed)
+                    .map(|type_id| {
+                        let producer_name = producer_graph.short_type_name(type_id);
+                        let name = if producer_name == "unknown" {
+                            consumer_graph.short_type_name(type_id)
+                        } else {
+                            producer_name
+                        };
+                        (name, *type_id)
+                    })
+                    .collect();
+                shared_types.sort_by(|left, right| left.0.cmp(&right.0));
+
+                for (type_name, _) in shared_types {
+                    results.push(format!(
+                        "{}: flow {} produces → flow {} consumes",
+                        type_name, producer_index, consumer_index
+                    ));
+                }
+            }
+        }
+        results
+    }
+
     /// Diff two data-flow graphs. Returns added/removed type names.
     pub fn diff(before: &DataFlowGraph<S>, after: &DataFlowGraph<S>) -> (Vec<String>, Vec<String>) {
         let before_types: HashSet<_> = before.all_types().iter().map(|t| before.short_type_name(t)).collect();

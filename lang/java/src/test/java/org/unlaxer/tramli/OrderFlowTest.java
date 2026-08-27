@@ -3,6 +3,7 @@ package org.unlaxer.tramli;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
+import java.util.Set;
 
 import static org.unlaxer.tramli.OrderFlowExample.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -183,7 +184,14 @@ class OrderFlowTest {
         var def1 = definition(true);
         var def2 = definition(true);
         var map = DataFlowGraph.crossFlowMap(def1.dataFlowGraph(), def2.dataFlowGraph());
-        assertNotNull(map); // same flow → types cross-reference themselves
+        assertEquals(Set.of(
+                "OrderRequest: flow 0 produces → flow 1 consumes",
+                "PaymentIntent: flow 0 produces → flow 1 consumes",
+                "PaymentResult: flow 0 produces → flow 1 consumes",
+                "OrderRequest: flow 1 produces → flow 0 consumes",
+                "PaymentIntent: flow 1 produces → flow 0 consumes",
+                "PaymentResult: flow 1 produces → flow 0 consumes"
+        ), Set.copyOf(map));
     }
 
     @Test
