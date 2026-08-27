@@ -1,7 +1,7 @@
+use crate::api::PluginDescriptor;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tramli::{FlowEngine, FlowState};
-use crate::api::PluginDescriptor;
 
 /// Telemetry event type.
 #[derive(Debug, Clone)]
@@ -36,7 +36,9 @@ pub struct InMemoryTelemetrySink {
 
 impl InMemoryTelemetrySink {
     pub fn new() -> Self {
-        Self { log: Mutex::new(Vec::new()) }
+        Self {
+            log: Mutex::new(Vec::new()),
+        }
     }
 }
 
@@ -61,7 +63,9 @@ pub struct NoopTelemetrySink;
 
 impl TelemetrySink for NoopTelemetrySink {
     fn emit(&self, _event: TelemetryEvent) {}
-    fn events(&self) -> Vec<TelemetryEvent> { Vec::new() }
+    fn events(&self) -> Vec<TelemetryEvent> {
+        Vec::new()
+    }
 }
 
 /// Observability engine plugin — installs transition/error logger hooks.
@@ -87,13 +91,27 @@ impl ObservabilityPlugin {
     }
 
     pub fn install_with_options<S: FlowState>(&self, engine: &mut FlowEngine<S>, append: bool) {
-        let prev_transition = if append { engine.take_transition_logger() } else { None };
-        let prev_error = if append { engine.take_error_logger() } else { None };
-        let prev_guard = if append { engine.take_guard_logger() } else { None };
+        let prev_transition = if append {
+            engine.take_transition_logger()
+        } else {
+            None
+        };
+        let prev_error = if append {
+            engine.take_error_logger()
+        } else {
+            None
+        };
+        let prev_guard = if append {
+            engine.take_guard_logger()
+        } else {
+            None
+        };
 
         let sink = self.sink.clone();
         engine.set_transition_logger(move |entry| {
-            if let Some(ref prev) = prev_transition { prev(entry); }
+            if let Some(ref prev) = prev_transition {
+                prev(entry);
+            }
             sink.emit(TelemetryEvent {
                 event_type: TelemetryType::Transition,
                 flow_id: entry.flow_id.clone(),
@@ -106,7 +124,9 @@ impl ObservabilityPlugin {
 
         let sink = self.sink.clone();
         engine.set_error_logger(move |entry| {
-            if let Some(ref prev) = prev_error { prev(entry); }
+            if let Some(ref prev) = prev_error {
+                prev(entry);
+            }
             sink.emit(TelemetryEvent {
                 event_type: TelemetryType::Error,
                 flow_id: entry.flow_id.clone(),
@@ -119,12 +139,17 @@ impl ObservabilityPlugin {
 
         let sink = self.sink.clone();
         engine.set_guard_logger(move |entry| {
-            if let Some(ref prev) = prev_guard { prev(entry); }
+            if let Some(ref prev) = prev_guard {
+                prev(entry);
+            }
             sink.emit(TelemetryEvent {
                 event_type: TelemetryType::Guard,
                 flow_id: entry.flow_id.clone(),
                 flow_name: entry.flow_name.clone(),
-                data: format!("guard {} at {}: {}", entry.guard_name, entry.state, entry.result),
+                data: format!(
+                    "guard {} at {}: {}",
+                    entry.guard_name, entry.state, entry.result
+                ),
                 timestamp: Instant::now(),
                 duration_micros: entry.duration_micros,
             });

@@ -53,25 +53,37 @@ pub struct DataFlowGraph<S: FlowState> {
 impl<S: FlowState> DataFlowGraph<S> {
     pub(crate) fn empty() -> Self {
         Self {
-            available_at_state: HashMap::new(), producers: HashMap::new(),
-            consumers: HashMap::new(), all_produced: HashSet::new(),
-            all_consumed: HashSet::new(), type_names: HashMap::new(),
+            available_at_state: HashMap::new(),
+            producers: HashMap::new(),
+            consumers: HashMap::new(),
+            all_produced: HashSet::new(),
+            all_consumed: HashSet::new(),
+            type_names: HashMap::new(),
         }
     }
 
     /// Data types available in context when the flow reaches the given state.
     pub fn available_at(&self, state: S) -> HashSet<TypeId> {
-        self.available_at_state.get(&state).cloned().unwrap_or_default()
+        self.available_at_state
+            .get(&state)
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Processors/guards that produce the given type.
     pub fn producers_of(&self, type_id: &TypeId) -> &[NodeInfo<S>] {
-        self.producers.get(type_id).map(|v| v.as_slice()).unwrap_or(&[])
+        self.producers
+            .get(type_id)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
     }
 
     /// Processors/guards that consume (require) the given type.
     pub fn consumers_of(&self, type_id: &TypeId) -> &[NodeInfo<S>] {
-        self.consumers.get(type_id).map(|v| v.as_slice()).unwrap_or(&[])
+        self.consumers
+            .get(type_id)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
     }
 
     /// Explain what data is available and what is missing at a given state.
@@ -86,7 +98,10 @@ impl<S: FlowState> DataFlowGraph<S> {
             for node in nodes {
                 // A type is "needed" at a state if some consumer at that state requires it
                 if node.from_state == state {
-                    all_needed.entry(*type_id).or_default().push(node.name.clone());
+                    all_needed
+                        .entry(*type_id)
+                        .or_default()
+                        .push(node.name.clone());
                 }
             }
         }
@@ -94,18 +109,21 @@ impl<S: FlowState> DataFlowGraph<S> {
         let mut missing_list = Vec::new();
         for (type_id, needed_by) in &all_needed {
             if !available.contains(type_id) {
-                let producers_info: Vec<ProducerInfo> = self.producers_of(type_id).iter().map(|n| {
-                    ProducerInfo {
+                let producers_info: Vec<ProducerInfo> = self
+                    .producers_of(type_id)
+                    .iter()
+                    .map(|n| ProducerInfo {
                         name: n.name.clone(),
                         produced_at: format!("{:?}", n.to_state),
-                    }
-                }).collect();
+                    })
+                    .collect();
 
                 let type_name = self.short_type_name(type_id);
                 let reason = if producers_info.is_empty() {
                     format!("'{}' has no producers in this flow", type_name)
                 } else {
-                    let producer_names: Vec<String> = producers_info.iter()
+                    let producer_names: Vec<String> = producers_info
+                        .iter()
                         .map(|p| format!("'{}' (at {})", p.name, p.produced_at))
                         .collect();
                     format!(
@@ -140,7 +158,10 @@ impl<S: FlowState> DataFlowGraph<S> {
         let mut reasons = Vec::new();
 
         if available.contains(&type_id) {
-            reasons.push(format!("'{}' is NOT missing at {:?} — it is available", type_name, state));
+            reasons.push(format!(
+                "'{}' is NOT missing at {:?} — it is available",
+                type_name, state
+            ));
             return reasons;
         }
 
@@ -173,14 +194,18 @@ impl<S: FlowState> DataFlowGraph<S> {
         }
 
         // Also mention who needs it at this state
-        let consumers: Vec<String> = self.consumers_of(&type_id).iter()
+        let consumers: Vec<String> = self
+            .consumers_of(&type_id)
+            .iter()
             .filter(|n| n.from_state == state)
             .map(|n| n.name.clone())
             .collect();
         if !consumers.is_empty() {
             reasons.push(format!(
                 "'{}' is needed by {} at {:?}",
-                type_name, consumers.join(", "), state
+                type_name,
+                consumers.join(", "),
+                state
             ));
         }
 
@@ -189,15 +214,22 @@ impl<S: FlowState> DataFlowGraph<S> {
 
     /// Types produced but never required by any downstream processor/guard.
     pub fn dead_data(&self) -> HashSet<TypeId> {
-        self.all_produced.difference(&self.all_consumed).copied().collect()
+        self.all_produced
+            .difference(&self.all_consumed)
+            .copied()
+            .collect()
     }
 
     /// Data lifetime: which states a type is first produced and last consumed.
     pub fn lifetime(&self, type_id: &TypeId) -> Option<(S, S)> {
         let prods = self.producers.get(type_id)?;
-        if prods.is_empty() { return None; }
+        if prods.is_empty() {
+            return None;
+        }
         let first = prods[0].to_state;
-        let last = self.consumers.get(type_id)
+        let last = self
+            .consumers
+            .get(type_id)
             .and_then(|c| c.last())
             .map(|c| c.from_state)
             .unwrap_or(first);
@@ -209,16 +241,23 @@ impl<S: FlowState> DataFlowGraph<S> {
         let mut consumed_at: HashMap<S, HashSet<TypeId>> = HashMap::new();
         for (type_id, nodes) in &self.consumers {
             for node in nodes {
-                consumed_at.entry(node.from_state).or_default().insert(*type_id);
+                consumed_at
+                    .entry(node.from_state)
+                    .or_default()
+                    .insert(*type_id);
             }
         }
         let mut hints = HashMap::new();
         for (state, available) in &self.available_at_state {
             let needed = consumed_at.get(state);
-            let prunable: HashSet<TypeId> = available.iter()
+            let prunable: HashSet<TypeId> = available
+                .iter()
                 .filter(|t| needed.map_or(true, |n| !n.contains(t)))
-                .copied().collect();
-            if !prunable.is_empty() { hints.insert(*state, prunable); }
+                .copied()
+                .collect();
+            if !prunable.is_empty() {
+                hints.insert(*state, prunable);
+            }
         }
         hints
     }
@@ -226,8 +265,10 @@ impl<S: FlowState> DataFlowGraph<S> {
     /// Check if processor B can replace processor A without breaking data-flow.
     /// B requires no more than A, and B produces at least what A produces.
     pub fn is_compatible(
-        a_requires: &[TypeId], a_produces: &[TypeId],
-        b_requires: &[TypeId], b_produces: &[TypeId],
+        a_requires: &[TypeId],
+        a_produces: &[TypeId],
+        b_requires: &[TypeId],
+        b_produces: &[TypeId],
     ) -> bool {
         let a_reqs: HashSet<_> = a_requires.iter().collect();
         let b_reqs: HashSet<_> = b_requires.iter().collect();
@@ -245,10 +286,10 @@ impl<S: FlowState> DataFlowGraph<S> {
         let mut violations = Vec::new();
         for req in processor.requires() {
             if !ctx.has_type_id(&req) {
-                violations.push(format!("requires a type that is not in context"));
+                violations.push("requires a type that is not in context".to_string());
             }
         }
-        let before: HashSet<TypeId> = HashSet::new(); // can't enumerate ctx keys easily
+        let _before: HashSet<TypeId> = HashSet::new(); // can't enumerate ctx keys easily
         match processor.process(ctx) {
             Ok(()) => {}
             Err(e) => {
@@ -259,7 +300,7 @@ impl<S: FlowState> DataFlowGraph<S> {
         // Check produces after execution
         for prod in processor.produces() {
             if !ctx.has_type_id(&prod) {
-                violations.push(format!("declares produces but did not put it"));
+                violations.push("declares produces but did not put it".to_string());
             }
         }
         violations
@@ -267,20 +308,32 @@ impl<S: FlowState> DataFlowGraph<S> {
 
     /// All type nodes in the graph.
     pub fn all_types(&self) -> HashSet<TypeId> {
-        self.all_produced.union(&self.all_consumed).copied().collect()
+        self.all_produced
+            .union(&self.all_consumed)
+            .copied()
+            .collect()
     }
 
     /// Get the human-readable name for a TypeId (if registered).
     pub fn type_name(&self, type_id: &TypeId) -> &str {
-        self.type_names.get(type_id).map(|s| s.as_str()).unwrap_or("unknown")
+        self.type_names
+            .get(type_id)
+            .map(|s| s.as_str())
+            .unwrap_or("unknown")
     }
 
     /// Assert that a flow's context satisfies the data-flow invariant at the given state.
     /// Returns list of missing TypeIds (empty = OK).
-    pub fn assert_data_flow(&self, ctx: &crate::context::FlowContext, current_state: S) -> Vec<TypeId> {
+    pub fn assert_data_flow(
+        &self,
+        ctx: &crate::context::FlowContext,
+        current_state: S,
+    ) -> Vec<TypeId> {
         let mut missing = Vec::new();
         for &type_id in self.available_at(current_state).iter() {
-            if !ctx.has_type_id(&type_id) { missing.push(type_id); }
+            if !ctx.has_type_id(&type_id) {
+                missing.push(type_id);
+            }
         }
         missing
     }
@@ -295,19 +348,53 @@ impl<S: FlowState> DataFlowGraph<S> {
     /// Parallelism hints: pairs of processor names with no data dependency.
     pub fn parallelism_hints(&self) -> Vec<(String, String)> {
         let mut all_nodes: Vec<String> = Vec::new();
-        for nodes in self.producers.values() { for n in nodes { if !all_nodes.contains(&n.name) { all_nodes.push(n.name.clone()); } } }
-        for nodes in self.consumers.values() { for n in nodes { if !all_nodes.contains(&n.name) { all_nodes.push(n.name.clone()); } } }
+        for nodes in self.producers.values() {
+            for n in nodes {
+                if !all_nodes.contains(&n.name) {
+                    all_nodes.push(n.name.clone());
+                }
+            }
+        }
+        for nodes in self.consumers.values() {
+            for n in nodes {
+                if !all_nodes.contains(&n.name) {
+                    all_nodes.push(n.name.clone());
+                }
+            }
+        }
         let mut hints = Vec::new();
         for i in 0..all_nodes.len() {
-            for j in (i+1)..all_nodes.len() {
+            for j in (i + 1)..all_nodes.len() {
                 let (a, b) = (&all_nodes[i], &all_nodes[j]);
-                let a_prods: HashSet<_> = self.producers.iter().filter(|(_, ns)| ns.iter().any(|n| &n.name == a)).map(|(t, _)| t).collect();
-                let b_reqs: HashSet<_> = self.consumers.iter().filter(|(_, ns)| ns.iter().any(|n| &n.name == b)).map(|(t, _)| t).collect();
-                let b_prods: HashSet<_> = self.producers.iter().filter(|(_, ns)| ns.iter().any(|n| &n.name == b)).map(|(t, _)| t).collect();
-                let a_reqs: HashSet<_> = self.consumers.iter().filter(|(_, ns)| ns.iter().any(|n| &n.name == a)).map(|(t, _)| t).collect();
+                let a_prods: HashSet<_> = self
+                    .producers
+                    .iter()
+                    .filter(|(_, ns)| ns.iter().any(|n| &n.name == a))
+                    .map(|(t, _)| t)
+                    .collect();
+                let b_reqs: HashSet<_> = self
+                    .consumers
+                    .iter()
+                    .filter(|(_, ns)| ns.iter().any(|n| &n.name == b))
+                    .map(|(t, _)| t)
+                    .collect();
+                let b_prods: HashSet<_> = self
+                    .producers
+                    .iter()
+                    .filter(|(_, ns)| ns.iter().any(|n| &n.name == b))
+                    .map(|(t, _)| t)
+                    .collect();
+                let a_reqs: HashSet<_> = self
+                    .consumers
+                    .iter()
+                    .filter(|(_, ns)| ns.iter().any(|n| &n.name == a))
+                    .map(|(t, _)| t)
+                    .collect();
                 let a_dep_b = a_reqs.iter().any(|r| b_prods.contains(r));
                 let b_dep_a = b_reqs.iter().any(|r| a_prods.contains(r));
-                if !a_dep_b && !b_dep_a { hints.push((a.clone(), b.clone())); }
+                if !a_dep_b && !b_dep_a {
+                    hints.push((a.clone(), b.clone()));
+                }
             }
         }
         hints
@@ -319,16 +406,36 @@ impl<S: FlowState> DataFlowGraph<S> {
         let mut types = Vec::new();
         for type_id in self.all_types() {
             let name = esc(&self.short_type_name(&type_id));
-            let prods: Vec<String> = self.producers_of(&type_id).iter().map(|n| format!("\"{}\"", esc(&n.name))).collect();
-            let cons: Vec<String> = self.consumers_of(&type_id).iter().map(|n| format!("\"{}\"", esc(&n.name))).collect();
+            let prods: Vec<String> = self
+                .producers_of(&type_id)
+                .iter()
+                .map(|n| format!("\"{}\"", esc(&n.name)))
+                .collect();
+            let cons: Vec<String> = self
+                .consumers_of(&type_id)
+                .iter()
+                .map(|n| format!("\"{}\"", esc(&n.name)))
+                .collect();
             let mut entry = format!("{{\"name\": \"{}\"", name);
-            if !prods.is_empty() { entry += &format!(", \"producers\": [{}]", prods.join(", ")); }
-            if !cons.is_empty() { entry += &format!(", \"consumers\": [{}]", cons.join(", ")); }
+            if !prods.is_empty() {
+                entry += &format!(", \"producers\": [{}]", prods.join(", "));
+            }
+            if !cons.is_empty() {
+                entry += &format!(", \"consumers\": [{}]", cons.join(", "));
+            }
             entry += "}";
             types.push(entry);
         }
-        let dead: Vec<String> = self.dead_data().iter().map(|t| format!("\"{}\"", esc(&self.short_type_name(t)))).collect();
-        format!("{{\n  \"types\": [\n    {}\n  ],\n  \"deadData\": [{}]\n}}", types.join(",\n    "), dead.join(", "))
+        let dead: Vec<String> = self
+            .dead_data()
+            .iter()
+            .map(|t| format!("\"{}\"", esc(&self.short_type_name(t))))
+            .collect();
+        format!(
+            "{{\n  \"types\": [\n    {}\n  ],\n  \"deadData\": [{}]\n}}",
+            types.join(",\n    "),
+            dead.join(", ")
+        )
     }
 
     /// Generate Mermaid data-flow diagram.
@@ -369,27 +476,51 @@ impl<S: FlowState> DataFlowGraph<S> {
     pub fn migration_order(&self) -> Vec<String> {
         let mut node_reqs: HashMap<String, HashSet<TypeId>> = HashMap::new();
         let mut node_prods: HashMap<String, HashSet<TypeId>> = HashMap::new();
-        for (tid, nodes) in &self.consumers { for n in nodes { node_reqs.entry(n.name.clone()).or_default().insert(*tid); } }
-        for (tid, nodes) in &self.producers { for n in nodes { node_prods.entry(n.name.clone()).or_default().insert(*tid); } }
+        for (tid, nodes) in &self.consumers {
+            for n in nodes {
+                node_reqs.entry(n.name.clone()).or_default().insert(*tid);
+            }
+        }
+        for (tid, nodes) in &self.producers {
+            for n in nodes {
+                node_prods.entry(n.name.clone()).or_default().insert(*tid);
+            }
+        }
 
         let mut order = Vec::new();
-        let mut available: HashSet<TypeId> = self.producers.iter()
+        let mut available: HashSet<TypeId> = self
+            .producers
+            .iter()
             .filter(|(_, ns)| ns.iter().any(|n| n.name == "initial"))
-            .map(|(t, _)| *t).collect();
-        let mut remaining: Vec<String> = node_reqs.keys().chain(node_prods.keys())
-            .filter(|n| n.as_str() != "initial").cloned().collect::<HashSet<_>>().into_iter().collect();
+            .map(|(t, _)| *t)
+            .collect();
+        let mut remaining: Vec<String> = node_reqs
+            .keys()
+            .chain(node_prods.keys())
+            .filter(|n| n.as_str() != "initial")
+            .cloned()
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
 
         while !remaining.is_empty() {
             let next = remaining.iter().position(|name| {
-                node_reqs.get(name).map_or(true, |reqs| reqs.is_subset(&available))
+                node_reqs
+                    .get(name)
+                    .map_or(true, |reqs| reqs.is_subset(&available))
             });
             match next {
                 Some(idx) => {
                     let name = remaining.remove(idx);
-                    if let Some(prods) = node_prods.get(&name) { available.extend(prods); }
+                    if let Some(prods) = node_prods.get(&name) {
+                        available.extend(prods);
+                    }
                     order.push(name);
                 }
-                None => { order.extend(remaining.drain(..)); break; }
+                None => {
+                    order.append(&mut remaining);
+                    break;
+                }
             }
         }
         order
@@ -400,15 +531,25 @@ impl<S: FlowState> DataFlowGraph<S> {
         let mut lines = vec!["# Migration Checklist\n".to_string()];
         let order = self.migration_order();
         for (i, name) in order.iter().enumerate() {
-            let reqs: Vec<String> = self.consumers.iter()
+            let reqs: Vec<String> = self
+                .consumers
+                .iter()
                 .filter(|(_, ns)| ns.iter().any(|n| &n.name == name))
-                .map(|(t, _)| self.short_type_name(t)).collect();
-            let prods: Vec<String> = self.producers.iter()
+                .map(|(t, _)| self.short_type_name(t))
+                .collect();
+            let prods: Vec<String> = self
+                .producers
+                .iter()
                 .filter(|(_, ns)| ns.iter().any(|n| &n.name == name))
-                .map(|(t, _)| self.short_type_name(t)).collect();
+                .map(|(t, _)| self.short_type_name(t))
+                .collect();
             let mut line = format!("- [ ] **{}. {}**", i + 1, name);
-            if !reqs.is_empty() { line += &format!("  requires: {:?}", reqs); }
-            if !prods.is_empty() { line += &format!("  produces: {:?}", prods); }
+            if !reqs.is_empty() {
+                line += &format!("  requires: {:?}", reqs);
+            }
+            if !prods.is_empty() {
+                line += &format!("  produces: {:?}", prods);
+            }
             lines.push(line);
         }
         lines.join("\n") + "\n"
@@ -419,7 +560,9 @@ impl<S: FlowState> DataFlowGraph<S> {
         let mut scaffold: HashMap<String, Vec<String>> = HashMap::new();
         for (type_id, nodes) in &self.consumers {
             for node in nodes {
-                scaffold.entry(node.name.clone()).or_default()
+                scaffold
+                    .entry(node.name.clone())
+                    .or_default()
                     .push(self.short_type_name(type_id));
             }
         }
@@ -432,7 +575,10 @@ impl<S: FlowState> DataFlowGraph<S> {
         for (state, types) in &self.available_at_state {
             let mut names: Vec<String> = types.iter().map(|t| self.short_type_name(t)).collect();
             names.sort();
-            assertions.push(format!("At state {:?}: context must contain {:?}", state, names));
+            assertions.push(format!(
+                "At state {:?}: context must contain {:?}",
+                state, names
+            ));
         }
         assertions
     }
@@ -444,9 +590,12 @@ impl<S: FlowState> DataFlowGraph<S> {
         let mut results = Vec::new();
         for (producer_index, producer_graph) in graphs.iter().enumerate() {
             for (consumer_index, consumer_graph) in graphs.iter().enumerate() {
-                if producer_index == consumer_index { continue; }
+                if producer_index == consumer_index {
+                    continue;
+                }
 
-                let mut shared_types: Vec<(String, TypeId)> = producer_graph.all_produced
+                let mut shared_types: Vec<(String, TypeId)> = producer_graph
+                    .all_produced
                     .intersection(&consumer_graph.all_consumed)
                     .map(|type_id| {
                         let producer_name = producer_graph.short_type_name(type_id);
@@ -473,8 +622,16 @@ impl<S: FlowState> DataFlowGraph<S> {
 
     /// Diff two data-flow graphs. Returns added/removed type names.
     pub fn diff(before: &DataFlowGraph<S>, after: &DataFlowGraph<S>) -> (Vec<String>, Vec<String>) {
-        let before_types: HashSet<_> = before.all_types().iter().map(|t| before.short_type_name(t)).collect();
-        let after_types: HashSet<_> = after.all_types().iter().map(|t| after.short_type_name(t)).collect();
+        let before_types: HashSet<_> = before
+            .all_types()
+            .iter()
+            .map(|t| before.short_type_name(t))
+            .collect();
+        let after_types: HashSet<_> = after
+            .all_types()
+            .iter()
+            .map(|t| after.short_type_name(t))
+            .collect();
         let added: Vec<String> = after_types.difference(&before_types).cloned().collect();
         let removed: Vec<String> = before_types.difference(&after_types).cloned().collect();
         (added, removed)
@@ -482,7 +639,11 @@ impl<S: FlowState> DataFlowGraph<S> {
 
     // ─── Builder ─────────────────────────────────────────────
 
-    pub(crate) fn build(def: &FlowDefinition<S>, initially_available: &[TypeId], externally_provided: &[TypeId]) -> Self {
+    pub(crate) fn build(
+        def: &FlowDefinition<S>,
+        initially_available: &[TypeId],
+        externally_provided: &[TypeId],
+    ) -> Self {
         let mut state_avail: HashMap<S, HashSet<TypeId>> = HashMap::new();
         let mut producers: HashMap<TypeId, Vec<NodeInfo<S>>> = HashMap::new();
         let mut consumers: HashMap<TypeId, Vec<NodeInfo<S>>> = HashMap::new();
@@ -492,35 +653,60 @@ impl<S: FlowState> DataFlowGraph<S> {
         let ext_set: HashSet<TypeId> = externally_provided.iter().copied().collect();
 
         if let Some(initial) = def.initial_state() {
-            Self::traverse(def, initial, &initially_available.iter().copied().collect(), &ext_set,
-                &mut state_avail, &mut producers, &mut consumers,
-                &mut all_produced, &mut all_consumed, &mut type_names);
+            Self::traverse(
+                def,
+                initial,
+                &initially_available.iter().copied().collect(),
+                &ext_set,
+                &mut state_avail,
+                &mut producers,
+                &mut consumers,
+                &mut all_produced,
+                &mut all_consumed,
+                &mut type_names,
+            );
 
             // Mark initially available types as produced by "initial"
             for &tid in initially_available {
                 producers.entry(tid).or_default().push(NodeInfo {
                     name: "initial".to_string(),
-                    from_state: initial, to_state: initial,
+                    from_state: initial,
+                    to_state: initial,
                     kind: "initial",
                 });
             }
         }
 
-        Self { available_at_state: state_avail, producers, consumers, all_produced, all_consumed, type_names }
+        Self {
+            available_at_state: state_avail,
+            producers,
+            consumers,
+            all_produced,
+            all_consumed,
+            type_names,
+        }
     }
 
     fn traverse(
-        def: &FlowDefinition<S>, state: S, available: &HashSet<TypeId>, externally_provided: &HashSet<TypeId>,
+        def: &FlowDefinition<S>,
+        state: S,
+        available: &HashSet<TypeId>,
+        externally_provided: &HashSet<TypeId>,
         state_avail: &mut HashMap<S, HashSet<TypeId>>,
         producers: &mut HashMap<TypeId, Vec<NodeInfo<S>>>,
         consumers: &mut HashMap<TypeId, Vec<NodeInfo<S>>>,
-        all_produced: &mut HashSet<TypeId>, all_consumed: &mut HashSet<TypeId>,
+        all_produced: &mut HashSet<TypeId>,
+        all_consumed: &mut HashSet<TypeId>,
         type_names: &mut HashMap<TypeId, String>,
     ) {
         if let Some(existing) = state_avail.get_mut(&state) {
-            if available.is_subset(existing) { return; }
+            if available.is_subset(existing) {
+                return;
+            }
             let new_set: HashSet<TypeId> = existing.intersection(available).copied().collect();
-            if new_set == *existing { return; }
+            if new_set == *existing {
+                return;
+            }
             *existing = new_set;
         } else {
             state_avail.insert(state, available.clone());
@@ -539,13 +725,19 @@ impl<S: FlowState> DataFlowGraph<S> {
                 Self::collect_type_names(&named_prods, type_names);
                 for (req, _) in &named_reqs {
                     consumers.entry(*req).or_default().push(NodeInfo {
-                        name: guard.name().to_string(), from_state: t.from, to_state: t.to, kind: "guard",
+                        name: guard.name().to_string(),
+                        from_state: t.from,
+                        to_state: t.to,
+                        kind: "guard",
                     });
                     all_consumed.insert(*req);
                 }
                 for (prod, _) in &named_prods {
                     producers.entry(*prod).or_default().push(NodeInfo {
-                        name: guard.name().to_string(), from_state: t.from, to_state: t.to, kind: "guard",
+                        name: guard.name().to_string(),
+                        from_state: t.from,
+                        to_state: t.to,
+                        kind: "guard",
                     });
                     all_produced.insert(*prod);
                     new_avail.insert(*prod);
@@ -556,7 +748,10 @@ impl<S: FlowState> DataFlowGraph<S> {
                 Self::collect_type_names(&named_reqs, type_names);
                 for (req, _) in &named_reqs {
                     consumers.entry(*req).or_default().push(NodeInfo {
-                        name: branch.name().to_string(), from_state: t.from, to_state: t.to, kind: "branch",
+                        name: branch.name().to_string(),
+                        from_state: t.from,
+                        to_state: t.to,
+                        kind: "branch",
                     });
                     all_consumed.insert(*req);
                 }
@@ -568,25 +763,44 @@ impl<S: FlowState> DataFlowGraph<S> {
                 Self::collect_type_names(&named_prods, type_names);
                 for (req, _) in &named_reqs {
                     consumers.entry(*req).or_default().push(NodeInfo {
-                        name: proc.name().to_string(), from_state: t.from, to_state: t.to, kind: "processor",
+                        name: proc.name().to_string(),
+                        from_state: t.from,
+                        to_state: t.to,
+                        kind: "processor",
                     });
                     all_consumed.insert(*req);
                 }
                 for (prod, _) in &named_prods {
                     producers.entry(*prod).or_default().push(NodeInfo {
-                        name: proc.name().to_string(), from_state: t.from, to_state: t.to, kind: "processor",
+                        name: proc.name().to_string(),
+                        from_state: t.from,
+                        to_state: t.to,
+                        kind: "processor",
                     });
                     all_produced.insert(*prod);
                     new_avail.insert(*prod);
                 }
             }
 
-            Self::traverse(def, t.to, &new_avail, externally_provided, state_avail, producers, consumers,
-                all_produced, all_consumed, type_names);
+            Self::traverse(
+                def,
+                t.to,
+                &new_avail,
+                externally_provided,
+                state_avail,
+                producers,
+                consumers,
+                all_produced,
+                all_consumed,
+                type_names,
+            );
         }
     }
 
-    fn collect_type_names(named: &[(TypeId, &'static str)], type_names: &mut HashMap<TypeId, String>) {
+    fn collect_type_names(
+        named: &[(TypeId, &'static str)],
+        type_names: &mut HashMap<TypeId, String>,
+    ) {
         for &(id, name) in named {
             if !name.is_empty() {
                 type_names.entry(id).or_insert_with(|| name.to_string());

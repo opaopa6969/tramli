@@ -3,6 +3,10 @@
 //! Constrained flow engine — state machines that prevent invalid transitions at build time.
 //! Intentionally synchronous. See `docs/async-integration.md` for async I/O patterns.
 
+#![allow(clippy::result_large_err)]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::too_many_arguments)]
+
 mod clone_any;
 mod context;
 mod data_flow_graph;
@@ -18,9 +22,12 @@ mod types;
 
 pub use clone_any::CloneAny;
 pub use context::FlowContext;
-pub use data_flow_graph::{DataFlowGraph, NodeInfo, ExplainResult, MissingInfo, ProducerInfo};
-pub use definition::{FlowDefinition, Builder, FromBuilder, BranchBuilder, SubFlowBuilder, ValidationError, BuildResult};
-pub use engine::{FlowEngine, TransitionLogEntry, ErrorLogEntry, GuardLogEntry};
+pub use data_flow_graph::{DataFlowGraph, ExplainResult, MissingInfo, NodeInfo, ProducerInfo};
+pub use definition::{
+    BranchBuilder, BuildResult, Builder, FlowDefinition, FromBuilder, SubFlowBuilder,
+    ValidationError,
+};
+pub use engine::{ErrorLogEntry, FlowEngine, GuardLogEntry, TransitionLogEntry};
 pub use error::FlowError;
 pub use instance::FlowInstance;
 pub use mermaid::{MermaidGenerator, MermaidView};

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use std::any::TypeId;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -6,84 +7,171 @@ use std::time::Duration;
 use tramli::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum OrderState { Created, PaymentPending, PaymentConfirmed, Shipped, Cancelled }
+enum OrderState {
+    Created,
+    PaymentPending,
+    PaymentConfirmed,
+    Shipped,
+    Cancelled,
+}
 
 impl FlowState for OrderState {
-    fn is_terminal(&self) -> bool { matches!(self, Self::Shipped | Self::Cancelled) }
-    fn is_initial(&self) -> bool { matches!(self, Self::Created) }
+    fn is_terminal(&self) -> bool {
+        matches!(self, Self::Shipped | Self::Cancelled)
+    }
+    fn is_initial(&self) -> bool {
+        matches!(self, Self::Created)
+    }
     fn all_states() -> &'static [Self] {
-        &[Self::Created, Self::PaymentPending, Self::PaymentConfirmed, Self::Shipped, Self::Cancelled]
+        &[
+            Self::Created,
+            Self::PaymentPending,
+            Self::PaymentConfirmed,
+            Self::Shipped,
+            Self::Cancelled,
+        ]
     }
 }
 
-#[derive(Clone, Debug)] struct OrderRequest { item_id: String }
-#[derive(Clone, Debug)] struct PaymentIntent { transaction_id: String }
-#[derive(Clone, Debug)] struct PaymentResult { status: String }
-#[derive(Clone, Debug)] struct ShipmentInfo { tracking_id: String }
+#[derive(Clone, Debug)]
+struct OrderRequest {
+    item_id: String,
+}
+#[derive(Clone, Debug)]
+struct PaymentIntent {
+    transaction_id: String,
+}
+#[derive(Clone, Debug)]
+struct PaymentResult {
+    status: String,
+}
+#[derive(Clone, Debug)]
+struct ShipmentInfo {
+    tracking_id: String,
+}
 
 struct OrderInit;
 impl StateProcessor<OrderState> for OrderInit {
-    fn name(&self) -> &str { "OrderInit" }
-    fn requires(&self) -> Vec<TypeId> { requires![OrderRequest] }
-    fn produces(&self) -> Vec<TypeId> { requires![PaymentIntent] }
-    fn requires_named(&self) -> Vec<(TypeId, &'static str)> { requires_named![OrderRequest] }
-    fn produces_named(&self) -> Vec<(TypeId, &'static str)> { data_types_named![PaymentIntent] }
+    fn name(&self) -> &str {
+        "OrderInit"
+    }
+    fn requires(&self) -> Vec<TypeId> {
+        requires![OrderRequest]
+    }
+    fn produces(&self) -> Vec<TypeId> {
+        requires![PaymentIntent]
+    }
+    fn requires_named(&self) -> Vec<(TypeId, &'static str)> {
+        requires_named![OrderRequest]
+    }
+    fn produces_named(&self) -> Vec<(TypeId, &'static str)> {
+        data_types_named![PaymentIntent]
+    }
     fn process(&self, ctx: &mut FlowContext) -> Result<(), FlowError> {
         let req = ctx.get::<OrderRequest>()?;
-        ctx.put(PaymentIntent { transaction_id: format!("txn-{}", req.item_id) });
+        ctx.put(PaymentIntent {
+            transaction_id: format!("txn-{}", req.item_id),
+        });
         Ok(())
     }
 }
 
 struct ShipProcessor;
 impl StateProcessor<OrderState> for ShipProcessor {
-    fn name(&self) -> &str { "ShipProcessor" }
-    fn requires(&self) -> Vec<TypeId> { requires![PaymentResult] }
-    fn produces(&self) -> Vec<TypeId> { requires![ShipmentInfo] }
-    fn requires_named(&self) -> Vec<(TypeId, &'static str)> { requires_named![PaymentResult] }
-    fn produces_named(&self) -> Vec<(TypeId, &'static str)> { data_types_named![ShipmentInfo] }
+    fn name(&self) -> &str {
+        "ShipProcessor"
+    }
+    fn requires(&self) -> Vec<TypeId> {
+        requires![PaymentResult]
+    }
+    fn produces(&self) -> Vec<TypeId> {
+        requires![ShipmentInfo]
+    }
+    fn requires_named(&self) -> Vec<(TypeId, &'static str)> {
+        requires_named![PaymentResult]
+    }
+    fn produces_named(&self) -> Vec<(TypeId, &'static str)> {
+        data_types_named![ShipmentInfo]
+    }
     fn process(&self, ctx: &mut FlowContext) -> Result<(), FlowError> {
-        ctx.put(ShipmentInfo { tracking_id: "TRACK-001".into() });
+        ctx.put(ShipmentInfo {
+            tracking_id: "TRACK-001".into(),
+        });
         Ok(())
     }
 }
 
-struct PaymentGuard { accept: bool }
+struct PaymentGuard {
+    accept: bool,
+}
 impl TransitionGuard<OrderState> for PaymentGuard {
-    fn name(&self) -> &str { "PaymentGuard" }
-    fn requires(&self) -> Vec<TypeId> { requires![PaymentIntent] }
-    fn produces(&self) -> Vec<TypeId> { requires![PaymentResult] }
-    fn requires_named(&self) -> Vec<(TypeId, &'static str)> { requires_named![PaymentIntent] }
-    fn produces_named(&self) -> Vec<(TypeId, &'static str)> { data_types_named![PaymentResult] }
+    fn name(&self) -> &str {
+        "PaymentGuard"
+    }
+    fn requires(&self) -> Vec<TypeId> {
+        requires![PaymentIntent]
+    }
+    fn produces(&self) -> Vec<TypeId> {
+        requires![PaymentResult]
+    }
+    fn requires_named(&self) -> Vec<(TypeId, &'static str)> {
+        requires_named![PaymentIntent]
+    }
+    fn produces_named(&self) -> Vec<(TypeId, &'static str)> {
+        data_types_named![PaymentResult]
+    }
     fn validate(&self, _ctx: &FlowContext) -> GuardOutput {
         if self.accept {
             let mut data = HashMap::new();
-            data.insert(TypeId::of::<PaymentResult>(), Box::new(PaymentResult { status: "OK".into() }) as Box<dyn CloneAny>);
+            data.insert(
+                TypeId::of::<PaymentResult>(),
+                Box::new(PaymentResult {
+                    status: "OK".into(),
+                }) as Box<dyn CloneAny>,
+            );
             GuardOutput::Accepted { data }
         } else {
-            GuardOutput::Rejected { reason: "Payment declined".into() }
+            GuardOutput::Rejected {
+                reason: "Payment declined".into(),
+            }
         }
     }
 }
 
 fn order_def(accept: bool) -> Arc<FlowDefinition<OrderState>> {
-    Arc::new(Builder::new("order")
-        .ttl(Duration::from_secs(86400))
-        .max_guard_retries(3)
-        .initially_available(requires![OrderRequest])
-        .from(OrderState::Created).auto(OrderState::PaymentPending, OrderInit)
-        .from(OrderState::PaymentPending).external(OrderState::PaymentConfirmed, PaymentGuard { accept })
-        .from(OrderState::PaymentConfirmed).auto(OrderState::Shipped, ShipProcessor)
-        .on_any_error(OrderState::Cancelled)
-        .build().unwrap())
+    Arc::new(
+        Builder::new("order")
+            .ttl(Duration::from_secs(86400))
+            .max_guard_retries(3)
+            .initially_available(requires![OrderRequest])
+            .from(OrderState::Created)
+            .auto(OrderState::PaymentPending, OrderInit)
+            .from(OrderState::PaymentPending)
+            .external(OrderState::PaymentConfirmed, PaymentGuard { accept })
+            .from(OrderState::PaymentConfirmed)
+            .auto(OrderState::Shipped, ShipProcessor)
+            .on_any_error(OrderState::Cancelled)
+            .build()
+            .unwrap(),
+    )
 }
 
 #[test]
 fn happy_path() {
     let def = order_def(true);
     let mut engine = FlowEngine::new(InMemoryFlowStore::new());
-    let flow_id = engine.start_flow(def.clone(), "s1",
-        vec![(TypeId::of::<OrderRequest>(), Box::new(OrderRequest { item_id: "item-1".into() }) as Box<dyn CloneAny>)]).unwrap();
+    let flow_id = engine
+        .start_flow(
+            def.clone(),
+            "s1",
+            vec![(
+                TypeId::of::<OrderRequest>(),
+                Box::new(OrderRequest {
+                    item_id: "item-1".into(),
+                }) as Box<dyn CloneAny>,
+            )],
+        )
+        .unwrap();
 
     let flow = engine.store.get(&flow_id).unwrap();
     assert_eq!(flow.current_state(), OrderState::PaymentPending);
@@ -100,8 +188,18 @@ fn happy_path() {
 fn payment_rejected_max_retries() {
     let def = order_def(false);
     let mut engine = FlowEngine::new(InMemoryFlowStore::new());
-    let flow_id = engine.start_flow(def.clone(), "s1",
-        vec![(TypeId::of::<OrderRequest>(), Box::new(OrderRequest { item_id: "item-1".into() }) as Box<dyn CloneAny>)]).unwrap();
+    let flow_id = engine
+        .start_flow(
+            def.clone(),
+            "s1",
+            vec![(
+                TypeId::of::<OrderRequest>(),
+                Box::new(OrderRequest {
+                    item_id: "item-1".into(),
+                }) as Box<dyn CloneAny>,
+            )],
+        )
+        .unwrap();
 
     engine.resume_and_execute(&flow_id, vec![]).unwrap();
     engine.resume_and_execute(&flow_id, vec![]).unwrap();
@@ -118,9 +216,13 @@ fn data_flow_graph() {
     let graph = def.data_flow_graph();
 
     // Available data at CREATED
-    assert!(graph.available_at(OrderState::Created).contains(&TypeId::of::<OrderRequest>()));
+    assert!(graph
+        .available_at(OrderState::Created)
+        .contains(&TypeId::of::<OrderRequest>()));
     // Available data at PaymentPending
-    assert!(graph.available_at(OrderState::PaymentPending).contains(&TypeId::of::<PaymentIntent>()));
+    assert!(graph
+        .available_at(OrderState::PaymentPending)
+        .contains(&TypeId::of::<PaymentIntent>()));
 
     // Producers of PaymentIntent
     let producers = graph.producers_of(&TypeId::of::<PaymentIntent>());
@@ -139,7 +241,9 @@ fn data_flow_graph() {
 #[test]
 fn data_flow_lifetime() {
     let def = order_def(true);
-    let lt = def.data_flow_graph().lifetime(&TypeId::of::<PaymentIntent>());
+    let lt = def
+        .data_flow_graph()
+        .lifetime(&TypeId::of::<PaymentIntent>());
     assert!(lt.is_some());
     let (first, _last) = lt.unwrap();
     assert_eq!(first, OrderState::PaymentPending);
@@ -155,12 +259,16 @@ fn data_flow_pruning_hints() {
 #[test]
 fn processor_compatibility() {
     assert!(DataFlowGraph::<OrderState>::is_compatible(
-        &OrderInit.requires(), &OrderInit.produces(),
-        &OrderInit.requires(), &OrderInit.produces(),
+        &OrderInit.requires(),
+        &OrderInit.produces(),
+        &OrderInit.requires(),
+        &OrderInit.produces(),
     ));
     assert!(!DataFlowGraph::<OrderState>::is_compatible(
-        &OrderInit.requires(), &OrderInit.produces(),
-        &ShipProcessor.requires(), &ShipProcessor.produces(),
+        &OrderInit.requires(),
+        &OrderInit.produces(),
+        &ShipProcessor.requires(),
+        &ShipProcessor.produces(),
     ));
 }
 
@@ -168,11 +276,27 @@ fn processor_compatibility() {
 fn assert_data_flow_happy_path() {
     let def = order_def(true);
     let mut engine = FlowEngine::new(InMemoryFlowStore::new());
-    let flow_id = engine.start_flow(def.clone(), "s1",
-        vec![(TypeId::of::<OrderRequest>(), Box::new(OrderRequest { item_id: "item-1".into() }) as Box<dyn CloneAny>)]).unwrap();
+    let flow_id = engine
+        .start_flow(
+            def.clone(),
+            "s1",
+            vec![(
+                TypeId::of::<OrderRequest>(),
+                Box::new(OrderRequest {
+                    item_id: "item-1".into(),
+                }) as Box<dyn CloneAny>,
+            )],
+        )
+        .unwrap();
     let flow = engine.store.get(&flow_id).unwrap();
-    let missing = def.data_flow_graph().assert_data_flow(&flow.context, flow.current_state());
-    assert!(missing.is_empty(), "Missing types at {:?}", flow.current_state());
+    let missing = def
+        .data_flow_graph()
+        .assert_data_flow(&flow.context, flow.current_state());
+    assert!(
+        missing.is_empty(),
+        "Missing types at {:?}",
+        flow.current_state()
+    );
 }
 
 // ─── v1.4.0+ API tests ──────────────────────────────
@@ -180,7 +304,9 @@ fn assert_data_flow_happy_path() {
 #[test]
 fn impact_of() {
     let def = order_def(true);
-    let (prods, cons) = def.data_flow_graph().impact_of(&TypeId::of::<PaymentIntent>());
+    let (prods, cons) = def
+        .data_flow_graph()
+        .impact_of(&TypeId::of::<PaymentIntent>());
     assert!(!prods.is_empty());
     assert!(!cons.is_empty());
 }
@@ -190,7 +316,7 @@ fn parallelism_hints() {
     let def = order_def(true);
     let hints = def.data_flow_graph().parallelism_hints();
     // may be empty if all dependent, but should not panic
-    assert!(hints.len() >= 0);
+    let _ = hints.len();
 }
 
 #[test]
@@ -229,10 +355,10 @@ fn generate_invariant_assertions() {
 fn cross_flow_map() {
     let def1 = order_def(true);
     let def2 = order_def(true);
-    let actual: HashSet<String> = DataFlowGraph::cross_flow_map(&[
-        def1.data_flow_graph(),
-        def2.data_flow_graph(),
-    ]).into_iter().collect();
+    let actual: HashSet<String> =
+        DataFlowGraph::cross_flow_map(&[def1.data_flow_graph(), def2.data_flow_graph()])
+            .into_iter()
+            .collect();
     let expected: HashSet<String> = [
         "OrderRequest: flow 0 produces → flow 1 consumes",
         "PaymentIntent: flow 0 produces → flow 1 consumes",
@@ -240,7 +366,10 @@ fn cross_flow_map() {
         "OrderRequest: flow 1 produces → flow 0 consumes",
         "PaymentIntent: flow 1 produces → flow 0 consumes",
         "PaymentResult: flow 1 produces → flow 0 consumes",
-    ].into_iter().map(str::to_string).collect();
+    ]
+    .into_iter()
+    .map(str::to_string)
+    .collect();
 
     assert_eq!(actual, expected);
 }
@@ -249,8 +378,14 @@ fn cross_flow_map() {
 fn context_alias() {
     let mut ctx = tramli::FlowContext::new("test-alias".into());
     ctx.register_alias::<OrderRequest>("OrderRequest");
-    assert_eq!(ctx.alias_of(&TypeId::of::<OrderRequest>()), Some("OrderRequest"));
-    assert_eq!(ctx.type_id_of_alias("OrderRequest"), Some(&TypeId::of::<OrderRequest>()));
+    assert_eq!(
+        ctx.alias_of(&TypeId::of::<OrderRequest>()),
+        Some("OrderRequest")
+    );
+    assert_eq!(
+        ctx.type_id_of_alias("OrderRequest"),
+        Some(&TypeId::of::<OrderRequest>())
+    );
 }
 
 #[test]
@@ -276,25 +411,47 @@ fn mermaid_data_flow() {
 fn processor_throws_routes_to_error() {
     struct FailProc;
     impl StateProcessor<OrderState> for FailProc {
-        fn name(&self) -> &str { "FailProc" }
-        fn requires(&self) -> Vec<TypeId> { requires![OrderRequest] }
-        fn produces(&self) -> Vec<TypeId> { requires![PaymentIntent] }
+        fn name(&self) -> &str {
+            "FailProc"
+        }
+        fn requires(&self) -> Vec<TypeId> {
+            requires![OrderRequest]
+        }
+        fn produces(&self) -> Vec<TypeId> {
+            requires![PaymentIntent]
+        }
         fn process(&self, _ctx: &mut FlowContext) -> Result<(), FlowError> {
             Err(FlowError::new("PROC_ERROR", "boom"))
         }
     }
 
-    let def = Arc::new(Builder::new("err")
-        .initially_available(requires![OrderRequest])
-        .from(OrderState::Created).auto(OrderState::PaymentPending, FailProc)
-        .from(OrderState::PaymentPending).external(OrderState::PaymentConfirmed, PaymentGuard { accept: true })
-        .from(OrderState::PaymentConfirmed).auto(OrderState::Shipped, ShipProcessor)
-        .on_any_error(OrderState::Cancelled)
-        .build().unwrap());
+    let def = Arc::new(
+        Builder::new("err")
+            .initially_available(requires![OrderRequest])
+            .from(OrderState::Created)
+            .auto(OrderState::PaymentPending, FailProc)
+            .from(OrderState::PaymentPending)
+            .external(OrderState::PaymentConfirmed, PaymentGuard { accept: true })
+            .from(OrderState::PaymentConfirmed)
+            .auto(OrderState::Shipped, ShipProcessor)
+            .on_any_error(OrderState::Cancelled)
+            .build()
+            .unwrap(),
+    );
 
     let mut engine = FlowEngine::new(InMemoryFlowStore::new());
-    let flow_id = engine.start_flow(def, "s1",
-        vec![(TypeId::of::<OrderRequest>(), Box::new(OrderRequest { item_id: "x".into() }) as Box<dyn CloneAny>)]).unwrap();
+    let flow_id = engine
+        .start_flow(
+            def,
+            "s1",
+            vec![(
+                TypeId::of::<OrderRequest>(),
+                Box::new(OrderRequest {
+                    item_id: "x".into(),
+                }) as Box<dyn CloneAny>,
+            )],
+        )
+        .unwrap();
 
     let flow = engine.store.get(&flow_id).unwrap();
     assert_eq!(flow.current_state(), OrderState::Cancelled);
@@ -312,7 +469,11 @@ fn explain_at_created_shows_available() {
     assert!(result.available.contains(&TypeId::of::<OrderRequest>()));
     // Nothing should be missing that is needed at Created
     // (OrderInit requires OrderRequest which IS available)
-    assert!(result.missing.is_empty(), "Expected no missing types at Created, got: {:?}", result.missing);
+    assert!(
+        result.missing.is_empty(),
+        "Expected no missing types at Created, got: {:?}",
+        result.missing
+    );
 }
 
 #[test]
@@ -326,9 +487,15 @@ fn explain_at_payment_confirmed_shows_available() {
 #[test]
 fn why_missing_returns_not_missing_when_available() {
     let def = order_def(true);
-    let reasons = def.data_flow_graph().why_missing(TypeId::of::<OrderRequest>(), OrderState::Created);
+    let reasons = def
+        .data_flow_graph()
+        .why_missing(TypeId::of::<OrderRequest>(), OrderState::Created);
     assert_eq!(reasons.len(), 1);
-    assert!(reasons[0].contains("NOT missing"), "Expected 'NOT missing' message, got: {}", reasons[0]);
+    assert!(
+        reasons[0].contains("NOT missing"),
+        "Expected 'NOT missing' message, got: {}",
+        reasons[0]
+    );
 }
 
 #[test]
@@ -336,9 +503,15 @@ fn why_missing_with_no_producers() {
     let def = order_def(true);
     #[derive(Clone)]
     struct UnknownType;
-    let reasons = def.data_flow_graph().why_missing(TypeId::of::<UnknownType>(), OrderState::Created);
+    let reasons = def
+        .data_flow_graph()
+        .why_missing(TypeId::of::<UnknownType>(), OrderState::Created);
     assert!(!reasons.is_empty());
-    assert!(reasons[0].contains("no producers"), "Expected 'no producers' message, got: {}", reasons[0]);
+    assert!(
+        reasons[0].contains("no producers"),
+        "Expected 'no producers' message, got: {}",
+        reasons[0]
+    );
 }
 
 #[test]

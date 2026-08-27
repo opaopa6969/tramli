@@ -17,9 +17,11 @@ impl GuaranteedSubflowValidator {
 
         if let Some(initial) = subflow.initial_state() {
             let required_at_entry = subflow.data_flow_graph().available_at(initial);
-            let missing: HashSet<TypeId> = required_at_entry.difference(&available).cloned().collect();
+            let missing: HashSet<TypeId> =
+                required_at_entry.difference(&available).cloned().collect();
             if !missing.is_empty() {
-                let missing_names: Vec<String> = missing.iter()
+                let missing_names: Vec<String> = missing
+                    .iter()
                     .map(|id| subflow.data_flow_graph().type_name(id).to_string())
                     .collect();
                 return Err(format!(

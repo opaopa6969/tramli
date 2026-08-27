@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use std::any::TypeId;
 use std::sync::Arc;
 use std::time::Duration;
@@ -5,32 +6,63 @@ use tramli::*;
 
 // ─── Error Path states ─────────────────────────────────
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum EP { Start, Mid, Err, Done }
+enum EP {
+    Start,
+    Mid,
+    Err,
+    Done,
+}
 impl FlowState for EP {
-    fn is_terminal(&self) -> bool { matches!(self, Self::Done) }
-    fn is_initial(&self) -> bool { matches!(self, Self::Start) }
-    fn all_states() -> &'static [Self] { &[Self::Start, Self::Mid, Self::Err, Self::Done] }
+    fn is_terminal(&self) -> bool {
+        matches!(self, Self::Done)
+    }
+    fn is_initial(&self) -> bool {
+        matches!(self, Self::Start)
+    }
+    fn all_states() -> &'static [Self] {
+        &[Self::Start, Self::Mid, Self::Err, Self::Done]
+    }
 }
 
-#[derive(Clone)] struct EpInput(String);
-#[derive(Clone)] struct EpMiddle(String);
+#[derive(Clone)]
+struct EpInput(String);
+#[derive(Clone)]
+struct EpMiddle(String);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum S { A, B, C }
+enum S {
+    A,
+    B,
+    C,
+}
 impl FlowState for S {
-    fn is_terminal(&self) -> bool { matches!(self, Self::C) }
-    fn is_initial(&self) -> bool { matches!(self, Self::A) }
-    fn all_states() -> &'static [Self] { &[Self::A, Self::B, Self::C] }
+    fn is_terminal(&self) -> bool {
+        matches!(self, Self::C)
+    }
+    fn is_initial(&self) -> bool {
+        matches!(self, Self::A)
+    }
+    fn all_states() -> &'static [Self] {
+        &[Self::A, Self::B, Self::C]
+    }
 }
 
-#[derive(Clone)] struct D(String);
-#[derive(Clone)] struct E(String);
+#[derive(Clone)]
+struct D(String);
+#[derive(Clone)]
+struct E(String);
 
 struct P1;
 impl StateProcessor<S> for P1 {
-    fn name(&self) -> &str { "P1" }
-    fn requires(&self) -> Vec<TypeId> { requires![D] }
-    fn produces(&self) -> Vec<TypeId> { requires![E] }
+    fn name(&self) -> &str {
+        "P1"
+    }
+    fn requires(&self) -> Vec<TypeId> {
+        requires![D]
+    }
+    fn produces(&self) -> Vec<TypeId> {
+        requires![E]
+    }
     fn process(&self, ctx: &mut FlowContext) -> Result<(), FlowError> {
         let d = ctx.get::<D>()?;
         ctx.put(E(format!("from-{}", d.0)));
@@ -40,9 +72,15 @@ impl StateProcessor<S> for P1 {
 
 struct P2;
 impl StateProcessor<S> for P2 {
-    fn name(&self) -> &str { "P2" }
-    fn requires(&self) -> Vec<TypeId> { requires![E] }
-    fn produces(&self) -> Vec<TypeId> { vec![] }
+    fn name(&self) -> &str {
+        "P2"
+    }
+    fn requires(&self) -> Vec<TypeId> {
+        requires![E]
+    }
+    fn produces(&self) -> Vec<TypeId> {
+        vec![]
+    }
     fn process(&self, ctx: &mut FlowContext) -> Result<(), FlowError> {
         let _e = ctx.get::<E>()?;
         Ok(())
@@ -54,8 +92,10 @@ fn build_with_requires_produces() {
     let result = Builder::<S>::new("t")
         .ttl(Duration::from_secs(60))
         .initially_available(requires![D])
-        .from(S::A).auto(S::B, P1)
-        .from(S::B).auto(S::C, P2)
+        .from(S::A)
+        .auto(S::B, P1)
+        .from(S::B)
+        .auto(S::C, P2)
         .build();
     match &result {
         Ok(_) => eprintln!("Build OK"),
@@ -66,15 +106,28 @@ fn build_with_requires_produces() {
 
 #[test]
 fn start_with_requires_produces() {
-    let def = Arc::new(Builder::<S>::new("t")
-        .ttl(Duration::from_secs(60))
-        .initially_available(requires![D])
-        .from(S::A).auto(S::B, P1)
-        .from(S::B).auto(S::C, P2)
-        .build().unwrap());
+    let def = Arc::new(
+        Builder::<S>::new("t")
+            .ttl(Duration::from_secs(60))
+            .initially_available(requires![D])
+            .from(S::A)
+            .auto(S::B, P1)
+            .from(S::B)
+            .auto(S::C, P2)
+            .build()
+            .unwrap(),
+    );
     let mut engine = FlowEngine::new(InMemoryFlowStore::new());
-    let fid = engine.start_flow(def, "s1",
-        vec![(TypeId::of::<D>(), Box::new(D("hello".into())) as Box<dyn CloneAny>)]).unwrap();
+    let fid = engine
+        .start_flow(
+            def,
+            "s1",
+            vec![(
+                TypeId::of::<D>(),
+                Box::new(D("hello".into())) as Box<dyn CloneAny>,
+            )],
+        )
+        .unwrap();
     let f = engine.store.get(&fid).unwrap();
     assert_eq!(f.current_state(), S::C);
     assert!(f.is_completed());
@@ -84,9 +137,15 @@ fn start_with_requires_produces() {
 
 struct EpP1;
 impl StateProcessor<EP> for EpP1 {
-    fn name(&self) -> &str { "P1" }
-    fn requires(&self) -> Vec<TypeId> { requires![EpInput] }
-    fn produces(&self) -> Vec<TypeId> { requires![EpMiddle] }
+    fn name(&self) -> &str {
+        "P1"
+    }
+    fn requires(&self) -> Vec<TypeId> {
+        requires![EpInput]
+    }
+    fn produces(&self) -> Vec<TypeId> {
+        requires![EpMiddle]
+    }
     fn process(&self, ctx: &mut FlowContext) -> Result<(), FlowError> {
         ctx.put(EpMiddle("mid".into()));
         Ok(())
@@ -95,10 +154,18 @@ impl StateProcessor<EP> for EpP1 {
 
 struct EpP2;
 impl StateProcessor<EP> for EpP2 {
-    fn name(&self) -> &str { "P2" }
-    fn requires(&self) -> Vec<TypeId> { requires![EpMiddle] }
-    fn produces(&self) -> Vec<TypeId> { vec![] }
-    fn process(&self, _ctx: &mut FlowContext) -> Result<(), FlowError> { Ok(()) }
+    fn name(&self) -> &str {
+        "P2"
+    }
+    fn requires(&self) -> Vec<TypeId> {
+        requires![EpMiddle]
+    }
+    fn produces(&self) -> Vec<TypeId> {
+        vec![]
+    }
+    fn process(&self, _ctx: &mut FlowContext) -> Result<(), FlowError> {
+        Ok(())
+    }
 }
 
 #[test]
@@ -108,10 +175,13 @@ fn error_path_requires_unsatisfied_build_fails() {
     let result = Builder::<EP>::new("errpath")
         .ttl(Duration::from_secs(60))
         .initially_available(requires![EpInput])
-        .from(EP::Start).auto(EP::Mid, EpP1)
-        .from(EP::Mid).auto(EP::Done, EpP2)
+        .from(EP::Start)
+        .auto(EP::Mid, EpP1)
+        .from(EP::Mid)
+        .auto(EP::Done, EpP2)
         .on_error(EP::Start, EP::Err)
-        .from(EP::Err).auto(EP::Done, EpP2) // EpP2 requires EpMiddle — not available on error path
+        .from(EP::Err)
+        .auto(EP::Done, EpP2) // EpP2 requires EpMiddle — not available on error path
         .build();
 
     assert!(result.is_err());
@@ -123,20 +193,37 @@ fn error_path_requires_unsatisfied_build_fails() {
 fn basic_sub_flow() {
     // Sub-flow states
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    enum Sub { Init, Process, Done }
+    enum Sub {
+        Init,
+        Process,
+        Done,
+    }
     impl FlowState for Sub {
-        fn is_terminal(&self) -> bool { matches!(self, Self::Done) }
-        fn is_initial(&self) -> bool { matches!(self, Self::Init) }
-        fn all_states() -> &'static [Self] { &[Self::Init, Self::Process, Self::Done] }
+        fn is_terminal(&self) -> bool {
+            matches!(self, Self::Done)
+        }
+        fn is_initial(&self) -> bool {
+            matches!(self, Self::Init)
+        }
+        fn all_states() -> &'static [Self] {
+            &[Self::Init, Self::Process, Self::Done]
+        }
     }
 
-    #[derive(Clone)] struct SubOut(String);
+    #[derive(Clone)]
+    struct SubOut(String);
 
     struct SubP1;
     impl StateProcessor<Sub> for SubP1 {
-        fn name(&self) -> &str { "SubP1" }
-        fn requires(&self) -> Vec<TypeId> { requires![D] }
-        fn produces(&self) -> Vec<TypeId> { requires![SubOut] }
+        fn name(&self) -> &str {
+            "SubP1"
+        }
+        fn requires(&self) -> Vec<TypeId> {
+            requires![D]
+        }
+        fn produces(&self) -> Vec<TypeId> {
+            requires![SubOut]
+        }
         fn process(&self, ctx: &mut FlowContext) -> Result<(), FlowError> {
             ctx.put(SubOut("done".into()));
             Ok(())
@@ -145,39 +232,75 @@ fn basic_sub_flow() {
 
     struct SubP2;
     impl StateProcessor<Sub> for SubP2 {
-        fn name(&self) -> &str { "SubP2" }
-        fn requires(&self) -> Vec<TypeId> { requires![SubOut] }
-        fn produces(&self) -> Vec<TypeId> { vec![] }
-        fn process(&self, _ctx: &mut FlowContext) -> Result<(), FlowError> { Ok(()) }
+        fn name(&self) -> &str {
+            "SubP2"
+        }
+        fn requires(&self) -> Vec<TypeId> {
+            requires![SubOut]
+        }
+        fn produces(&self) -> Vec<TypeId> {
+            vec![]
+        }
+        fn process(&self, _ctx: &mut FlowContext) -> Result<(), FlowError> {
+            Ok(())
+        }
     }
 
-    let sub_def = Arc::new(Builder::<Sub>::new("sub")
-        .ttl(Duration::from_secs(60))
-        .initially_available(requires![D])
-        .from(Sub::Init).auto(Sub::Process, SubP1)
-        .from(Sub::Process).auto(Sub::Done, SubP2)
-        .build().unwrap());
+    let sub_def = Arc::new(
+        Builder::<Sub>::new("sub")
+            .ttl(Duration::from_secs(60))
+            .initially_available(requires![D])
+            .from(Sub::Init)
+            .auto(Sub::Process, SubP1)
+            .from(Sub::Process)
+            .auto(Sub::Done, SubP2)
+            .build()
+            .unwrap(),
+    );
 
     let sub_runner = Box::new(tramli::sub_flow::SubFlowAdapter::new(sub_def));
 
     // Main flow states
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    enum M { Start, Done }
+    enum M {
+        Start,
+        Done,
+    }
     impl FlowState for M {
-        fn is_terminal(&self) -> bool { matches!(self, Self::Done) }
-        fn is_initial(&self) -> bool { matches!(self, Self::Start) }
-        fn all_states() -> &'static [Self] { &[Self::Start, Self::Done] }
+        fn is_terminal(&self) -> bool {
+            matches!(self, Self::Done)
+        }
+        fn is_initial(&self) -> bool {
+            matches!(self, Self::Start)
+        }
+        fn all_states() -> &'static [Self] {
+            &[Self::Start, Self::Done]
+        }
     }
 
-    let main_def = Arc::new(Builder::<M>::new("main")
-        .ttl(Duration::from_secs(60))
-        .initially_available(requires![D])
-        .from(M::Start).sub_flow(sub_runner).on_exit("Done", M::Done).end_sub_flow()
-        .build().unwrap());
+    let main_def = Arc::new(
+        Builder::<M>::new("main")
+            .ttl(Duration::from_secs(60))
+            .initially_available(requires![D])
+            .from(M::Start)
+            .sub_flow(sub_runner)
+            .on_exit("Done", M::Done)
+            .end_sub_flow()
+            .build()
+            .unwrap(),
+    );
 
     let mut engine = FlowEngine::new(InMemoryFlowStore::new());
-    let fid = engine.start_flow(main_def, "s1",
-        vec![(TypeId::of::<D>(), Box::new(D("hello".into())) as Box<dyn CloneAny>)]).unwrap();
+    let fid = engine
+        .start_flow(
+            main_def,
+            "s1",
+            vec![(
+                TypeId::of::<D>(),
+                Box::new(D("hello".into())) as Box<dyn CloneAny>,
+            )],
+        )
+        .unwrap();
 
     let f = engine.store.get(&fid).unwrap();
     assert_eq!(f.current_state(), M::Done);
@@ -188,20 +311,37 @@ fn basic_sub_flow() {
 fn sub_flow_with_external_resume() {
     // Sub-flow with external transition: start → auto → wait(external) → resume → done
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    enum SubExt { Init, Wait, Done }
+    enum SubExt {
+        Init,
+        Wait,
+        Done,
+    }
     impl FlowState for SubExt {
-        fn is_terminal(&self) -> bool { matches!(self, Self::Done) }
-        fn is_initial(&self) -> bool { matches!(self, Self::Init) }
-        fn all_states() -> &'static [Self] { &[Self::Init, Self::Wait, Self::Done] }
+        fn is_terminal(&self) -> bool {
+            matches!(self, Self::Done)
+        }
+        fn is_initial(&self) -> bool {
+            matches!(self, Self::Init)
+        }
+        fn all_states() -> &'static [Self] {
+            &[Self::Init, Self::Wait, Self::Done]
+        }
     }
 
-    #[derive(Clone)] struct WaitData(String);
+    #[derive(Clone)]
+    struct WaitData(String);
 
     struct WaitProc;
     impl StateProcessor<SubExt> for WaitProc {
-        fn name(&self) -> &str { "WaitProc" }
-        fn requires(&self) -> Vec<TypeId> { requires![D] }
-        fn produces(&self) -> Vec<TypeId> { requires![WaitData] }
+        fn name(&self) -> &str {
+            "WaitProc"
+        }
+        fn requires(&self) -> Vec<TypeId> {
+            requires![D]
+        }
+        fn produces(&self) -> Vec<TypeId> {
+            requires![WaitData]
+        }
         fn process(&self, ctx: &mut FlowContext) -> Result<(), FlowError> {
             ctx.put(WaitData("waiting".into()));
             Ok(())
@@ -210,40 +350,76 @@ fn sub_flow_with_external_resume() {
 
     struct WaitGuard;
     impl TransitionGuard<SubExt> for WaitGuard {
-        fn name(&self) -> &str { "WaitGuard" }
-        fn requires(&self) -> Vec<TypeId> { requires![WaitData] }
-        fn produces(&self) -> Vec<TypeId> { vec![] }
+        fn name(&self) -> &str {
+            "WaitGuard"
+        }
+        fn requires(&self) -> Vec<TypeId> {
+            requires![WaitData]
+        }
+        fn produces(&self) -> Vec<TypeId> {
+            vec![]
+        }
         fn validate(&self, _ctx: &FlowContext) -> GuardOutput {
-            GuardOutput::Accepted { data: std::collections::HashMap::new() }
+            GuardOutput::Accepted {
+                data: std::collections::HashMap::new(),
+            }
         }
     }
 
-    let sub_def = Arc::new(Builder::<SubExt>::new("sub-ext")
-        .ttl(Duration::from_secs(60))
-        .initially_available(requires![D])
-        .from(SubExt::Init).auto(SubExt::Wait, WaitProc)
-        .from(SubExt::Wait).external(SubExt::Done, WaitGuard)
-        .build().unwrap());
+    let sub_def = Arc::new(
+        Builder::<SubExt>::new("sub-ext")
+            .ttl(Duration::from_secs(60))
+            .initially_available(requires![D])
+            .from(SubExt::Init)
+            .auto(SubExt::Wait, WaitProc)
+            .from(SubExt::Wait)
+            .external(SubExt::Done, WaitGuard)
+            .build()
+            .unwrap(),
+    );
 
     let sub_runner = Box::new(tramli::sub_flow::SubFlowAdapter::new(sub_def));
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    enum M2 { Start, Done }
+    enum M2 {
+        Start,
+        Done,
+    }
     impl FlowState for M2 {
-        fn is_terminal(&self) -> bool { matches!(self, Self::Done) }
-        fn is_initial(&self) -> bool { matches!(self, Self::Start) }
-        fn all_states() -> &'static [Self] { &[Self::Start, Self::Done] }
+        fn is_terminal(&self) -> bool {
+            matches!(self, Self::Done)
+        }
+        fn is_initial(&self) -> bool {
+            matches!(self, Self::Start)
+        }
+        fn all_states() -> &'static [Self] {
+            &[Self::Start, Self::Done]
+        }
     }
 
-    let main_def = Arc::new(Builder::<M2>::new("main-ext")
-        .ttl(Duration::from_secs(60))
-        .initially_available(requires![D])
-        .from(M2::Start).sub_flow(sub_runner).on_exit("Done", M2::Done).end_sub_flow()
-        .build().unwrap());
+    let main_def = Arc::new(
+        Builder::<M2>::new("main-ext")
+            .ttl(Duration::from_secs(60))
+            .initially_available(requires![D])
+            .from(M2::Start)
+            .sub_flow(sub_runner)
+            .on_exit("Done", M2::Done)
+            .end_sub_flow()
+            .build()
+            .unwrap(),
+    );
 
     let mut engine = FlowEngine::new(InMemoryFlowStore::new());
-    let fid = engine.start_flow(main_def.clone(), "s1",
-        vec![(TypeId::of::<D>(), Box::new(D("hello".into())) as Box<dyn CloneAny>)]).unwrap();
+    let fid = engine
+        .start_flow(
+            main_def.clone(),
+            "s1",
+            vec![(
+                TypeId::of::<D>(),
+                Box::new(D("hello".into())) as Box<dyn CloneAny>,
+            )],
+        )
+        .unwrap();
 
     // Should be waiting at sub-flow external
     let f = engine.store.get(&fid).unwrap();
@@ -265,68 +441,124 @@ fn sub_flow_with_external_resume() {
 #[test]
 fn nested_sub_flow_state_path_and_resume() {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    enum Inner { Init, Wait, Done }
+    enum Inner {
+        Init,
+        Wait,
+        Done,
+    }
     impl FlowState for Inner {
-        fn is_terminal(&self) -> bool { matches!(self, Self::Done) }
-        fn is_initial(&self) -> bool { matches!(self, Self::Init) }
-        fn all_states() -> &'static [Self] { &[Self::Init, Self::Wait, Self::Done] }
+        fn is_terminal(&self) -> bool {
+            matches!(self, Self::Done)
+        }
+        fn is_initial(&self) -> bool {
+            matches!(self, Self::Init)
+        }
+        fn all_states() -> &'static [Self] {
+            &[Self::Init, Self::Wait, Self::Done]
+        }
     }
 
-    #[derive(Clone)] struct NestedInput(String);
+    #[derive(Clone)]
+    struct NestedInput(String);
 
     struct InnerNoop;
     impl StateProcessor<Inner> for InnerNoop {
-        fn name(&self) -> &str { "InnerNoop" }
-        fn requires(&self) -> Vec<TypeId> { vec![] }
-        fn produces(&self) -> Vec<TypeId> { vec![] }
-        fn process(&self, _ctx: &mut FlowContext) -> Result<(), FlowError> { Ok(()) }
+        fn name(&self) -> &str {
+            "InnerNoop"
+        }
+        fn requires(&self) -> Vec<TypeId> {
+            vec![]
+        }
+        fn produces(&self) -> Vec<TypeId> {
+            vec![]
+        }
+        fn process(&self, _ctx: &mut FlowContext) -> Result<(), FlowError> {
+            Ok(())
+        }
     }
 
     struct NestedGuard;
     impl TransitionGuard<Inner> for NestedGuard {
-        fn name(&self) -> &str { "NestedGuard" }
-        fn requires(&self) -> Vec<TypeId> { requires![NestedInput] }
-        fn produces(&self) -> Vec<TypeId> { vec![] }
+        fn name(&self) -> &str {
+            "NestedGuard"
+        }
+        fn requires(&self) -> Vec<TypeId> {
+            requires![NestedInput]
+        }
+        fn produces(&self) -> Vec<TypeId> {
+            vec![]
+        }
         fn validate(&self, _ctx: &FlowContext) -> GuardOutput {
-            GuardOutput::Accepted { data: std::collections::HashMap::new() }
+            GuardOutput::Accepted {
+                data: std::collections::HashMap::new(),
+            }
         }
     }
 
-    let inner = Arc::new(Builder::<Inner>::new("inner")
-        .externally_provided(requires![NestedInput])
-        .from(Inner::Init).auto(Inner::Wait, InnerNoop)
-        .from(Inner::Wait).external(Inner::Done, NestedGuard)
-        .build().unwrap());
+    let inner = Arc::new(
+        Builder::<Inner>::new("inner")
+            .externally_provided(requires![NestedInput])
+            .from(Inner::Init)
+            .auto(Inner::Wait, InnerNoop)
+            .from(Inner::Wait)
+            .external(Inner::Done, NestedGuard)
+            .build()
+            .unwrap(),
+    );
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    enum Outer { Init, Done }
+    enum Outer {
+        Init,
+        Done,
+    }
     impl FlowState for Outer {
-        fn is_terminal(&self) -> bool { matches!(self, Self::Done) }
-        fn is_initial(&self) -> bool { matches!(self, Self::Init) }
-        fn all_states() -> &'static [Self] { &[Self::Init, Self::Done] }
+        fn is_terminal(&self) -> bool {
+            matches!(self, Self::Done)
+        }
+        fn is_initial(&self) -> bool {
+            matches!(self, Self::Init)
+        }
+        fn all_states() -> &'static [Self] {
+            &[Self::Init, Self::Done]
+        }
     }
 
-    let outer = Arc::new(Builder::<Outer>::new("outer")
-        .from(Outer::Init)
-        .sub_flow(Box::new(tramli::sub_flow::SubFlowAdapter::new(inner)))
-        .on_exit("Done", Outer::Done)
-        .end_sub_flow()
-        .build().unwrap());
+    let outer = Arc::new(
+        Builder::<Outer>::new("outer")
+            .from(Outer::Init)
+            .sub_flow(Box::new(tramli::sub_flow::SubFlowAdapter::new(inner)))
+            .on_exit("Done", Outer::Done)
+            .end_sub_flow()
+            .build()
+            .unwrap(),
+    );
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    enum Root { Start, Done }
+    enum Root {
+        Start,
+        Done,
+    }
     impl FlowState for Root {
-        fn is_terminal(&self) -> bool { matches!(self, Self::Done) }
-        fn is_initial(&self) -> bool { matches!(self, Self::Start) }
-        fn all_states() -> &'static [Self] { &[Self::Start, Self::Done] }
+        fn is_terminal(&self) -> bool {
+            matches!(self, Self::Done)
+        }
+        fn is_initial(&self) -> bool {
+            matches!(self, Self::Start)
+        }
+        fn all_states() -> &'static [Self] {
+            &[Self::Start, Self::Done]
+        }
     }
 
-    let root = Arc::new(Builder::<Root>::new("root")
-        .from(Root::Start)
-        .sub_flow(Box::new(tramli::sub_flow::SubFlowAdapter::new(outer)))
-        .on_exit("Done", Root::Done)
-        .end_sub_flow()
-        .build().unwrap());
+    let root = Arc::new(
+        Builder::<Root>::new("root")
+            .from(Root::Start)
+            .sub_flow(Box::new(tramli::sub_flow::SubFlowAdapter::new(outer)))
+            .on_exit("Done", Root::Done)
+            .end_sub_flow()
+            .build()
+            .unwrap(),
+    );
 
     let mut engine = FlowEngine::new(InMemoryFlowStore::new());
     let fid = engine.start_flow(root, "nested", vec![]).unwrap();
@@ -334,10 +566,15 @@ fn nested_sub_flow_state_path_and_resume() {
     assert_eq!(flow.state_path(), vec!["Start", "Init", "Wait"]);
     assert_eq!(flow.waiting_for(), requires![NestedInput]);
 
-    engine.resume_and_execute(&fid, vec![(
-        TypeId::of::<NestedInput>(),
-        Box::new(NestedInput("ready".into())) as Box<dyn CloneAny>,
-    )]).unwrap();
+    engine
+        .resume_and_execute(
+            &fid,
+            vec![(
+                TypeId::of::<NestedInput>(),
+                Box::new(NestedInput("ready".into())) as Box<dyn CloneAny>,
+            )],
+        )
+        .unwrap();
 
     let flow = engine.store.get(&fid).unwrap();
     assert_eq!(flow.current_state(), Root::Done);
@@ -352,8 +589,10 @@ fn error_path_to_terminal_build_succeeds() {
     let result = Builder::<S>::new("errterm")
         .ttl(Duration::from_secs(60))
         .initially_available(requires![D])
-        .from(S::A).auto(S::B, P1)
-        .from(S::B).auto(S::C, P2)
+        .from(S::A)
+        .auto(S::B, P1)
+        .from(S::B)
+        .auto(S::C, P2)
         .on_error(S::A, S::C)
         .build();
 

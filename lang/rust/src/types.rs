@@ -16,12 +16,21 @@ pub trait FlowState: Clone + Copy + Eq + Hash + Debug + Send + Sync + 'static {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TransitionType { Auto, External, Branch, SubFlow }
+pub enum TransitionType {
+    Auto,
+    External,
+    Branch,
+    SubFlow,
+}
 
 /// Guard output.
 pub enum GuardOutput {
-    Accepted { data: HashMap<TypeId, Box<dyn CloneAny>> },
-    Rejected { reason: String },
+    Accepted {
+        data: HashMap<TypeId, Box<dyn CloneAny>>,
+    },
+    Rejected {
+        reason: String,
+    },
     Expired,
 }
 

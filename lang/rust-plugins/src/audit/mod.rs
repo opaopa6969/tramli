@@ -1,5 +1,5 @@
 use std::time::Instant;
-use tramli::{FlowState, FlowStore, InMemoryFlowStore, FlowInstance, TransitionRecord};
+use tramli::{FlowInstance, FlowState, FlowStore, InMemoryFlowStore, TransitionRecord};
 
 /// Audited transition record.
 #[derive(Debug, Clone)]
@@ -19,7 +19,10 @@ pub struct AuditingStore<S: FlowState> {
 
 impl<S: FlowState> AuditingStore<S> {
     pub fn new(delegate: InMemoryFlowStore<S>) -> Self {
-        Self { delegate, audit_log: Vec::new() }
+        Self {
+            delegate,
+            audit_log: Vec::new(),
+        }
     }
 
     pub fn create(&mut self, flow: FlowInstance<S>) {
@@ -60,12 +63,22 @@ impl<S: FlowState> AuditingStore<S> {
 }
 
 impl<S: FlowState> FlowStore<S> for AuditingStore<S> {
-    fn create(&mut self, flow: FlowInstance<S>) { self.delegate.create(flow); }
-    fn get(&self, flow_id: &str) -> Option<&FlowInstance<S>> { self.delegate.get(flow_id) }
-    fn get_mut(&mut self, flow_id: &str) -> Option<&mut FlowInstance<S>> { self.delegate.get_mut(flow_id) }
+    fn create(&mut self, flow: FlowInstance<S>) {
+        self.delegate.create(flow);
+    }
+    fn get(&self, flow_id: &str) -> Option<&FlowInstance<S>> {
+        self.delegate.get(flow_id)
+    }
+    fn get_mut(&mut self, flow_id: &str) -> Option<&mut FlowInstance<S>> {
+        self.delegate.get_mut(flow_id)
+    }
     fn record_transition(&mut self, flow_id: &str, from: &str, to: &str, trigger: &str) {
         self.record_transition(flow_id, from, to, trigger);
     }
-    fn transition_log(&self) -> &[TransitionRecord] { self.delegate.transition_log() }
-    fn clear(&mut self) { self.clear(); }
+    fn transition_log(&self) -> &[TransitionRecord] {
+        self.delegate.transition_log()
+    }
+    fn clear(&mut self) {
+        self.clear();
+    }
 }

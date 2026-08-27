@@ -31,7 +31,12 @@ pub struct InMemoryFlowStore<S: FlowState> {
 }
 
 impl<S: FlowState> InMemoryFlowStore<S> {
-    pub fn new() -> Self { Self { flows: HashMap::new(), transition_log: Vec::new() } }
+    pub fn new() -> Self {
+        Self {
+            flows: HashMap::new(),
+            transition_log: Vec::new(),
+        }
+    }
 
     /// Clear all flows and transition log. For pool/reuse patterns.
     pub fn clear(&mut self) {
@@ -39,9 +44,13 @@ impl<S: FlowState> InMemoryFlowStore<S> {
         self.transition_log.clear();
     }
 
-    pub fn create(&mut self, flow: FlowInstance<S>) { self.flows.insert(flow.id.clone(), flow); }
+    pub fn create(&mut self, flow: FlowInstance<S>) {
+        self.flows.insert(flow.id.clone(), flow);
+    }
 
-    pub fn get(&self, flow_id: &str) -> Option<&FlowInstance<S>> { self.flows.get(flow_id) }
+    pub fn get(&self, flow_id: &str) -> Option<&FlowInstance<S>> {
+        self.flows.get(flow_id)
+    }
 
     pub fn get_mut(&mut self, flow_id: &str) -> Option<&mut FlowInstance<S>> {
         self.flows.get_mut(flow_id).filter(|f| !f.is_completed())
@@ -49,26 +58,50 @@ impl<S: FlowState> InMemoryFlowStore<S> {
 
     pub fn record_transition(&mut self, flow_id: &str, from: &str, to: &str, trigger: &str) {
         let sub_flow = if trigger.starts_with("subFlow:") {
-            trigger.get(8..trigger.find('/').unwrap_or(trigger.len())).map(|s| s.to_string())
-        } else { None };
+            trigger
+                .get(8..trigger.find('/').unwrap_or(trigger.len()))
+                .map(|s| s.to_string())
+        } else {
+            None
+        };
         self.transition_log.push(TransitionRecord {
-            flow_id: flow_id.to_string(), from: from.to_string(),
-            to: to.to_string(), trigger: trigger.to_string(), sub_flow, timestamp: Instant::now(),
+            flow_id: flow_id.to_string(),
+            from: from.to_string(),
+            to: to.to_string(),
+            trigger: trigger.to_string(),
+            sub_flow,
+            timestamp: Instant::now(),
         });
     }
 
-    pub fn transition_log(&self) -> &[TransitionRecord] { &self.transition_log }
+    pub fn transition_log(&self) -> &[TransitionRecord] {
+        &self.transition_log
+    }
 }
 
-impl<S: FlowState> Default for InMemoryFlowStore<S> { fn default() -> Self { Self::new() } }
+impl<S: FlowState> Default for InMemoryFlowStore<S> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl<S: FlowState> FlowStore<S> for InMemoryFlowStore<S> {
-    fn create(&mut self, flow: FlowInstance<S>) { self.create(flow); }
-    fn get(&self, flow_id: &str) -> Option<&FlowInstance<S>> { self.get(flow_id) }
-    fn get_mut(&mut self, flow_id: &str) -> Option<&mut FlowInstance<S>> { self.get_mut(flow_id) }
+    fn create(&mut self, flow: FlowInstance<S>) {
+        self.create(flow);
+    }
+    fn get(&self, flow_id: &str) -> Option<&FlowInstance<S>> {
+        self.get(flow_id)
+    }
+    fn get_mut(&mut self, flow_id: &str) -> Option<&mut FlowInstance<S>> {
+        self.get_mut(flow_id)
+    }
     fn record_transition(&mut self, flow_id: &str, from: &str, to: &str, trigger: &str) {
         self.record_transition(flow_id, from, to, trigger);
     }
-    fn transition_log(&self) -> &[TransitionRecord] { self.transition_log() }
-    fn clear(&mut self) { self.clear(); }
+    fn transition_log(&self) -> &[TransitionRecord] {
+        self.transition_log()
+    }
+    fn clear(&mut self) {
+        self.clear();
+    }
 }

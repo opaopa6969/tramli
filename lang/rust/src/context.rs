@@ -24,8 +24,11 @@ pub struct FlowContext {
 impl FlowContext {
     pub fn new(flow_id: String) -> Self {
         Self {
-            flow_id, created_at: std::time::Instant::now(),
-            attrs: HashMap::new(), alias_to_type: HashMap::new(), type_to_alias: HashMap::new(),
+            flow_id,
+            created_at: std::time::Instant::now(),
+            attrs: HashMap::new(),
+            alias_to_type: HashMap::new(),
+            type_to_alias: HashMap::new(),
         }
     }
 
@@ -34,13 +37,15 @@ impl FlowContext {
     }
 
     pub fn get<T: CloneAny + 'static>(&self) -> Result<&T, FlowError> {
-        self.attrs.get(&TypeId::of::<T>())
+        self.attrs
+            .get(&TypeId::of::<T>())
             .and_then(|v| (**v).as_any().downcast_ref::<T>())
             .ok_or_else(|| FlowError::missing_context(std::any::type_name::<T>()))
     }
 
     pub fn find<T: CloneAny + 'static>(&self) -> Option<&T> {
-        self.attrs.get(&TypeId::of::<T>())
+        self.attrs
+            .get(&TypeId::of::<T>())
             .and_then(|v| (**v).as_any().downcast_ref::<T>())
     }
 
@@ -59,7 +64,10 @@ impl FlowContext {
 
     /// Create a snapshot of the current context (for rollback on error).
     pub fn snapshot(&self) -> HashMap<TypeId, Box<dyn CloneAny>> {
-        self.attrs.iter().map(|(k, v)| (*k, (**v).clone_box())).collect()
+        self.attrs
+            .iter()
+            .map(|(k, v)| (*k, (**v).clone_box()))
+            .collect()
     }
 
     /// Restore context from a snapshot (for rollback on error).
@@ -71,8 +79,10 @@ impl FlowContext {
 
     /// Register a string alias for a type. Used for cross-language serialization.
     pub fn register_alias<T: 'static>(&mut self, alias: &str) {
-        self.alias_to_type.insert(alias.to_string(), TypeId::of::<T>());
-        self.type_to_alias.insert(TypeId::of::<T>(), alias.to_string());
+        self.alias_to_type
+            .insert(alias.to_string(), TypeId::of::<T>());
+        self.type_to_alias
+            .insert(TypeId::of::<T>(), alias.to_string());
     }
 
     /// Get the alias for a TypeId (if registered).
