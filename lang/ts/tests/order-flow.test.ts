@@ -236,7 +236,14 @@ describe('OrderFlow', () => {
   it('crossFlowMap', () => {
     const def = definition(true);
     const map = DataFlowGraph.crossFlowMap(def.dataFlowGraph!, def.dataFlowGraph!);
-    expect(map).toBeDefined();
+    expect(new Set(map)).toEqual(new Set([
+      'OrderRequest: flow 0 produces → flow 1 consumes',
+      'PaymentIntent: flow 0 produces → flow 1 consumes',
+      'PaymentResult: flow 0 produces → flow 1 consumes',
+      'OrderRequest: flow 1 produces → flow 0 consumes',
+      'PaymentIntent: flow 1 produces → flow 0 consumes',
+      'PaymentResult: flow 1 produces → flow 0 consumes',
+    ]));
   });
 
   it('diff', () => {
