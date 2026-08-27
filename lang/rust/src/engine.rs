@@ -143,17 +143,20 @@ impl<S: FlowState> FlowEngine<S> {
             let current = flow.current_state();
             let def = flow.definition.clone();
 
-            // Multi-external: select guard by requires matching
-            let externals = def.externals_from(current);
-            if externals.is_empty() {
-                return Err(FlowError::invalid_transition(&format!("{:?}", current), &format!("{:?}", current)));
-            }
-            let transition = externals.iter()
-                .find(|ext| ext.guard.as_ref().map_or(false, |g| {
-                    g.requires().iter().all(|r| data_type_ids.contains(r))
-                }))
-                .copied()
-                .unwrap_or(externals[0]);
+            if flow.has_active_sub_flow() {
+                Self::resume_active_sub_flow(flow, current, &def)?
+            } else {
+                // Multi-external: select guard by requires matching
+                let externals = def.externals_from(current);
+                if externals.is_empty() {
+                    return Err(FlowError::invalid_transition(&format!("{:?}", current), &format!("{:?}", current)));
+                }
+                let transition = externals.iter()
+                    .find(|ext| ext.guard.as_ref().map_or(false, |g| {
+                        g.requires().iter().all(|r| data_type_ids.contains(r))
+                    }))
+                    .copied()
+                    .unwrap_or(externals[0]);
 
             // Per-state timeout check
             if let Some(timeout) = transition.timeout {
@@ -164,10 +167,10 @@ impl<S: FlowState> FlowEngine<S> {
                 }
             }
 
-            if let Some(guard) = &transition.guard {
-                let guard_name = guard.name().to_string();
-                let output = guard.validate(&flow.context);
-                match output {
+                if let Some(guard) = &transition.guard {
+                    let guard_name = guard.name().to_string();
+                    let output = guard.validate(&flow.context);
+                    match output {
                     GuardOutput::Accepted { data } => {
                         guard_info = Some((format!("{:?}", current), guard_name.clone(), "accepted", None));
                         let backup = flow.context.snapshot();
@@ -211,14 +214,15 @@ impl<S: FlowState> FlowEngine<S> {
                         flow.complete("EXPIRED");
                         None
                     }
+                    }
+                } else {
+                    let from_dbg = format!("{:?}", current);
+                    let to = transition.to;
+                    if let Some(action) = def.exit_action(current) { action(&mut flow.context); }
+                    flow.transition_to(to);
+                    if let Some(action) = def.enter_action(to) { action(&mut flow.context); }
+                    Some((from_dbg, format!("{:?}", to), "external".to_string()))
                 }
-            } else {
-                let from_dbg = format!("{:?}", current);
-                let to = transition.to;
-                if let Some(action) = def.exit_action(current) { action(&mut flow.context); }
-                flow.transition_to(to);
-                if let Some(action) = def.enter_action(to) { action(&mut flow.context); }
-                Some((from_dbg, format!("{:?}", to), "external".to_string()))
             }
         }; // flow borrow ends here
 
@@ -310,6 +314,53 @@ impl<S: FlowState> FlowEngine<S> {
         Ok(())
     }
 
+    fn resume_active_sub_flow(
+        flow: &mut FlowInstance<S>, current: S, def: &FlowDefinition<S>,
+    ) -> Result<Option<(String, String, String)>, FlowError> {
+        use crate::sub_flow::SubFlowResult;
+
+        let mut instance = flow.take_active_sub_flow()
+            .expect("active sub-flow must exist after has_active_sub_flow");
+        let result = match instance.resume(&mut flow.context) {
+            Ok(result) => result,
+            Err(error) => {
+                flow.set_active_sub_flow(instance);
+                return Err(error);
+            }
+        };
+
+        match result {
+            SubFlowResult::WaitingAtExternal | SubFlowResult::GuardRejected(_) => {
+                flow.set_active_sub_flow(instance);
+                Ok(None)
+            }
+            SubFlowResult::Completed(exit_name) => {
+                let config = def.transitions.iter()
+                    .find(|transition| transition.from == current && transition.transition_type == TransitionType::SubFlow)
+                    .and_then(|transition| transition.sub_flow.as_ref());
+                if let Some(config) = config {
+                    if let Some(&target) = config.exit_mappings.get(&exit_name) {
+                        let from = format!("{:?}", current);
+                        if let Some(action) = def.exit_action(current) { action(&mut flow.context); }
+                        flow.transition_to(target);
+                        if let Some(action) = def.enter_action(target) { action(&mut flow.context); }
+                        return Ok(Some((
+                            from,
+                            format!("{:?}", target),
+                            format!("subFlow:{}/{}", config.runner.name(), exit_name),
+                        )));
+                    }
+                }
+                Self::handle_error(flow, current, def);
+                Ok(Some((
+                    format!("{:?}", current),
+                    format!("{:?}", flow.current_state()),
+                    "error".to_string(),
+                )))
+            }
+        }
+    }
+
     /// Dispatch one auto-chain step. Returns (from, to, trigger, is_error) or None to stop.
     fn dispatch_step(
         flow: &mut FlowInstance<S>, current: S, def: &FlowDefinition<S>, strict_mode: bool,
@@ -319,7 +370,8 @@ impl<S: FlowState> FlowEngine<S> {
             if let Some(ref config) = sft.sub_flow {
                 use crate::sub_flow::SubFlowResult;
                 let mut instance = config.runner.create_instance();
-                return match instance.start(&mut flow.context)? {
+                let result = instance.start(&mut flow.context)?;
+                return match result {
                     SubFlowResult::Completed(exit_name) => {
                         if let Some(&target) = config.exit_mappings.get(&exit_name) {
                             let from_dbg = format!("{:?}", current);
@@ -333,7 +385,10 @@ impl<S: FlowState> FlowEngine<S> {
                             Ok(Some((format!("{:?}", current), format!("{:?}", flow.current_state()), "error".to_string(), true)))
                         }
                     }
-                    SubFlowResult::WaitingAtExternal | SubFlowResult::GuardRejected(_) => Ok(None),
+                    SubFlowResult::WaitingAtExternal | SubFlowResult::GuardRejected(_) => {
+                        flow.set_active_sub_flow(instance);
+                        Ok(None)
+                    }
                 };
             }
             return Ok(None);

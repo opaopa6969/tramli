@@ -19,6 +19,7 @@ pub struct FlowInstance<S: FlowState> {
     state_entered_at: Instant,
     last_error: Option<String>,
     exit_state: Option<String>,
+    active_sub_flow: Option<Box<dyn crate::sub_flow::SubFlowInstance>>,
 }
 
 impl<S: FlowState> FlowInstance<S> {
@@ -32,7 +33,7 @@ impl<S: FlowState> FlowInstance<S> {
             id, session_id, definition, context, current_state,
             guard_failure_count: 0, guard_failure_counts: std::collections::HashMap::new(),
             version: 0, created_at: now, expires_at, state_entered_at: now,
-            last_error: None, exit_state: None,
+            last_error: None, exit_state: None, active_sub_flow: None,
         }
     }
 
@@ -50,6 +51,7 @@ impl<S: FlowState> FlowInstance<S> {
             guard_failure_count, guard_failure_counts: std::collections::HashMap::new(),
             version, created_at, expires_at,
             state_entered_at: created_at, last_error: None, exit_state,
+            active_sub_flow: None,
         }
     }
 
@@ -67,7 +69,11 @@ impl<S: FlowState> FlowInstance<S> {
 
     /// State path from root. E.g. ["PAYMENT", "CONFIRM"].
     pub fn state_path(&self) -> Vec<String> {
-        vec![format!("{:?}", self.current_state)]
+        let mut path = vec![format!("{:?}", self.current_state)];
+        if let Some(sub_flow) = &self.active_sub_flow {
+            path.extend(sub_flow.state_path());
+        }
+        path
     }
 
     /// State path as slash-separated string.
@@ -98,6 +104,9 @@ impl<S: FlowState> FlowInstance<S> {
 
     /// Types required by the next external transition.
     pub fn waiting_for(&self) -> Vec<std::any::TypeId> {
+        if let Some(sub_flow) = &self.active_sub_flow {
+            return sub_flow.waiting_for();
+        }
         if let Some(ext) = self.definition.external_from(self.current_state) {
             if let Some(g) = &ext.guard {
                 return g.requires();
@@ -112,6 +121,13 @@ impl<S: FlowState> FlowInstance<S> {
     }
 
     pub fn state_entered_at(&self) -> Instant { self.state_entered_at }
+    pub(crate) fn has_active_sub_flow(&self) -> bool { self.active_sub_flow.is_some() }
+    pub(crate) fn take_active_sub_flow(&mut self) -> Option<Box<dyn crate::sub_flow::SubFlowInstance>> {
+        self.active_sub_flow.take()
+    }
+    pub(crate) fn set_active_sub_flow(&mut self, sub_flow: Box<dyn crate::sub_flow::SubFlowInstance>) {
+        self.active_sub_flow = Some(sub_flow);
+    }
     pub(crate) fn transition_to(&mut self, state: S) {
         let changed = self.current_state != state;
         self.current_state = state;
@@ -124,5 +140,8 @@ impl<S: FlowState> FlowInstance<S> {
         *self.guard_failure_counts.entry(guard_name.to_string()).or_default() += 1;
     }
     pub(crate) fn set_last_error(&mut self, error: impl Into<String>) { self.last_error = Some(error.into()); }
-    pub(crate) fn complete(&mut self, exit_state: impl Into<String>) { self.exit_state = Some(exit_state.into()); }
+    pub(crate) fn complete(&mut self, exit_state: impl Into<String>) {
+        self.exit_state = Some(exit_state.into());
+        self.active_sub_flow = None;
+    }
 }

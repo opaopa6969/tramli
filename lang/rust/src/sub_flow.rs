@@ -28,6 +28,12 @@ pub trait SubFlowRunner: Send + Sync {
 /// A running sub-flow instance. Owns its state — NOT shared between flows.
 pub trait SubFlowInstance: Send {
     fn current_state_name(&self) -> Option<String>;
+    /// State path from this sub-flow to its deepest active child.
+    fn state_path(&self) -> Vec<String> {
+        self.current_state_name().into_iter().collect()
+    }
+    /// Types required by the external transition where this sub-flow is waiting.
+    fn waiting_for(&self) -> Vec<std::any::TypeId> { Vec::new() }
     fn start(&mut self, ctx: &mut FlowContext) -> Result<SubFlowResult, FlowError>;
     fn resume(&mut self, ctx: &mut FlowContext) -> Result<SubFlowResult, FlowError>;
 }
@@ -63,6 +69,7 @@ impl<T: FlowState> SubFlowRunner for SubFlowAdapter<T> {
             definition: self.definition.clone(),
             state: None,
             guard_failure_count: 0,
+            active_sub_flow: None,
         })
     }
 }
@@ -73,11 +80,30 @@ struct SubFlowAdapterInstance<T: FlowState> {
     definition: Arc<FlowDefinition<T>>,
     state: Option<T>,
     guard_failure_count: usize,
+    active_sub_flow: Option<Box<dyn SubFlowInstance>>,
 }
 
 impl<T: FlowState> SubFlowInstance for SubFlowAdapterInstance<T> {
     fn current_state_name(&self) -> Option<String> {
         self.state.map(|s| format!("{:?}", s))
+    }
+
+    fn state_path(&self) -> Vec<String> {
+        let mut path: Vec<String> = self.current_state_name().into_iter().collect();
+        if let Some(sub_flow) = &self.active_sub_flow {
+            path.extend(sub_flow.state_path());
+        }
+        path
+    }
+
+    fn waiting_for(&self) -> Vec<std::any::TypeId> {
+        if let Some(sub_flow) = &self.active_sub_flow {
+            return sub_flow.waiting_for();
+        }
+        let Some(current) = self.state else { return Vec::new() };
+        self.definition.external_from(current)
+            .and_then(|transition| transition.guard.as_ref())
+            .map_or_else(Vec::new, |guard| guard.requires())
     }
 
     fn start(&mut self, ctx: &mut FlowContext) -> Result<SubFlowResult, FlowError> {
@@ -91,6 +117,34 @@ impl<T: FlowState> SubFlowInstance for SubFlowAdapterInstance<T> {
     fn resume(&mut self, ctx: &mut FlowContext) -> Result<SubFlowResult, FlowError> {
         let current = self.state.ok_or_else(||
             FlowError::new("INVALID_STATE", "Sub-flow not started"))?;
+
+        if let Some(mut sub_flow) = self.active_sub_flow.take() {
+            let result = match sub_flow.resume(ctx) {
+                Ok(result) => result,
+                Err(error) => {
+                    self.active_sub_flow = Some(sub_flow);
+                    return Err(error);
+                }
+            };
+            match result {
+                SubFlowResult::WaitingAtExternal | SubFlowResult::GuardRejected(_) => {
+                    self.active_sub_flow = Some(sub_flow);
+                    return Ok(result);
+                }
+                SubFlowResult::Completed(exit_name) => {
+                    let target = self.definition.transitions.iter()
+                        .find(|transition| transition.from == current && transition.transition_type == TransitionType::SubFlow)
+                        .and_then(|transition| transition.sub_flow.as_ref())
+                        .and_then(|config| config.exit_mappings.get(&exit_name))
+                        .copied();
+                    if let Some(target) = target {
+                        self.state = Some(target);
+                        return self.run_auto_chain(ctx);
+                    }
+                    return self.handle_error_no_cause(current);
+                }
+            }
+        }
 
         let ext = self.definition.transitions.iter()
             .find(|t| t.from == current && t.transition_type == TransitionType::External)
@@ -134,6 +188,29 @@ impl<T: FlowState> SubFlowAdapterInstance<T> {
             let current = self.state.unwrap();
             if current.is_terminal() {
                 return Ok(SubFlowResult::Completed(format!("{:?}", current)));
+            }
+
+            // Nested sub-flow transition
+            if let Some(config) = self.definition.transitions.iter()
+                .find(|transition| transition.from == current && transition.transition_type == TransitionType::SubFlow)
+                .and_then(|transition| transition.sub_flow.as_ref())
+                .cloned()
+            {
+                let mut sub_flow = config.runner.create_instance();
+                match sub_flow.start(ctx)? {
+                    SubFlowResult::Completed(exit_name) => {
+                        if let Some(&target) = config.exit_mappings.get(&exit_name) {
+                            self.state = Some(target);
+                            depth += 1;
+                            continue;
+                        }
+                        return self.handle_error_no_cause(current);
+                    }
+                    result @ (SubFlowResult::WaitingAtExternal | SubFlowResult::GuardRejected(_)) => {
+                        self.active_sub_flow = Some(sub_flow);
+                        return Ok(result);
+                    }
+                }
             }
 
             // Auto transition
