@@ -1,11 +1,13 @@
 use std::any::TypeId;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::data_flow_graph::DataFlowGraph;
 use crate::error::FlowError;
 use crate::types::*;
 
+#[derive(Clone)]
 pub struct FlowDefinition<S: FlowState> {
     pub name: String,
     pub ttl: Duration,
@@ -15,16 +17,17 @@ pub struct FlowDefinition<S: FlowState> {
     initial_state: Option<S>,
     terminal_states: HashSet<S>,
     data_flow_graph: DataFlowGraph<S>,
-    enter_actions: HashMap<S, Box<dyn Fn(&mut crate::context::FlowContext) + Send + Sync>>,
-    exit_actions: HashMap<S, Box<dyn Fn(&mut crate::context::FlowContext) + Send + Sync>>,
+    enter_actions: HashMap<S, Arc<dyn Fn(&mut crate::context::FlowContext) + Send + Sync>>,
+    exit_actions: HashMap<S, Arc<dyn Fn(&mut crate::context::FlowContext) + Send + Sync>>,
     pub exception_routes: HashMap<S, Vec<ExceptionRoute<S>>>,
     pub strict_mode: bool,
     warnings: Vec<String>,
 }
 
 /// Route to a specific state based on error predicate.
+#[derive(Clone)]
 pub struct ExceptionRoute<S: FlowState> {
-    pub predicate: Box<dyn Fn(&FlowError) -> bool + Send + Sync>,
+    pub predicate: Arc<dyn Fn(&FlowError) -> bool + Send + Sync>,
     pub label: String,
     pub target: S,
 }
@@ -57,6 +60,47 @@ impl<S: FlowState> FlowDefinition<S> {
     pub fn externals_from(&self, state: S) -> Vec<&Transition<S>> {
         self.transitions.iter().filter(|t| t.from == state && t.transition_type == TransitionType::External).collect()
     }
+
+    /// Return a new definition with `plugin_flow` inserted before the first
+    /// transition matching `from -> to`. The base definition is not mutated.
+    pub fn with_plugin<T: FlowState>(
+        &self,
+        from: S,
+        to: S,
+        plugin_flow: Arc<FlowDefinition<T>>,
+    ) -> Self {
+        let mut result = self.clone();
+        let mut replaced = false;
+        let plugin_name = plugin_flow.name.clone();
+
+        result.transitions = self.transitions.iter().map(|transition| {
+            if transition.from == from && transition.to == to && !replaced {
+                replaced = true;
+                let exit_mappings = plugin_flow.terminal_states().iter()
+                    .map(|terminal| (format!("{:?}", terminal), to))
+                    .collect();
+                Transition {
+                    from,
+                    to: from,
+                    transition_type: TransitionType::SubFlow,
+                    processor: transition.processor.clone(),
+                    guard: None,
+                    branch: None,
+                    branch_targets: HashMap::new(),
+                    branch_label: None,
+                    sub_flow: Some(crate::sub_flow::SubFlowConfig {
+                        runner: Arc::new(crate::sub_flow::SubFlowAdapter::new(plugin_flow.clone())),
+                        exit_mappings,
+                    }),
+                    timeout: None,
+                }
+            } else {
+                transition.clone()
+            }
+        }).collect();
+        result.name = format!("{}+plugin:{}", self.name, plugin_name);
+        result
+    }
 }
 
 // ─── Builder ─────────────────────────────────────────────
@@ -72,9 +116,9 @@ pub struct Builder<S: FlowState> {
     perpetual: bool,
     strict_mode: bool,
     allow_unreachable: bool,
-    enter_actions: HashMap<S, Box<dyn Fn(&mut crate::context::FlowContext) + Send + Sync>>,
-    exit_actions: HashMap<S, Box<dyn Fn(&mut crate::context::FlowContext) + Send + Sync>>,
-    exception_routes: HashMap<S, Vec<(Box<dyn Fn(&FlowError) -> bool + Send + Sync>, String, S)>>,
+    enter_actions: HashMap<S, Arc<dyn Fn(&mut crate::context::FlowContext) + Send + Sync>>,
+    exit_actions: HashMap<S, Arc<dyn Fn(&mut crate::context::FlowContext) + Send + Sync>>,
+    exception_routes: HashMap<S, Vec<(Arc<dyn Fn(&FlowError) -> bool + Send + Sync>, String, S)>>,
 }
 
 impl<S: FlowState> Builder<S> {
@@ -117,19 +161,19 @@ impl<S: FlowState> Builder<S> {
 
     /// Callback when entering a state (pure data/metrics, no I/O).
     pub fn on_state_enter(mut self, state: S, action: impl Fn(&mut crate::context::FlowContext) + Send + Sync + 'static) -> Self {
-        self.enter_actions.insert(state, Box::new(action));
+        self.enter_actions.insert(state, Arc::new(action));
         self
     }
 
     /// Callback when exiting a state (pure data/metrics, no I/O).
     pub fn on_state_exit(mut self, state: S, action: impl Fn(&mut crate::context::FlowContext) + Send + Sync + 'static) -> Self {
-        self.exit_actions.insert(state, Box::new(action));
+        self.exit_actions.insert(state, Arc::new(action));
         self
     }
 
     /// Route specific error types to specific states. Checked before on_error.
     pub fn on_step_error(mut self, from: S, predicate: impl Fn(&FlowError) -> bool + Send + Sync + 'static, label: impl Into<String>, to: S) -> Self {
-        self.exception_routes.entry(from).or_default().push((Box::new(predicate), label.into(), to));
+        self.exception_routes.entry(from).or_default().push((Arc::new(predicate), label.into(), to));
         self
     }
 
@@ -246,7 +290,7 @@ impl<S: FlowState> FromBuilder<S> {
     pub fn auto(mut self, to: S, processor: impl StateProcessor<S> + 'static) -> Builder<S> {
         self.builder.add_transition(Transition {
             from: self.from, to, transition_type: TransitionType::Auto,
-            processor: Some(Box::new(processor)), guard: None, branch: None,
+            processor: Some(Arc::new(processor)), guard: None, branch: None,
             branch_targets: HashMap::new(), branch_label: None, sub_flow: None, timeout: None,
         });
         self.builder
@@ -255,7 +299,7 @@ impl<S: FlowState> FromBuilder<S> {
     pub fn external(mut self, to: S, guard: impl TransitionGuard<S> + 'static) -> Builder<S> {
         self.builder.add_transition(Transition {
             from: self.from, to, transition_type: TransitionType::External,
-            processor: None, guard: Some(Box::new(guard)), branch: None,
+            processor: None, guard: Some(Arc::new(guard)), branch: None,
             branch_targets: HashMap::new(), branch_label: None, sub_flow: None, timeout: None,
         });
         self.builder
@@ -264,7 +308,7 @@ impl<S: FlowState> FromBuilder<S> {
     pub fn external_with_processor(mut self, to: S, guard: impl TransitionGuard<S> + 'static, processor: impl StateProcessor<S> + 'static) -> Builder<S> {
         self.builder.add_transition(Transition {
             from: self.from, to, transition_type: TransitionType::External,
-            processor: Some(Box::new(processor)), guard: Some(Box::new(guard)), branch: None,
+            processor: Some(Arc::new(processor)), guard: Some(Arc::new(guard)), branch: None,
             branch_targets: HashMap::new(), branch_label: None, sub_flow: None, timeout: None,
         });
         self.builder
@@ -273,7 +317,7 @@ impl<S: FlowState> FromBuilder<S> {
     pub fn external_with_timeout(mut self, to: S, guard: impl TransitionGuard<S> + 'static, timeout: std::time::Duration) -> Builder<S> {
         self.builder.add_transition(Transition {
             from: self.from, to, transition_type: TransitionType::External,
-            processor: None, guard: Some(Box::new(guard)), branch: None,
+            processor: None, guard: Some(Arc::new(guard)), branch: None,
             branch_targets: HashMap::new(), branch_label: None, sub_flow: None, timeout: Some(timeout),
         });
         self.builder
@@ -282,7 +326,7 @@ impl<S: FlowState> FromBuilder<S> {
     pub fn external_with_processor_and_timeout(mut self, to: S, guard: impl TransitionGuard<S> + 'static, processor: impl StateProcessor<S> + 'static, timeout: std::time::Duration) -> Builder<S> {
         self.builder.add_transition(Transition {
             from: self.from, to, transition_type: TransitionType::External,
-            processor: Some(Box::new(processor)), guard: Some(Box::new(guard)), branch: None,
+            processor: Some(Arc::new(processor)), guard: Some(Arc::new(guard)), branch: None,
             branch_targets: HashMap::new(), branch_label: None, sub_flow: None, timeout: Some(timeout),
         });
         self.builder
@@ -291,14 +335,14 @@ impl<S: FlowState> FromBuilder<S> {
     pub fn sub_flow(self, runner: Box<dyn crate::sub_flow::SubFlowRunner>) -> SubFlowBuilder<S> {
         SubFlowBuilder {
             builder: self.builder, from: self.from,
-            runner, exit_mappings: HashMap::new(),
+            runner: runner.into(), exit_mappings: HashMap::new(),
         }
     }
 
     pub fn branch(self, branch: impl BranchProcessor<S> + 'static) -> BranchBuilder<S> {
         BranchBuilder {
             builder: self.builder, from: self.from,
-            branch: Some(Box::new(branch)),
+            branch: Some(Arc::new(branch)),
             targets: HashMap::new(),
         }
     }
@@ -308,7 +352,7 @@ impl<S: FlowState> FromBuilder<S> {
 
 pub struct BranchBuilder<S: FlowState> {
     builder: Builder<S>, from: S,
-    branch: Option<Box<dyn BranchProcessor<S>>>,
+    branch: Option<Arc<dyn BranchProcessor<S>>>,
     targets: HashMap<String, S>,
 }
 
@@ -339,7 +383,7 @@ impl<S: FlowState> BranchBuilder<S> {
 pub struct SubFlowBuilder<S: FlowState> {
     builder: Builder<S>,
     from: S,
-    runner: Box<dyn crate::sub_flow::SubFlowRunner>,
+    runner: Arc<dyn crate::sub_flow::SubFlowRunner>,
     exit_mappings: HashMap<String, S>,
 }
 
