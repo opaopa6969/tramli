@@ -497,12 +497,11 @@ mod s18 {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// S21: withPlugin basic (SubFlowAdapter in Rust)
+// S21: withPlugin basic
 // ═══════════════════════════════════════════════════════════════
 
 mod s21 {
     use super::*;
-    use tramli::sub_flow::SubFlowAdapter;
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     enum M { Created, Payment, Done }
@@ -541,16 +540,12 @@ mod s21 {
                 .build()
                 .unwrap(),
         );
-        let main_def = Arc::new(
-            Builder::<M>::new("order")
-                .from(M::Created)
-                    .sub_flow(Box::new(SubFlowAdapter::new(plugin_def)))
-                    .on_exit("Done", M::Payment)
-                    .end_sub_flow()
+        let base_def = Builder::<M>::new("order")
+                .from(M::Created).auto(M::Payment, Noop)
                 .from(M::Payment).auto(M::Done, Noop)
                 .build()
-                .unwrap(),
-        );
+                .unwrap();
+        let main_def = Arc::new(base_def.with_plugin(M::Created, M::Payment, plugin_def));
         let mut engine = FlowEngine::new(InMemoryFlowStore::new());
         let fid = engine.start_flow(main_def, "s21", vec![]).unwrap();
         let f = engine.store.get(&fid).unwrap();
@@ -611,7 +606,6 @@ mod s11 {
 
 mod s22 {
     use super::*;
-    use tramli::sub_flow::SubFlowAdapter;
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     enum M { A, B, C }
@@ -640,18 +634,14 @@ mod s22 {
                 .build()
                 .unwrap(),
         );
-        let def = Arc::new(
-            Builder::<M>::new("s22")
+        let base_def = Builder::<M>::new("s22")
                 .on_state_exit(M::A, |ctx| { ctx.put(ExitedA(true)); })
                 .on_state_enter(M::B, |ctx| { ctx.put(EnteredB(true)); })
-                .from(M::A)
-                    .sub_flow(Box::new(SubFlowAdapter::new(plugin_def)))
-                    .on_exit("Done", M::B)
-                    .end_sub_flow()
+                .from(M::A).auto(M::B, Noop)
                 .from(M::B).auto(M::C, Noop)
                 .build()
-                .unwrap(),
-        );
+                .unwrap();
+        let def = Arc::new(base_def.with_plugin(M::A, M::B, plugin_def));
         let mut engine = FlowEngine::new(InMemoryFlowStore::new());
         let fid = engine.start_flow(def, "s22", vec![]).unwrap();
         let f = engine.store.get(&fid).unwrap();
@@ -667,7 +657,6 @@ mod s22 {
 
 mod s23 {
     use super::*;
-    use tramli::sub_flow::SubFlowAdapter;
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     enum M { A, B, C, SpecialErr }
@@ -703,17 +692,13 @@ mod s23 {
                 .build()
                 .unwrap(),
         );
-        let def = Arc::new(
-            Builder::<M>::new("s23")
-                .from(M::A)
-                    .sub_flow(Box::new(SubFlowAdapter::new(plugin_def)))
-                    .on_exit("Done", M::B)
-                    .end_sub_flow()
+        let base_def = Builder::<M>::new("s23")
+                .from(M::A).auto(M::B, Noop)
                 .from(M::B).auto(M::C, SpecificFailProc)
                 .on_step_error(M::B, |e| e.code == "SPECIFIC_ERROR", "SpecificError", M::SpecialErr)
                 .build()
-                .unwrap(),
-        );
+                .unwrap();
+        let def = Arc::new(base_def.with_plugin(M::A, M::B, plugin_def));
         let mut engine = FlowEngine::new(InMemoryFlowStore::new());
         let fid = engine.start_flow(def, "s23", vec![]).unwrap();
         let f = engine.store.get(&fid).unwrap();
@@ -727,7 +712,6 @@ mod s23 {
 
 mod s30 {
     use super::*;
-    use tramli::sub_flow::{SubFlowAdapter, SubFlowRunner};
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     enum M { A, B }
@@ -746,15 +730,23 @@ mod s30 {
     }
 
     #[test]
-    fn s30_subflow_runner_name() {
+    fn s30_with_plugin_name_and_immutability() {
         let plugin_def = Arc::new(
             Builder::<Pl>::new("validation")
                 .from(Pl::Init).auto(Pl::Done, Noop)
                 .build()
                 .unwrap(),
         );
-        let adapter = SubFlowAdapter::new(plugin_def);
-        assert_eq!(adapter.name(), "validation", "SubFlowAdapter name should match definition name");
+        let base_def = Builder::<M>::new("order")
+            .from(M::A).auto(M::B, Noop)
+            .build()
+            .unwrap();
+        let extended = base_def.with_plugin(M::A, M::B, plugin_def);
+
+        assert_eq!(base_def.name, "order", "base definition must remain unchanged");
+        assert_eq!(base_def.transitions[0].transition_type, TransitionType::Auto);
+        assert_eq!(extended.name, "order+plugin:validation");
+        assert_eq!(extended.transitions[0].transition_type, TransitionType::SubFlow);
     }
 }
 

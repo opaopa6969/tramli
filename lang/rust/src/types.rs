@@ -2,6 +2,7 @@ use std::any::TypeId;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
+use std::sync::Arc;
 
 use crate::clone_any::CloneAny;
 use crate::context::FlowContext;
@@ -77,13 +78,14 @@ pub trait BranchProcessor<S: FlowState>: Send + Sync {
 }
 
 /// A single transition in the flow definition.
+#[derive(Clone)]
 pub struct Transition<S: FlowState> {
     pub from: S,
     pub to: S,
     pub transition_type: TransitionType,
-    pub processor: Option<Box<dyn StateProcessor<S>>>,
-    pub guard: Option<Box<dyn TransitionGuard<S>>>,
-    pub branch: Option<Box<dyn BranchProcessor<S>>>,
+    pub processor: Option<Arc<dyn StateProcessor<S>>>,
+    pub guard: Option<Arc<dyn TransitionGuard<S>>>,
+    pub branch: Option<Arc<dyn BranchProcessor<S>>>,
     pub branch_targets: HashMap<String, S>,
     /// Label assigned by builder .to(target, label, processor). Used for branch label-specific processor matching.
     pub branch_label: Option<String>,

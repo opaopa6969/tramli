@@ -33,8 +33,9 @@ pub trait SubFlowInstance: Send {
 }
 
 /// Configuration for a sub-flow transition.
+#[derive(Clone)]
 pub struct SubFlowConfig<S> {
-    pub runner: Box<dyn SubFlowRunner>,
+    pub runner: Arc<dyn SubFlowRunner>,
     pub exit_mappings: HashMap<String, S>,
 }
 

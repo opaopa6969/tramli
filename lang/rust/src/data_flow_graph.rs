@@ -39,6 +39,7 @@ pub struct ProducerInfo {
 
 /// Bipartite graph of data types (TypeId) and processors/guards.
 /// Built automatically during FlowDefinition::build().
+#[derive(Clone)]
 pub struct DataFlowGraph<S: FlowState> {
     available_at_state: HashMap<S, HashSet<TypeId>>,
     producers: HashMap<TypeId, Vec<NodeInfo<S>>>,
