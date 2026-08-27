@@ -225,6 +225,16 @@ mod s10 {
         }
     }
 
+    struct CombinedGuard;
+    impl TransitionGuard<S> for CombinedGuard {
+        fn name(&self) -> &str { "combinedGuard" }
+        fn requires(&self) -> Vec<TypeId> { requires![PaymentData, CancelRequest] }
+        fn produces(&self) -> Vec<TypeId> { vec![] }
+        fn validate(&self, _ctx: &FlowContext) -> GuardOutput {
+            GuardOutput::Accepted { data: HashMap::new() }
+        }
+    }
+
     #[test]
     fn s10_multi_external_payment() {
         let def = Arc::new(
@@ -265,6 +275,33 @@ mod s10 {
         ]).unwrap();
         let f = engine.store.get(&fid).unwrap();
         assert_eq!(f.current_state(), S::D, "CancelRequest should select cancelGuard → D");
+    }
+
+    #[test]
+    fn s10_duplicate_external_requires_rejected() {
+        let result = Builder::<S>::new("s10-duplicate")
+            .initially_available(requires![PaymentData])
+            .from(S::A).auto(S::B, Noop)
+            .from(S::B).external(S::C, PaymentGuard)
+            .from(S::B).external(S::D, PaymentGuard)
+            .build_and_validate();
+
+        assert!(result.definition.is_none());
+        assert!(result.errors.iter()
+            .any(|error| error.code == "EXTERNAL_REQUIRES_NOT_DISTINCT"));
+    }
+
+    #[test]
+    fn s10_subset_external_requires_allowed() {
+        let result = Builder::<S>::new("s10-subset")
+            .initially_available(requires![PaymentData, CancelRequest])
+            .from(S::A).auto(S::B, Noop)
+            .from(S::B).external(S::C, PaymentGuard)
+            .from(S::B).external(S::D, CombinedGuard)
+            .build_and_validate();
+
+        assert!(result.definition.is_some());
+        assert!(result.errors.is_empty());
     }
 }
 

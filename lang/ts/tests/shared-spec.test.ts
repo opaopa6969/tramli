@@ -261,6 +261,36 @@ describe('S10: Multi-External Guard Selection', () => {
     expect(resumed.currentState).toBe('D');
     expect(resumed.isCompleted).toBe(true);
   });
+
+  it('s10_duplicate_external_requires_rejected', () => {
+    const first = guardA();
+    const second = { ...guardA(), name: 'SecondGuard' };
+
+    const result = Tramli.define<S10>('s10-duplicate', s10Config)
+      .initiallyAvailable(PaymentData)
+      .from('A').auto('B', noop('Noop'))
+      .from('B').external('C', first)
+      .from('B').external('D', second)
+      .buildAndValidate();
+
+    expect(result.definition).toBeNull();
+    expect(result.errors.some(error => error.code === 'EXTERNAL_REQUIRES_NOT_DISTINCT')).toBe(true);
+  });
+
+  it('s10_subset_external_requires_allowed', () => {
+    const subset = guardA();
+    const superset = { ...guardA(), name: 'SupersetGuard', requires: [PaymentData, CancelRequest] };
+
+    const result = Tramli.define<S10>('s10-subset', s10Config)
+      .initiallyAvailable(PaymentData, CancelRequest)
+      .from('A').auto('B', noop('Noop'))
+      .from('B').external('C', subset)
+      .from('B').external('D', superset)
+      .buildAndValidate();
+
+    expect(result.definition).not.toBeNull();
+    expect(result.errors).toEqual([]);
+  });
 });
 
 // ─── S11: Per-State Timeout ─────────────────────────

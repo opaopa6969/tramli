@@ -358,6 +358,43 @@ class SharedSpecTest {
         assertTrue(flow.isCompleted());
     }
 
+    @Test
+    void s10_duplicate_external_requires_rejected() {
+        TransitionGuard first = acceptingGuard("FirstGuard",
+                Set.of(PaymentData.class), Map.of());
+        TransitionGuard second = acceptingGuard("SecondGuard",
+                Set.of(PaymentData.class), Map.of());
+
+        var result = Tramli.define("s10-duplicate", MultiExtState.class)
+                .initiallyAvailable(PaymentData.class)
+                .from(MultiExtState.A).auto(MultiExtState.B, noop("Noop"))
+                .from(MultiExtState.B).external(MultiExtState.C, first)
+                .from(MultiExtState.B).external(MultiExtState.D, second)
+                .buildAndValidate();
+
+        assertNull(result.definition());
+        assertTrue(result.errors().stream()
+                .anyMatch(error -> error.code().equals("EXTERNAL_REQUIRES_NOT_DISTINCT")));
+    }
+
+    @Test
+    void s10_subset_external_requires_allowed() {
+        TransitionGuard subset = acceptingGuard("SubsetGuard",
+                Set.of(PaymentData.class), Map.of());
+        TransitionGuard superset = acceptingGuard("SupersetGuard",
+                Set.of(PaymentData.class, CancelRequest.class), Map.of());
+
+        var result = Tramli.define("s10-subset", MultiExtState.class)
+                .initiallyAvailable(PaymentData.class, CancelRequest.class)
+                .from(MultiExtState.A).auto(MultiExtState.B, noop("Noop"))
+                .from(MultiExtState.B).external(MultiExtState.C, subset)
+                .from(MultiExtState.B).external(MultiExtState.D, superset)
+                .buildAndValidate();
+
+        assertNotNull(result.definition());
+        assertTrue(result.errors().isEmpty());
+    }
+
     private FlowDefinition<MultiExtState> buildMultiExternalDef() {
         TransitionGuard guardA = acceptingGuard("GuardA",
                 Set.of(PaymentData.class), Map.of());

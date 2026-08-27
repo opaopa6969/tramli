@@ -226,6 +226,11 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
         var conflict = java.util.regex.Pattern.compile("State (\\S+) has both").matcher(msg);
         if (conflict.find()) return new ValidationError("AUTO_EXTERNAL_CONFLICT", msg, conflict.group(1), null, null);
 
+        // "State X has ambiguous external guards ... with identical requires sets"
+        var ambiguousExternal = java.util.regex.Pattern.compile("State (\\S+) has ambiguous external guards").matcher(msg);
+        if (ambiguousExternal.find()) return new ValidationError(
+                "EXTERNAL_REQUIRES_NOT_DISTINCT", msg, ambiguousExternal.group(1), null, null);
+
         // "Terminal state X has an outgoing transition to Y"
         var term = java.util.regex.Pattern.compile("Terminal state (\\S+)").matcher(msg);
         if (term.find()) return new ValidationError("TERMINAL_OUTGOING", msg, term.group(1), null, null);
@@ -507,7 +512,7 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
             if (!allowUnreachable) checkReachability(def, raw);
             if (!perpetual) checkPathToTerminal(def, raw);
             checkDag(def, raw);
-            // checkExternalUniqueness removed (DD-020: multi-external allowed)
+            checkExternalRequiresDistinct(def, raw);
             checkBranchCompleteness(def, raw);
             checkRequiresProduces(def, raw);
             checkAutoExternalConflict(def, raw);
@@ -608,14 +613,20 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
             return false;
         }
 
-        private void checkExternalUniqueness(FlowDefinition<S> def, List<String> errors) {
-            Map<S, Integer> externalCount = new EnumMap<>(stateClass);
-            for (Transition<S> t : def.transitions) {
-                if (t.isExternal()) externalCount.merge(t.from(), 1, Integer::sum);
-            }
-            for (var entry : externalCount.entrySet()) {
-                if (entry.getValue() > 1)
-                    errors.add("State " + entry.getKey().name() + " has " + entry.getValue() + " external transitions (max 1)");
+        private void checkExternalRequiresDistinct(FlowDefinition<S> def, List<String> errors) {
+            for (S state : def.allStates()) {
+                List<Transition<S>> externals = def.externalsFrom(state);
+                for (int i = 0; i < externals.size(); i++) {
+                    for (int j = i + 1; j < externals.size(); j++) {
+                        TransitionGuard first = externals.get(i).guard();
+                        TransitionGuard second = externals.get(j).guard();
+                        if (first != null && second != null && first.requires().equals(second.requires())) {
+                            errors.add("State " + state.name() + " has ambiguous external guards '" +
+                                    first.name() + "' and '" + second.name() +
+                                    "' with identical requires sets");
+                        }
+                    }
+                }
             }
         }
 

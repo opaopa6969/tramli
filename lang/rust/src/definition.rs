@@ -431,7 +431,7 @@ fn validate<S: FlowState>(def: &FlowDefinition<S>, name: &str, perpetual: bool, 
     if !allow_unreachable { check_reachability(def, &mut errors); }
     if !perpetual { check_path_to_terminal(def, &mut errors); }
     check_dag(def, &mut errors);
-    // check_external_uniqueness removed (DD-020: multi-external allowed)
+    check_external_requires_distinct(def, &mut errors);
     check_branch_completeness(def, &mut errors);
     check_requires_produces(def, initially_available, externally_provided, &mut errors);
     check_auto_external_conflict(def, &mut errors);
@@ -478,6 +478,15 @@ fn collect_errors<S: FlowState>(def: &FlowDefinition<S>, _name: &str, perpetual:
         for msg in errs {
             let st = parse_state_from_msg(&msg);
             result.push(ValidationError { code: "DAG_CYCLE".into(), message: msg, state: st });
+        }
+    }
+
+    {
+        let mut errs = Vec::new();
+        check_external_requires_distinct(def, &mut errs);
+        for msg in errs {
+            let st = parse_state_from_msg(&msg);
+            result.push(ValidationError { code: "EXTERNAL_REQUIRES_NOT_DISTINCT".into(), message: msg, state: st });
         }
     }
 
@@ -568,6 +577,26 @@ fn parse_state_from_msg(msg: &str) -> Option<String> {
         }
     }
     None
+}
+
+fn check_external_requires_distinct<S: FlowState>(def: &FlowDefinition<S>, errors: &mut Vec<String>) {
+    for state in S::all_states() {
+        let externals = def.externals_from(*state);
+        for i in 0..externals.len() {
+            for j in (i + 1)..externals.len() {
+                let Some(first) = externals[i].guard.as_ref() else { continue };
+                let Some(second) = externals[j].guard.as_ref() else { continue };
+                let first_requires: HashSet<TypeId> = first.requires().into_iter().collect();
+                let second_requires: HashSet<TypeId> = second.requires().into_iter().collect();
+                if first_requires == second_requires {
+                    errors.push(format!(
+                        "State {:?} has ambiguous external guards '{}' and '{}' with identical requires sets",
+                        state, first.name(), second.name()
+                    ));
+                }
+            }
+        }
+    }
 }
 
 fn check_reachability<S: FlowState>(def: &FlowDefinition<S>, errors: &mut Vec<String>) {
