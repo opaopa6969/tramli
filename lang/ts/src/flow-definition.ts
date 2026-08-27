@@ -55,6 +55,11 @@ function parseValidationError(msg: string): ValidationError {
   // "State X has both auto/branch and external"
   const conflict = msg.match(/State (\S+) has both/);
   if (conflict) { result.code = 'AUTO_EXTERNAL_CONFLICT'; result.state = conflict[1]; return result; }
+  // "State X has ambiguous external guards ... with identical requires sets"
+  const ambiguousExternal = msg.match(/State (\S+) has ambiguous external guards/);
+  if (ambiguousExternal) {
+    result.code = 'EXTERNAL_REQUIRES_NOT_DISTINCT'; result.state = ambiguousExternal[1]; return result;
+  }
   // "Terminal state X has an outgoing transition"
   const term = msg.match(/Terminal state (\S+)/);
   if (term) { result.code = 'TERMINAL_OUTGOING'; result.state = term[1]; return result; }
@@ -321,6 +326,7 @@ export class Builder<S extends string> {
     if (!this._allowUnreachable) this.checkReachability(def, raw);
     if (!this._perpetual) this.checkPathToTerminal(def, raw);
     this.checkDag(def, raw);
+    this.checkExternalRequiresDistinct(def, raw);
     this.checkBranchCompleteness(def, raw);
     this.checkRequiresProduces(def, raw);
     this.checkAutoExternalConflict(def, raw);
@@ -361,6 +367,26 @@ export class Builder<S extends string> {
     for (const s of def.allStates()) {
       if (!visited.has(s) && !def.stateConfig[s].terminal) {
         errors.push(`State ${s} is not reachable from ${def.initialState}`);
+      }
+    }
+  }
+
+  private checkExternalRequiresDistinct(def: FlowDefinition<S>, errors: string[]): void {
+    for (const state of def.allStates()) {
+      const externals = def.externalsFrom(state);
+      for (let i = 0; i < externals.length; i++) {
+        for (let j = i + 1; j < externals.length; j++) {
+          const first = externals[i].guard;
+          const second = externals[j].guard;
+          if (!first || !second) continue;
+          const firstRequires = new Set(first.requires);
+          const secondRequires = new Set(second.requires);
+          const identical = firstRequires.size === secondRequires.size &&
+            [...firstRequires].every(required => secondRequires.has(required));
+          if (identical) {
+            errors.push(`State ${state} has ambiguous external guards '${first.name}' and '${second.name}' with identical requires sets`);
+          }
+        }
       }
     }
   }
