@@ -1,9 +1,9 @@
+use crate::context::FlowContext;
+use crate::definition::FlowDefinition;
+use crate::error::FlowError;
+use crate::types::*;
 use std::collections::HashMap;
 use std::sync::Arc;
-use crate::context::FlowContext;
-use crate::error::FlowError;
-use crate::definition::FlowDefinition;
-use crate::types::*;
 
 /// Result of a sub-flow step.
 pub enum SubFlowResult {
@@ -20,7 +20,9 @@ pub trait SubFlowRunner: Send + Sync {
     fn name(&self) -> &str;
     fn terminal_names(&self) -> Vec<String>;
     /// Max nesting depth contributed by this sub-flow (for validation).
-    fn nesting_depth(&self) -> usize { 1 }
+    fn nesting_depth(&self) -> usize {
+        1
+    }
     /// Create a new sub-flow instance (with its own state).
     fn create_instance(&self) -> Box<dyn SubFlowInstance>;
 }
@@ -33,7 +35,9 @@ pub trait SubFlowInstance: Send {
         self.current_state_name().into_iter().collect()
     }
     /// Types required by the external transition where this sub-flow is waiting.
-    fn waiting_for(&self) -> Vec<std::any::TypeId> { Vec::new() }
+    fn waiting_for(&self) -> Vec<std::any::TypeId> {
+        Vec::new()
+    }
     fn start(&mut self, ctx: &mut FlowContext) -> Result<SubFlowResult, FlowError>;
     fn resume(&mut self, ctx: &mut FlowContext) -> Result<SubFlowResult, FlowError>;
 }
@@ -58,10 +62,16 @@ impl<T: FlowState> SubFlowAdapter<T> {
 }
 
 impl<T: FlowState> SubFlowRunner for SubFlowAdapter<T> {
-    fn name(&self) -> &str { &self.definition.name }
+    fn name(&self) -> &str {
+        &self.definition.name
+    }
 
     fn terminal_names(&self) -> Vec<String> {
-        self.definition.terminal_states().iter().map(|s| format!("{:?}", s)).collect()
+        self.definition
+            .terminal_states()
+            .iter()
+            .map(|s| format!("{:?}", s))
+            .collect()
     }
 
     fn create_instance(&self) -> Box<dyn SubFlowInstance> {
@@ -100,23 +110,28 @@ impl<T: FlowState> SubFlowInstance for SubFlowAdapterInstance<T> {
         if let Some(sub_flow) = &self.active_sub_flow {
             return sub_flow.waiting_for();
         }
-        let Some(current) = self.state else { return Vec::new() };
-        self.definition.external_from(current)
+        let Some(current) = self.state else {
+            return Vec::new();
+        };
+        self.definition
+            .external_from(current)
             .and_then(|transition| transition.guard.as_ref())
             .map_or_else(Vec::new, |guard| guard.requires())
     }
 
     fn start(&mut self, ctx: &mut FlowContext) -> Result<SubFlowResult, FlowError> {
-        let initial = self.definition.initial_state()
-            .ok_or_else(|| FlowError::new("INVALID_FLOW_DEFINITION", "Sub-flow has no initial state"))?;
+        let initial = self.definition.initial_state().ok_or_else(|| {
+            FlowError::new("INVALID_FLOW_DEFINITION", "Sub-flow has no initial state")
+        })?;
         self.state = Some(initial);
         self.guard_failure_count = 0;
         self.run_auto_chain(ctx)
     }
 
     fn resume(&mut self, ctx: &mut FlowContext) -> Result<SubFlowResult, FlowError> {
-        let current = self.state.ok_or_else(||
-            FlowError::new("INVALID_STATE", "Sub-flow not started"))?;
+        let current = self
+            .state
+            .ok_or_else(|| FlowError::new("INVALID_STATE", "Sub-flow not started"))?;
 
         if let Some(mut sub_flow) = self.active_sub_flow.take() {
             let result = match sub_flow.resume(ctx) {
@@ -132,8 +147,14 @@ impl<T: FlowState> SubFlowInstance for SubFlowAdapterInstance<T> {
                     return Ok(result);
                 }
                 SubFlowResult::Completed(exit_name) => {
-                    let target = self.definition.transitions.iter()
-                        .find(|transition| transition.from == current && transition.transition_type == TransitionType::SubFlow)
+                    let target = self
+                        .definition
+                        .transitions
+                        .iter()
+                        .find(|transition| {
+                            transition.from == current
+                                && transition.transition_type == TransitionType::SubFlow
+                        })
                         .and_then(|transition| transition.sub_flow.as_ref())
                         .and_then(|config| config.exit_mappings.get(&exit_name))
                         .copied();
@@ -146,15 +167,24 @@ impl<T: FlowState> SubFlowInstance for SubFlowAdapterInstance<T> {
             }
         }
 
-        let ext = self.definition.transitions.iter()
+        let ext = self
+            .definition
+            .transitions
+            .iter()
             .find(|t| t.from == current && t.transition_type == TransitionType::External)
-            .ok_or_else(|| FlowError::new("INVALID_TRANSITION",
-                format!("No external transition from sub-flow state {:?}", current)))?;
+            .ok_or_else(|| {
+                FlowError::new(
+                    "INVALID_TRANSITION",
+                    format!("No external transition from sub-flow state {:?}", current),
+                )
+            })?;
 
         if let Some(guard) = &ext.guard {
             match guard.validate(ctx) {
                 GuardOutput::Accepted { data } => {
-                    for (k, v) in data { ctx.put_raw(k, v); }
+                    for (k, v) in data {
+                        ctx.put_raw(k, v);
+                    }
                     if let Some(proc) = &ext.processor {
                         if let Err(e) = proc.process(ctx) {
                             return self.handle_error(current, e);
@@ -191,8 +221,14 @@ impl<T: FlowState> SubFlowAdapterInstance<T> {
             }
 
             // Nested sub-flow transition
-            if let Some(config) = self.definition.transitions.iter()
-                .find(|transition| transition.from == current && transition.transition_type == TransitionType::SubFlow)
+            if let Some(config) = self
+                .definition
+                .transitions
+                .iter()
+                .find(|transition| {
+                    transition.from == current
+                        && transition.transition_type == TransitionType::SubFlow
+                })
                 .and_then(|transition| transition.sub_flow.as_ref())
                 .cloned()
             {
@@ -206,7 +242,8 @@ impl<T: FlowState> SubFlowAdapterInstance<T> {
                         }
                         return self.handle_error_no_cause(current);
                     }
-                    result @ (SubFlowResult::WaitingAtExternal | SubFlowResult::GuardRejected(_)) => {
+                    result @ (SubFlowResult::WaitingAtExternal
+                    | SubFlowResult::GuardRejected(_)) => {
                         self.active_sub_flow = Some(sub_flow);
                         return Ok(result);
                     }
@@ -214,7 +251,10 @@ impl<T: FlowState> SubFlowAdapterInstance<T> {
             }
 
             // Auto transition
-            if let Some(t) = self.definition.transitions.iter()
+            if let Some(t) = self
+                .definition
+                .transitions
+                .iter()
                 .find(|t| t.from == current && t.transition_type == TransitionType::Auto)
             {
                 if let Some(proc) = &t.processor {
@@ -228,7 +268,10 @@ impl<T: FlowState> SubFlowAdapterInstance<T> {
             }
 
             // Branch transition
-            if let Some(t) = self.definition.transitions.iter()
+            if let Some(t) = self
+                .definition
+                .transitions
+                .iter()
                 .find(|t| t.from == current && t.transition_type == TransitionType::Branch)
             {
                 if let Some(branch) = &t.branch {
@@ -243,7 +286,10 @@ impl<T: FlowState> SubFlowAdapterInstance<T> {
             }
 
             // External — stop
-            if self.definition.transitions.iter()
+            if self
+                .definition
+                .transitions
+                .iter()
                 .any(|t| t.from == current && t.transition_type == TransitionType::External)
             {
                 return Ok(SubFlowResult::WaitingAtExternal);
@@ -268,6 +314,9 @@ impl<T: FlowState> SubFlowAdapterInstance<T> {
     }
 
     fn handle_error_no_cause(&mut self, current: T) -> Result<SubFlowResult, FlowError> {
-        self.handle_error(current, FlowError::new("MAX_RETRIES", "Guard max retries exceeded"))
+        self.handle_error(
+            current,
+            FlowError::new("MAX_RETRIES", "Guard max retries exceeded"),
+        )
     }
 }

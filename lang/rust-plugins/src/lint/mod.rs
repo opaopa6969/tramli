@@ -1,5 +1,5 @@
-use tramli::{FlowDefinition, FlowState, TransitionType};
 use crate::api::{FindingLocation, PluginReport};
+use tramli::{FlowDefinition, FlowState, TransitionType};
 
 /// Flow policy — a lint rule applied to a flow definition.
 pub type FlowPolicy<S> = Box<dyn Fn(&FlowDefinition<S>, &mut PluginReport) + Send + Sync>;
@@ -20,7 +20,9 @@ fn warn_terminal_with_outgoing<S: FlowState>(def: &FlowDefinition<S>, report: &m
             report.warn_at(
                 "policy/terminal-outgoing",
                 &format!("terminal state {:?} has outgoing transitions", state),
-                FindingLocation::State { state: format!("{:?}", state) },
+                FindingLocation::State {
+                    state: format!("{:?}", state),
+                },
             );
         }
     }
@@ -28,15 +30,22 @@ fn warn_terminal_with_outgoing<S: FlowState>(def: &FlowDefinition<S>, report: &m
 
 fn warn_too_many_externals<S: FlowState>(def: &FlowDefinition<S>, report: &mut PluginReport) {
     for state in S::all_states() {
-        let externals: Vec<_> = def.transitions_from(*state)
+        let externals: Vec<_> = def
+            .transitions_from(*state)
             .into_iter()
             .filter(|t| t.transition_type == TransitionType::External)
             .collect();
         if externals.len() > 3 {
             report.warn_at(
                 "policy/external-count",
-                &format!("state {:?} has {} external transitions", state, externals.len()),
-                FindingLocation::State { state: format!("{:?}", state) },
+                &format!(
+                    "state {:?} has {} external transitions",
+                    state,
+                    externals.len()
+                ),
+                FindingLocation::State {
+                    state: format!("{:?}", state),
+                },
             );
         }
     }
@@ -49,7 +58,9 @@ fn warn_dead_produced_data<S: FlowState>(def: &FlowDefinition<S>, report: &mut P
         report.warn_at(
             "policy/dead-data",
             &format!("produced but never consumed: {}", name),
-            FindingLocation::Data { data_key: name.to_string() },
+            FindingLocation::Data {
+                data_key: name.to_string(),
+            },
         );
     }
 }
@@ -60,7 +71,11 @@ fn warn_overwide_processors<S: FlowState>(def: &FlowDefinition<S>, report: &mut 
             if p.produces().len() > 3 {
                 report.warn_at(
                     "policy/overwide-processor",
-                    &format!("{} produces {} types; consider splitting it", p.name(), p.produces().len()),
+                    &format!(
+                        "{} produces {} types; consider splitting it",
+                        p.name(),
+                        p.produces().len()
+                    ),
                     FindingLocation::Transition {
                         from_state: format!("{:?}", t.from),
                         to_state: format!("{:?}", t.to),

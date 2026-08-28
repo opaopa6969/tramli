@@ -34,14 +34,26 @@ impl RichResumeExecutor {
                 match flow {
                     Some(f) => {
                         if f.is_completed() && f.current_state() == previous_state {
-                            RichResumeResult { status: RichResumeStatus::AlreadyComplete, error: None }
+                            RichResumeResult {
+                                status: RichResumeStatus::AlreadyComplete,
+                                error: None,
+                            }
                         } else if f.current_state() == previous_state && !f.is_completed() {
-                            RichResumeResult { status: RichResumeStatus::Rejected, error: None }
+                            RichResumeResult {
+                                status: RichResumeStatus::Rejected,
+                                error: None,
+                            }
                         } else {
-                            RichResumeResult { status: RichResumeStatus::Transitioned, error: None }
+                            RichResumeResult {
+                                status: RichResumeStatus::Transitioned,
+                                error: None,
+                            }
                         }
                     }
-                    None => RichResumeResult { status: RichResumeStatus::NoApplicableTransition, error: None },
+                    None => RichResumeResult {
+                        status: RichResumeStatus::NoApplicableTransition,
+                        error: None,
+                    },
                 }
             }
             Err(e) => {
@@ -51,7 +63,10 @@ impl RichResumeExecutor {
                     "INVALID_TRANSITION" => RichResumeStatus::NoApplicableTransition,
                     _ => RichResumeStatus::ExceptionRouted,
                 };
-                RichResumeResult { status, error: Some(e) }
+                RichResumeResult {
+                    status,
+                    error: Some(e),
+                }
             }
         }
     }

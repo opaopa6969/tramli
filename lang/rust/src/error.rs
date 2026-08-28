@@ -15,30 +15,59 @@ pub struct FlowError {
 
 impl FlowError {
     pub fn new(code: &'static str, message: impl Into<String>) -> Self {
-        Self { code, message: message.into(), source: None, available_types: None, missing_types: None }
+        Self {
+            code,
+            message: message.into(),
+            source: None,
+            available_types: None,
+            missing_types: None,
+        }
     }
 
-    pub fn with_source(code: &'static str, message: impl Into<String>, source: impl std::error::Error + Send + Sync + 'static) -> Self {
-        Self { code, message: message.into(), source: Some(Box::new(source)), available_types: None, missing_types: None }
+    pub fn with_source(
+        code: &'static str,
+        message: impl Into<String>,
+        source: impl std::error::Error + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            code,
+            message: message.into(),
+            source: Some(Box::new(source)),
+            available_types: None,
+            missing_types: None,
+        }
     }
 
     /// Attach context snapshot to this error.
-    pub fn with_context_snapshot(mut self, available: HashSet<TypeId>, missing: HashSet<TypeId>) -> Self {
+    pub fn with_context_snapshot(
+        mut self,
+        available: HashSet<TypeId>,
+        missing: HashSet<TypeId>,
+    ) -> Self {
         self.available_types = Some(available);
         self.missing_types = Some(missing);
         self
     }
 
     pub fn invalid_transition(from: &str, to: &str) -> Self {
-        Self::new("INVALID_TRANSITION", format!("Invalid transition from {from} to {to}"))
+        Self::new(
+            "INVALID_TRANSITION",
+            format!("Invalid transition from {from} to {to}"),
+        )
     }
 
     pub fn missing_context(type_name: &str) -> Self {
-        Self::new("MISSING_CONTEXT", format!("Missing context key: {type_name}"))
+        Self::new(
+            "MISSING_CONTEXT",
+            format!("Missing context key: {type_name}"),
+        )
     }
 
     pub fn dag_cycle(detail: &str) -> Self {
-        Self::new("DAG_CYCLE", format!("Auto/Branch transitions contain a cycle: {detail}"))
+        Self::new(
+            "DAG_CYCLE",
+            format!("Auto/Branch transitions contain a cycle: {detail}"),
+        )
     }
 
     pub fn max_chain_depth() -> Self {
@@ -54,6 +83,8 @@ impl fmt::Display for FlowError {
 
 impl std::error::Error for FlowError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.source.as_ref().map(|e| e.as_ref() as &(dyn std::error::Error + 'static))
+        self.source
+            .as_ref()
+            .map(|e| e.as_ref() as &(dyn std::error::Error + 'static))
     }
 }

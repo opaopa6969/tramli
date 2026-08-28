@@ -1,8 +1,8 @@
+use crate::resume::{RichResumeExecutor, RichResumeResult, RichResumeStatus};
 use std::any::TypeId;
 use std::collections::HashSet;
 use std::sync::Mutex;
 use tramli::{CloneAny, FlowEngine, FlowState};
-use crate::resume::{RichResumeExecutor, RichResumeResult, RichResumeStatus};
 
 /// Idempotency registry trait.
 pub trait IdempotencyRegistry: Send + Sync {
@@ -16,7 +16,9 @@ pub struct InMemoryIdempotencyRegistry {
 
 impl InMemoryIdempotencyRegistry {
     pub fn new() -> Self {
-        Self { seen: Mutex::new(HashSet::new()) }
+        Self {
+            seen: Mutex::new(HashSet::new()),
+        }
     }
 }
 

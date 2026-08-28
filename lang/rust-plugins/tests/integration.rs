@@ -1,32 +1,66 @@
+#![allow(dead_code)]
 use std::any::TypeId;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
 use tramli::*;
-use tramli_plugins::*;
 use tramli_plugins::observability::TelemetrySink;
+use tramli_plugins::*;
 
 // ─── Shared test flow ──────────────────────────────
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum S { Created, Pending, Confirmed, Done, Error }
-
-impl FlowState for S {
-    fn is_terminal(&self) -> bool { matches!(self, Self::Done | Self::Error) }
-    fn is_initial(&self) -> bool { matches!(self, Self::Created) }
-    fn all_states() -> &'static [Self] { &[Self::Created, Self::Pending, Self::Confirmed, Self::Done, Self::Error] }
+enum S {
+    Created,
+    Pending,
+    Confirmed,
+    Done,
+    Error,
 }
 
-#[derive(Clone, Debug)] struct Input { value: String }
-#[derive(Clone, Debug)] struct Middle { processed: bool }
-#[derive(Clone, Debug)] struct Output { result: String }
+impl FlowState for S {
+    fn is_terminal(&self) -> bool {
+        matches!(self, Self::Done | Self::Error)
+    }
+    fn is_initial(&self) -> bool {
+        matches!(self, Self::Created)
+    }
+    fn all_states() -> &'static [Self] {
+        &[
+            Self::Created,
+            Self::Pending,
+            Self::Confirmed,
+            Self::Done,
+            Self::Error,
+        ]
+    }
+}
+
+#[derive(Clone, Debug)]
+struct Input {
+    value: String,
+}
+#[derive(Clone, Debug)]
+struct Middle {
+    processed: bool,
+}
+#[derive(Clone, Debug)]
+struct Output {
+    result: String,
+}
 
 struct Proc1;
 impl StateProcessor<S> for Proc1 {
-    fn name(&self) -> &str { "Proc1" }
-    fn requires(&self) -> Vec<TypeId> { requires![Input] }
-    fn produces(&self) -> Vec<TypeId> { requires![Middle] }
+    fn name(&self) -> &str {
+        "Proc1"
+    }
+    fn requires(&self) -> Vec<TypeId> {
+        requires![Input]
+    }
+    fn produces(&self) -> Vec<TypeId> {
+        requires![Middle]
+    }
     fn process(&self, ctx: &mut FlowContext) -> Result<(), FlowError> {
         ctx.put(Middle { processed: true });
         Ok(())
@@ -35,49 +69,80 @@ impl StateProcessor<S> for Proc1 {
 
 struct Proc2;
 impl StateProcessor<S> for Proc2 {
-    fn name(&self) -> &str { "Proc2" }
-    fn requires(&self) -> Vec<TypeId> { requires![Middle] }
-    fn produces(&self) -> Vec<TypeId> { requires![Output] }
+    fn name(&self) -> &str {
+        "Proc2"
+    }
+    fn requires(&self) -> Vec<TypeId> {
+        requires![Middle]
+    }
+    fn produces(&self) -> Vec<TypeId> {
+        requires![Output]
+    }
     fn process(&self, ctx: &mut FlowContext) -> Result<(), FlowError> {
-        ctx.put(Output { result: "done".into() });
+        ctx.put(Output {
+            result: "done".into(),
+        });
         Ok(())
     }
 }
 
-struct TestGuard { accept: bool }
+struct TestGuard {
+    accept: bool,
+}
 impl TransitionGuard<S> for TestGuard {
-    fn name(&self) -> &str { "TestGuard" }
-    fn requires(&self) -> Vec<TypeId> { requires![Middle] }
-    fn produces(&self) -> Vec<TypeId> { vec![] }
+    fn name(&self) -> &str {
+        "TestGuard"
+    }
+    fn requires(&self) -> Vec<TypeId> {
+        requires![Middle]
+    }
+    fn produces(&self) -> Vec<TypeId> {
+        vec![]
+    }
     fn validate(&self, _ctx: &FlowContext) -> GuardOutput {
         if self.accept {
-            GuardOutput::Accepted { data: HashMap::new() }
+            GuardOutput::Accepted {
+                data: HashMap::new(),
+            }
         } else {
-            GuardOutput::Rejected { reason: "declined".into() }
+            GuardOutput::Rejected {
+                reason: "declined".into(),
+            }
         }
     }
 }
 
 fn build_def(accept: bool) -> Arc<FlowDefinition<S>> {
-    Arc::new(Builder::new("test")
-        .ttl(Duration::from_secs(300))
-        .initially_available(requires![Input])
-        .from(S::Created).auto(S::Pending, Proc1)
-        .from(S::Pending).external(S::Confirmed, TestGuard { accept })
-        .from(S::Confirmed).auto(S::Done, Proc2)
-        .on_any_error(S::Error)
-        .build().unwrap())
+    Arc::new(
+        Builder::new("test")
+            .ttl(Duration::from_secs(300))
+            .initially_available(requires![Input])
+            .from(S::Created)
+            .auto(S::Pending, Proc1)
+            .from(S::Pending)
+            .external(S::Confirmed, TestGuard { accept })
+            .from(S::Confirmed)
+            .auto(S::Done, Proc2)
+            .on_any_error(S::Error)
+            .build()
+            .unwrap(),
+    )
 }
 
 fn initial_data() -> Vec<(TypeId, Box<dyn CloneAny>)> {
-    vec![(TypeId::of::<Input>(), Box::new(Input { value: "test".into() }) as Box<dyn CloneAny>)]
+    vec![(
+        TypeId::of::<Input>(),
+        Box::new(Input {
+            value: "test".into(),
+        }) as Box<dyn CloneAny>,
+    )]
 }
 
 // ─── Tests ─────────────────────────────────────────
 
 #[test]
 fn audit_store_captures_transitions() {
-    let def = build_def(true);
+    let _def = build_def(true);
     let mut store = audit::AuditingStore::<S>::new(InMemoryFlowStore::new());
     store.record_transition("f1", "CREATED", "PENDING", "Proc1");
     assert_eq!(store.audited_transitions().len(), 1);
@@ -110,11 +175,20 @@ fn projection_replay() {
 
     struct CountReducer;
     impl eventstore::ProjectionReducer<usize> for CountReducer {
-        fn initial_state(&self) -> usize { 0 }
-        fn apply(&self, state: usize, _event: &eventstore::VersionedTransitionEvent) -> usize { state + 1 }
+        fn initial_state(&self) -> usize {
+            0
+        }
+        fn apply(&self, state: usize, _event: &eventstore::VersionedTransitionEvent) -> usize {
+            state + 1
+        }
     }
 
-    let count = eventstore::ProjectionReplayService::state_at_version(store.events(), "f1", 999, &CountReducer);
+    let count = eventstore::ProjectionReplayService::state_at_version(
+        store.events(),
+        "f1",
+        999,
+        &CountReducer,
+    );
     assert_eq!(count, 2);
 }
 
@@ -165,7 +239,10 @@ fn observability_append_mode_chains() {
     let custom_log = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
     let log_ref = custom_log.clone();
     engine.set_transition_logger(move |entry| {
-        log_ref.lock().unwrap().push(format!("{} -> {}", entry.from, entry.to));
+        log_ref
+            .lock()
+            .unwrap()
+            .push(format!("{} -> {}", entry.from, entry.to));
     });
 
     // Install observability with append=true
@@ -191,7 +268,10 @@ fn observability_default_mode_replaces() {
     let custom_log = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
     let log_ref = custom_log.clone();
     engine.set_transition_logger(move |entry| {
-        log_ref.lock().unwrap().push(format!("{} -> {}", entry.from, entry.to));
+        log_ref
+            .lock()
+            .unwrap()
+            .push(format!("{} -> {}", entry.from, entry.to));
     });
 
     // Install without append (default)
@@ -227,15 +307,25 @@ fn idempotency_duplicate_suppression() {
     let registry = idempotency::InMemoryIdempotencyRegistry::new();
 
     let r1 = idempotency::IdempotentRichResumeExecutor::resume(
-        &mut engine, &registry, &flow_id,
-        idempotency::CommandEnvelope { command_id: "cmd-1".into(), external_data: vec![] },
+        &mut engine,
+        &registry,
+        &flow_id,
+        idempotency::CommandEnvelope {
+            command_id: "cmd-1".into(),
+            external_data: vec![],
+        },
         S::Pending,
     );
     assert_eq!(r1.status, resume::RichResumeStatus::Transitioned);
 
     let r2 = idempotency::IdempotentRichResumeExecutor::resume(
-        &mut engine, &registry, &flow_id,
-        idempotency::CommandEnvelope { command_id: "cmd-1".into(), external_data: vec![] },
+        &mut engine,
+        &registry,
+        &flow_id,
+        idempotency::CommandEnvelope {
+            command_id: "cmd-1".into(),
+            external_data: vec![],
+        },
         S::Confirmed,
     );
     assert_eq!(r2.status, resume::RichResumeStatus::AlreadyComplete);
@@ -274,8 +364,14 @@ fn lint_analysis() {
     let mut report = api::PluginReport::new();
     linter.analyze(&def, &mut report);
     let findings = report.findings();
-    let dead = findings.iter().find(|f| f.message.contains("never consumed"));
-    assert!(dead.is_some(), "expected dead data finding, got: {:?}", findings);
+    let dead = findings
+        .iter()
+        .find(|f| f.message.contains("never consumed"));
+    assert!(
+        dead.is_some(),
+        "expected dead data finding, got: {:?}",
+        findings
+    );
 }
 
 #[test]
@@ -297,9 +393,12 @@ fn hierarchy_entry_exit_compiler() {
 #[test]
 fn hierarchy_code_generation() {
     let mut spec = hierarchy::HierarchicalFlowSpec::new("Simple", "SimpleState");
-    spec.root_states.push(hierarchy::HierarchicalStateSpec::new("A", true, false));
-    spec.root_states.push(hierarchy::HierarchicalStateSpec::new("B", false, true));
-    spec.transitions.push(hierarchy::HierarchicalTransitionSpec::new("A", "B", "go"));
+    spec.root_states
+        .push(hierarchy::HierarchicalStateSpec::new("A", true, false));
+    spec.root_states
+        .push(hierarchy::HierarchicalStateSpec::new("B", false, true));
+    spec.transitions
+        .push(hierarchy::HierarchicalTransitionSpec::new("A", "B", "go"));
 
     let enum_src = hierarchy::HierarchyCodeGenerator::generate_enum_source(&spec);
     assert!(enum_src.contains("A"));
@@ -316,27 +415,45 @@ fn subflow_validator() {
 
     // Create a simple subflow with no data requirements
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    enum SubS { SubA, SubB }
+    enum SubS {
+        SubA,
+        SubB,
+    }
     impl FlowState for SubS {
-        fn is_terminal(&self) -> bool { matches!(self, Self::SubB) }
-        fn is_initial(&self) -> bool { matches!(self, Self::SubA) }
-        fn all_states() -> &'static [Self] { &[Self::SubA, Self::SubB] }
+        fn is_terminal(&self) -> bool {
+            matches!(self, Self::SubB)
+        }
+        fn is_initial(&self) -> bool {
+            matches!(self, Self::SubA)
+        }
+        fn all_states() -> &'static [Self] {
+            &[Self::SubA, Self::SubB]
+        }
     }
     struct SubProc;
     impl StateProcessor<SubS> for SubProc {
-        fn name(&self) -> &str { "SubProc" }
-        fn requires(&self) -> Vec<TypeId> { vec![] }
-        fn produces(&self) -> Vec<TypeId> { vec![] }
-        fn process(&self, _ctx: &mut FlowContext) -> Result<(), FlowError> { Ok(()) }
+        fn name(&self) -> &str {
+            "SubProc"
+        }
+        fn requires(&self) -> Vec<TypeId> {
+            vec![]
+        }
+        fn produces(&self) -> Vec<TypeId> {
+            vec![]
+        }
+        fn process(&self, _ctx: &mut FlowContext) -> Result<(), FlowError> {
+            Ok(())
+        }
     }
     let sub_def = Builder::new("sub")
-        .from(SubS::SubA).auto(SubS::SubB, SubProc)
+        .from(SubS::SubA)
+        .auto(SubS::SubB, SubProc)
         .allow_perpetual()
-        .build().unwrap();
+        .build()
+        .unwrap();
 
-    let result = subflow::GuaranteedSubflowValidator::validate(
-        &def, S::Pending, &sub_def, &HashSet::new(),
-    );
+    let result =
+        subflow::GuaranteedSubflowValidator::validate(&def, S::Pending, &sub_def, &HashSet::new());
     assert!(result.is_ok());
 }
 

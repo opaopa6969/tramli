@@ -76,11 +76,20 @@ impl EntryExitCompiler {
         generated
     }
 
-    fn walk(state: &HierarchicalStateSpec, out: &mut Vec<HierarchicalTransitionSpec>, parent: Option<&str>) {
+    fn walk(
+        state: &HierarchicalStateSpec,
+        out: &mut Vec<HierarchicalTransitionSpec>,
+        parent: Option<&str>,
+    ) {
         if !state.entry_produces.is_empty() {
-            let from = parent.map(|p| p.to_string())
+            let from = parent
+                .map(|p| p.to_string())
                 .unwrap_or_else(|| format!("{}__ENTRY_START", state.name));
-            let mut t = HierarchicalTransitionSpec::new(&from, &state.name, &format!("__entry__{}", state.name));
+            let mut t = HierarchicalTransitionSpec::new(
+                &from,
+                &state.name,
+                &format!("__entry__{}", state.name),
+            );
             t.produces = state.entry_produces.clone();
             out.push(t);
         }
@@ -108,9 +117,9 @@ impl HierarchyCodeGenerator {
         Self::flatten(&spec.root_states, "", &mut flat);
 
         let mut lines = Vec::new();
-        lines.push(format!("use tramli::FlowState;"));
+        lines.push("use tramli::FlowState;".to_string());
         lines.push(String::new());
-        lines.push(format!("#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]"));
+        lines.push("#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]".to_string());
         lines.push(format!("pub enum {} {{", spec.enum_name));
         for (name, _, _) in &flat {
             lines.push(format!("    {},", name));
@@ -120,7 +129,8 @@ impl HierarchyCodeGenerator {
         lines.push(format!("impl FlowState for {} {{", spec.enum_name));
         lines.push("    fn is_terminal(&self) -> bool {".to_string());
         lines.push("        matches!(self,".to_string());
-        let terminals: Vec<&str> = flat.iter()
+        let terminals: Vec<&str> = flat
+            .iter()
             .filter(|(_, terminal, _)| *terminal)
             .map(|(name, _, _)| name.as_str())
             .collect();
@@ -135,7 +145,8 @@ impl HierarchyCodeGenerator {
         lines.push("        )".to_string());
         lines.push("    }".to_string());
         lines.push("    fn is_initial(&self) -> bool {".to_string());
-        let initials: Vec<&str> = flat.iter()
+        let initials: Vec<&str> = flat
+            .iter()
             .filter(|(_, _, initial)| *initial)
             .map(|(name, _, _)| name.as_str())
             .collect();
@@ -150,8 +161,8 @@ impl HierarchyCodeGenerator {
             lines.push("        )".to_string());
         }
         lines.push("    }".to_string());
-        lines.push(format!("    fn all_states() -> &'static [Self] {{"));
-        lines.push(format!("        &["));
+        lines.push("    fn all_states() -> &'static [Self] {".to_string());
+        lines.push("        &[".to_string());
         for (name, _, _) in &flat {
             lines.push(format!("            Self::{},", name));
         }
@@ -164,20 +175,34 @@ impl HierarchyCodeGenerator {
 
     pub fn generate_builder_skeleton(spec: &HierarchicalFlowSpec) -> String {
         let mut lines = Vec::new();
-        lines.push(format!("use std::sync::Arc;"));
-        lines.push(format!("use tramli::{{Builder, FlowDefinition}};"));
+        lines.push("use std::sync::Arc;".to_string());
+        lines.push("use tramli::{Builder, FlowDefinition};".to_string());
         lines.push(String::new());
-        lines.push(format!("pub fn build_{}() -> Result<FlowDefinition<{}>, tramli::FlowError> {{", spec.flow_name.to_lowercase(), spec.enum_name));
-        lines.push(format!("    let b = Builder::<{}>::new(\"{}\");", spec.enum_name, spec.flow_name));
+        lines.push(format!(
+            "pub fn build_{}() -> Result<FlowDefinition<{}>, tramli::FlowError> {{",
+            spec.flow_name.to_lowercase(),
+            spec.enum_name
+        ));
+        lines.push(format!(
+            "    let b = Builder::<{}>::new(\"{}\");",
+            spec.enum_name, spec.flow_name
+        ));
         for t in &spec.transitions {
-            lines.push(format!("    // {}: {} -> {} requires {:?} produces {:?}", t.trigger, t.from, t.to, t.requires, t.produces));
+            lines.push(format!(
+                "    // {}: {} -> {} requires {:?} produces {:?}",
+                t.trigger, t.from, t.to, t.requires, t.produces
+            ));
         }
         lines.push("    b.build()".to_string());
         lines.push("}".to_string());
         lines.join("\n")
     }
 
-    fn flatten(states: &[HierarchicalStateSpec], prefix: &str, out: &mut Vec<(String, bool, bool)>) {
+    fn flatten(
+        states: &[HierarchicalStateSpec],
+        prefix: &str,
+        out: &mut Vec<(String, bool, bool)>,
+    ) {
         for state in states {
             let flat = if prefix.is_empty() {
                 state.name.to_uppercase()

@@ -23,16 +23,26 @@ pub struct PluginDescriptor {
 /// Describes where in a flow definition a finding is located.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FindingLocation {
-    Transition { from_state: String, to_state: String },
-    State { state: String },
-    Data { data_key: String },
+    Transition {
+        from_state: String,
+        to_state: String,
+    },
+    State {
+        state: String,
+    },
+    Data {
+        data_key: String,
+    },
     Flow,
 }
 
 impl fmt::Display for FindingLocation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            FindingLocation::Transition { from_state, to_state } => {
+            FindingLocation::Transition {
+                from_state,
+                to_state,
+            } => {
                 write!(f, "transition({} -> {})", from_state, to_state)
             }
             FindingLocation::State { state } => write!(f, "state({})", state),
@@ -59,7 +69,9 @@ pub struct PluginReport {
 
 impl PluginReport {
     pub fn new() -> Self {
-        Self { entries: Vec::new() }
+        Self {
+            entries: Vec::new(),
+        }
     }
 
     pub fn add(&mut self, plugin_id: &str, severity: &str, message: &str) {
@@ -140,5 +152,7 @@ pub trait EnginePlugin<S: FlowState>: Send + Sync {
 /// Runtime adapter plugin — binds FlowEngine to return richer API.
 pub trait RuntimeAdapterPlugin<S: FlowState>: Send + Sync {
     fn descriptor(&self) -> PluginDescriptor;
-    fn id(&self) -> &str { self.descriptor().id }
+    fn id(&self) -> &str {
+        self.descriptor().id
+    }
 }

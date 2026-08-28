@@ -1,5 +1,5 @@
 use std::time::Instant;
-use tramli::{FlowState, InMemoryFlowStore, FlowInstance};
+use tramli::{FlowInstance, FlowState, InMemoryFlowStore};
 
 /// Event type for the append-only log.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -67,10 +67,18 @@ impl<S: FlowState> EventLogStore<S> {
     }
 
     pub fn record_transition(
-        &mut self, flow_id: &str, from: &str, to: &str, trigger: &str, snapshot: &str,
+        &mut self,
+        flow_id: &str,
+        from: &str,
+        to: &str,
+        trigger: &str,
+        snapshot: &str,
     ) {
         self.delegate.record_transition(flow_id, from, to, trigger);
-        let version = self.version_counters.entry(flow_id.to_string()).or_insert(0);
+        let version = self
+            .version_counters
+            .entry(flow_id.to_string())
+            .or_insert(0);
         *version += 1;
         self.event_log.push(VersionedTransitionEvent {
             flow_id: flow_id.to_string(),
@@ -85,7 +93,10 @@ impl<S: FlowState> EventLogStore<S> {
     }
 
     pub fn append_compensation(&mut self, flow_id: &str, trigger: &str, metadata: &str) {
-        let version = self.version_counters.entry(flow_id.to_string()).or_insert(0);
+        let version = self
+            .version_counters
+            .entry(flow_id.to_string())
+            .or_insert(0);
         *version += 1;
         self.event_log.push(VersionedTransitionEvent {
             flow_id: flow_id.to_string(),
@@ -104,7 +115,10 @@ impl<S: FlowState> EventLogStore<S> {
     }
 
     pub fn events_for_flow(&self, flow_id: &str) -> Vec<&VersionedTransitionEvent> {
-        self.event_log.iter().filter(|e| e.flow_id == flow_id).collect()
+        self.event_log
+            .iter()
+            .filter(|e| e.flow_id == flow_id)
+            .collect()
     }
 
     pub fn transition_log(&self) -> &[tramli::TransitionRecord] {
@@ -128,10 +142,18 @@ impl<S: FlowState> EventLogStore<S> {
 pub struct ReplayService;
 
 impl ReplayService {
-    pub fn state_at_version(events: &[VersionedTransitionEvent], flow_id: &str, target_version: u32) -> Option<String> {
+    pub fn state_at_version(
+        events: &[VersionedTransitionEvent],
+        flow_id: &str,
+        target_version: u32,
+    ) -> Option<String> {
         let mut flow_events: Vec<&VersionedTransitionEvent> = events
             .iter()
-            .filter(|e| e.flow_id == flow_id && e.event_type == EventType::Transition && e.version <= target_version)
+            .filter(|e| {
+                e.flow_id == flow_id
+                    && e.event_type == EventType::Transition
+                    && e.version <= target_version
+            })
             .collect();
         flow_events.sort_by_key(|e| e.version);
         flow_events.last().map(|e| e.to.clone())
@@ -177,7 +199,10 @@ impl CompensationService {
     }
 
     pub fn compensate<S: FlowState>(
-        &self, event: &VersionedTransitionEvent, cause: &str, store: &mut EventLogStore<S>,
+        &self,
+        event: &VersionedTransitionEvent,
+        cause: &str,
+        store: &mut EventLogStore<S>,
     ) -> bool {
         if let Some(plan) = (self.resolver)(event, cause) {
             store.append_compensation(&event.flow_id, &plan.action, &plan.metadata);

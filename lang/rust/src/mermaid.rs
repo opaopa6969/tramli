@@ -34,7 +34,10 @@ impl MermaidGenerator {
     }
 
     /// Generate Mermaid stateDiagram-v2 with options.
-    pub fn generate_with_options<S: FlowState>(def: &FlowDefinition<S>, exclude_error_transitions: bool) -> String {
+    pub fn generate_with_options<S: FlowState>(
+        def: &FlowDefinition<S>,
+        exclude_error_transitions: bool,
+    ) -> String {
         let mut lines = vec!["stateDiagram-v2".to_string()];
 
         if let Some(initial) = def.initial_state() {
@@ -58,7 +61,9 @@ impl MermaidGenerator {
                 continue;
             }
             let key = format!("{:?}->{:?}", t.from, t.to);
-            if !seen.insert(key) { continue; }
+            if !seen.insert(key) {
+                continue;
+            }
             let label = Self::transition_label(t);
             if label.is_empty() {
                 lines.push(format!("    {:?} --> {:?}", t.from, t.to));
@@ -70,7 +75,9 @@ impl MermaidGenerator {
         if !exclude_error_transitions {
             for (from, to) in &def.error_transitions {
                 let key = format!("{:?}->{:?}", from, to);
-                if !seen.insert(key) { continue; }
+                if !seen.insert(key) {
+                    continue;
+                }
                 lines.push(format!("    {:?} --> {:?} : error", from, to));
             }
         }
@@ -92,10 +99,26 @@ impl MermaidGenerator {
 
     fn transition_label<S: FlowState>(t: &Transition<S>) -> String {
         match t.transition_type {
-            TransitionType::Auto => t.processor.as_ref().map(|p| p.name().to_string()).unwrap_or_default(),
-            TransitionType::External => t.guard.as_ref().map(|g| format!("[{}]", g.name())).unwrap_or_default(),
-            TransitionType::Branch => t.branch.as_ref().map(|b| b.name().to_string()).unwrap_or_default(),
-            TransitionType::SubFlow => t.sub_flow.as_ref().map(|s| format!("{{{}}}", s.runner.name())).unwrap_or_default(),
+            TransitionType::Auto => t
+                .processor
+                .as_ref()
+                .map(|p| p.name().to_string())
+                .unwrap_or_default(),
+            TransitionType::External => t
+                .guard
+                .as_ref()
+                .map(|g| format!("[{}]", g.name()))
+                .unwrap_or_default(),
+            TransitionType::Branch => t
+                .branch
+                .as_ref()
+                .map(|b| b.name().to_string())
+                .unwrap_or_default(),
+            TransitionType::SubFlow => t
+                .sub_flow
+                .as_ref()
+                .map(|s| format!("{{{}}}", s.runner.name()))
+                .unwrap_or_default(),
         }
     }
 }

@@ -1,28 +1,52 @@
 //! Issue #47: unified view option for MermaidGenerator
 
+#![allow(dead_code)]
+
 use std::any::TypeId;
 use std::time::Duration;
 use tramli::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum S { A, B, C }
-
-impl FlowState for S {
-    fn is_terminal(&self) -> bool { matches!(self, Self::C) }
-    fn is_initial(&self) -> bool { matches!(self, Self::A) }
-    fn all_states() -> &'static [Self] { &[Self::A, Self::B, Self::C] }
+enum S {
+    A,
+    B,
+    C,
 }
 
-#[derive(Clone)] struct Num(i32);
-#[derive(Clone)] struct Str(String);
+impl FlowState for S {
+    fn is_terminal(&self) -> bool {
+        matches!(self, Self::C)
+    }
+    fn is_initial(&self) -> bool {
+        matches!(self, Self::A)
+    }
+    fn all_states() -> &'static [Self] {
+        &[Self::A, Self::B, Self::C]
+    }
+}
+
+#[derive(Clone)]
+struct Num(i32);
+#[derive(Clone)]
+struct Str(String);
 
 struct P1;
 impl StateProcessor<S> for P1 {
-    fn name(&self) -> &str { "p1" }
-    fn requires(&self) -> Vec<TypeId> { vec![] }
-    fn produces(&self) -> Vec<TypeId> { requires![Num] }
-    fn requires_named(&self) -> Vec<(TypeId, &'static str)> { vec![] }
-    fn produces_named(&self) -> Vec<(TypeId, &'static str)> { requires_named![Num] }
+    fn name(&self) -> &str {
+        "p1"
+    }
+    fn requires(&self) -> Vec<TypeId> {
+        vec![]
+    }
+    fn produces(&self) -> Vec<TypeId> {
+        requires![Num]
+    }
+    fn requires_named(&self) -> Vec<(TypeId, &'static str)> {
+        vec![]
+    }
+    fn produces_named(&self) -> Vec<(TypeId, &'static str)> {
+        requires_named![Num]
+    }
     fn process(&self, ctx: &mut FlowContext) -> Result<(), FlowError> {
         ctx.put(Num(1));
         Ok(())
@@ -31,11 +55,21 @@ impl StateProcessor<S> for P1 {
 
 struct P2;
 impl StateProcessor<S> for P2 {
-    fn name(&self) -> &str { "p2" }
-    fn requires(&self) -> Vec<TypeId> { requires![Num] }
-    fn produces(&self) -> Vec<TypeId> { requires![Str] }
-    fn requires_named(&self) -> Vec<(TypeId, &'static str)> { requires_named![Num] }
-    fn produces_named(&self) -> Vec<(TypeId, &'static str)> { requires_named![Str] }
+    fn name(&self) -> &str {
+        "p2"
+    }
+    fn requires(&self) -> Vec<TypeId> {
+        requires![Num]
+    }
+    fn produces(&self) -> Vec<TypeId> {
+        requires![Str]
+    }
+    fn requires_named(&self) -> Vec<(TypeId, &'static str)> {
+        requires_named![Num]
+    }
+    fn produces_named(&self) -> Vec<(TypeId, &'static str)> {
+        requires_named![Str]
+    }
     fn process(&self, ctx: &mut FlowContext) -> Result<(), FlowError> {
         let n = ctx.get::<Num>()?;
         ctx.put(Str(format!("n={}", n.0)));
@@ -46,8 +80,10 @@ impl StateProcessor<S> for P2 {
 fn build_flow() -> FlowDefinition<S> {
     Builder::<S>::new("view-test")
         .ttl(Duration::from_secs(60))
-        .from(S::A).auto(S::B, P1)
-        .from(S::B).auto(S::C, P2)
+        .from(S::A)
+        .auto(S::B, P1)
+        .from(S::B)
+        .auto(S::C, P2)
         .build()
         .expect("build ok")
 }
@@ -80,9 +116,18 @@ fn view_dataflow_produces_flowchart() {
     assert!(out.contains("requires"), "got: {out}");
     assert!(!out.contains("stateDiagram"), "got: {out}");
     // Issue #48: type names must resolve to the actual short name, not "unknown"
-    assert!(!out.contains("unknown"), "type names must not render as 'unknown'; got: {out}");
-    assert!(out.contains("Num"), "type 'Num' must appear in data-flow diagram; got: {out}");
-    assert!(out.contains("Str"), "type 'Str' must appear in data-flow diagram; got: {out}");
+    assert!(
+        !out.contains("unknown"),
+        "type names must not render as 'unknown'; got: {out}"
+    );
+    assert!(
+        out.contains("Num"),
+        "type 'Num' must appear in data-flow diagram; got: {out}"
+    );
+    assert!(
+        out.contains("Str"),
+        "type 'Str' must appear in data-flow diagram; got: {out}"
+    );
 }
 
 #[test]

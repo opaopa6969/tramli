@@ -101,7 +101,11 @@ impl ScenarioTestPlugin {
                         kind: ScenarioKind::GuardRejection,
                         steps: vec![
                             format!("given flow in {:?}", t.from),
-                            format!("when guard {} rejects {} times", g.name(), definition.max_guard_retries),
+                            format!(
+                                "when guard {} rejects {} times",
+                                g.name(),
+                                definition.max_guard_retries
+                            ),
                             if let Some(target) = error_target {
                                 format!("then flow transitions to {:?} via error", target)
                             } else {
@@ -121,7 +125,10 @@ impl ScenarioTestPlugin {
                     kind: ScenarioKind::Timeout,
                     steps: vec![
                         format!("given flow in {:?}", t.from),
-                        format!("when per-state timeout of {}ms expires", timeout.as_millis()),
+                        format!(
+                            "when per-state timeout of {}ms expires",
+                            timeout.as_millis()
+                        ),
                         "then flow completes as EXPIRED".to_string(),
                     ],
                 });

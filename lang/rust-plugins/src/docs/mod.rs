@@ -12,8 +12,12 @@ impl DocumentationPlugin {
         lines.push(String::new());
         for state in S::all_states() {
             let mut suffix = String::new();
-            if state.is_initial() { suffix.push_str(" (initial)"); }
-            if state.is_terminal() { suffix.push_str(" (terminal)"); }
+            if state.is_initial() {
+                suffix.push_str(" (initial)");
+            }
+            if state.is_terminal() {
+                suffix.push_str(" (terminal)");
+            }
             lines.push(format!("- `{:?}`{}", state, suffix));
         }
         lines.push(String::new());
