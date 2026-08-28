@@ -1822,4 +1822,4 @@ Shared test scenarios live in [`shared-tests/`](shared-tests/) — the same flow
 
 ## License
 
-MIT
+MIT License — Copyright (c) 2026 unlaxer. See [`LICENSE`](LICENSE).
