@@ -1334,3 +1334,66 @@ mod s31 {
         }));
     }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// S32: Indirect circular sub-flow reference detection (issue #78)
+// ═══════════════════════════════════════════════════════════════
+
+mod s32 {
+    use super::*;
+    use tramli::sub_flow::SubFlowAdapter;
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    enum S {
+        A,
+        B,
+    }
+    impl FlowState for S {
+        fn is_terminal(&self) -> bool {
+            matches!(self, Self::B)
+        }
+        fn is_initial(&self) -> bool {
+            matches!(self, Self::A)
+        }
+        fn all_states() -> &'static [Self] {
+            &[Self::A, Self::B]
+        }
+    }
+
+    #[test]
+    fn s32_indirect_circular_subflow_detected() {
+        // outer → sub_flow(name="mid") → on_exit("B", B)
+        // mid   → sub_flow(name="outer") → on_exit("B", B)
+        // build outer first (succeeds — no cycle yet at build time of outer alone)
+        let outer = Builder::<S>::new("outer")
+            .from(S::A)
+            .sub_flow(Box::new(SubFlowAdapter::new(Arc::new(
+                Builder::<S>::new("mid")
+                    .from(S::A)
+                    .sub_flow(Box::new(SubFlowAdapter::new(Arc::new(
+                        Builder::<S>::new("outer")
+                            .from(S::A)
+                            .auto(S::B, Noop)
+                            .build()
+                            .unwrap(),
+                    ))))
+                    .on_exit("B", S::B)
+                    .end_sub_flow()
+                    .build()
+                    .unwrap(),
+            ))))
+            .on_exit("B", S::B)
+            .end_sub_flow()
+            .build();
+
+        // outer -> mid -> outer : indirect circular reference
+        match outer {
+            Ok(_) => panic!("build should reject indirect circular sub-flow reference"),
+            Err(e) => assert!(
+                e.message.contains("Circular"),
+                "unexpected error: {}",
+                e.message
+            ),
+        }
+    }
+}

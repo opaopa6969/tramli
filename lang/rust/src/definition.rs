@@ -1217,33 +1217,18 @@ fn check_sub_flow_nesting_depth<S: FlowState>(
 fn check_sub_flow_circular_ref<S: FlowState>(
     def: &FlowDefinition<S>,
     errors: &mut Vec<String>,
-    visited: &mut Vec<String>,
+    _visited: &mut Vec<String>,
 ) {
-    if visited.contains(&def.name) {
-        errors.push(format!(
-            "Circular sub-flow reference detected: {} -> {}",
-            visited.join(" -> "),
-            def.name
-        ));
-        return;
-    }
+    let mut visited = Vec::new();
     visited.push(def.name.clone());
     for t in &def.transitions {
         if t.transition_type == TransitionType::SubFlow {
             if let Some(ref config) = t.sub_flow {
-                // Check by name (runner exposes name)
-                let sub_name = config.runner.name().to_string();
-                if visited.contains(&sub_name) {
-                    errors.push(format!(
-                        "Circular sub-flow reference detected: {} -> {}",
-                        visited.join(" -> "),
-                        sub_name
-                    ));
-                }
+                let sub_errors = config.runner.collect_circular_refs(&mut visited);
+                errors.extend(sub_errors);
             }
         }
     }
-    visited.pop();
 }
 
 fn check_terminal_no_outgoing<S: FlowState>(def: &FlowDefinition<S>, errors: &mut Vec<String>) {
