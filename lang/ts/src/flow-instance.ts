@@ -52,8 +52,12 @@ export class FlowInstance<S extends string> {
     Object.defineProperty(instance, 'expiresAt', { value: expiresAt, writable: false });
     instance._currentState = currentState;
     instance._guardFailureCount = guardFailureCount;
+    instance._guardFailureCounts = new Map();
     instance._version = version;
     instance._exitState = exitState;
+    instance._activeSubFlow = null;
+    instance._lastError = null;
+    instance._stateEnteredAt = new Date();
     return instance;
   }
 

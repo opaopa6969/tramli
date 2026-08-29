@@ -321,4 +321,37 @@ describe('FlowEngineError', () => {
 
     expect(def).toBeDefined();
   });
+
+  it('restore/withVersion sets stateEnteredAt — per-state timeout works after withVersion (issue #79)', async () => {
+    type TimeoutStep = 'INIT' | 'WAIT' | 'DONE' | 'ERROR';
+    const timeoutConfig: Record<TimeoutStep, StateConfig> = {
+      INIT:  { terminal: false, initial: true },
+      WAIT:  { terminal: false },
+      DONE:  { terminal: true },
+      ERROR: { terminal: true },
+    };
+    const Mid = flowKey<{ v: string }>('Mid');
+    const acceptGuard: TransitionGuard<TimeoutStep> = {
+      name: 'G', requires: [Mid], produces: [], maxRetries: 3,
+      validate(): GuardOutput { return { type: 'accepted' }; },
+    };
+
+    const def = Tramli.define<TimeoutStep>('timeout-flow', timeoutConfig)
+      .initiallyAvailable(Input)
+      .from('INIT').auto('WAIT', ok('P', [Input], [Mid]))
+      .from('WAIT').external('DONE', acceptGuard, { timeout: 60000 })
+      .onAnyError('ERROR')
+      .build();
+
+    const store = new InMemoryFlowStore();
+    const engine = Tramli.engine(store);
+    const flow = await engine.startFlow(def, 's1', new Map([[Input as string, { value: 'x' }]]));
+    expect(flow.stateEnteredAt).toBeInstanceOf(Date);
+
+    const versioned = flow.withVersion(1);
+    expect(versioned.stateEnteredAt).toBeInstanceOf(Date);
+
+    const resumed = await engine.resumeAndExecute(flow.id, def);
+    expect(resumed.currentState).toBe('DONE');
+  });
 });
