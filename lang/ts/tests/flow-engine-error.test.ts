@@ -289,6 +289,41 @@ describe('FlowEngineError', () => {
     ).toThrow(/onExit mapping/);
   });
 
+  it('subFlow guard rejected maxRetries — parent transitions to error (issue #77)', async () => {
+    type SubStep = 'S_INIT' | 'S_WAIT' | 'S_DONE';
+    const subConfig: Record<SubStep, StateConfig> = {
+      S_INIT: { terminal: false, initial: true },
+      S_WAIT: { terminal: false },
+      S_DONE: { terminal: true },
+    };
+    const SubOutput = flowKey<{ v: string }>('SubOutput');
+
+    const subDef = Tramli.define<SubStep>('sub-rej', subConfig)
+      .setMaxGuardRetries(1)
+      .initiallyAvailable(Input)
+      .from('S_INIT').auto('S_WAIT', ok('SubP1', [Input], [SubOutput]))
+      .from('S_WAIT').external('S_DONE', {
+        name: 'RejectGuard', requires: [SubOutput], produces: [], maxRetries: 1,
+        validate(): GuardOutput { return { type: 'rejected', reason: 'nope' }; },
+      } as TransitionGuard<SubStep>)
+      .build();
+
+    const mainDef = Tramli.define<TwoStep>('main-rej', twoStepConfig)
+      .initiallyAvailable(Input)
+      .from('INIT').subFlow(subDef).onExit('S_DONE', 'DONE').endSubFlow()
+      .onAnyError('ERROR')
+      .build();
+
+    const engine = Tramli.engine(new InMemoryFlowStore());
+    const flow = await engine.startFlow(mainDef, 's1', new Map([[Input as string, { value: 'x' }]]));
+    expect(flow.currentState).toBe('INIT');
+    expect(flow.activeSubFlow).not.toBeNull();
+
+    const r1 = await engine.resumeAndExecute(flow.id, mainDef);
+    expect(r1.currentState).toBe('ERROR');
+    expect(r1.activeSubFlow).toBeNull();
+  });
+
   // ─── Error Path Data-Flow Analysis ──────────────────
 
   it('error path requires unsatisfied — build fails', () => {

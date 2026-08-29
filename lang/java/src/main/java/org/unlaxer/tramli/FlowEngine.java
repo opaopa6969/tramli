@@ -351,6 +351,20 @@ public final class FlowEngine {
                 subFlow.incrementGuardFailure();
                 if (subFlow.guardFailureCount() >= subDef.maxGuardRetries()) {
                     subFlow.complete("ERROR");
+                    parentFlow.setActiveSubFlow(null);
+                    Transition subFlowT = parentDef.transitionsFrom(parentFlow.currentState()).stream()
+                            .filter(Transition::isSubFlow).findFirst().orElse(null);
+                    S target = subFlowT != null ? (S) subFlowT.exitMappings().get(subFlow.exitState()) : null;
+                    if (target != null) {
+                        S from = parentFlow.currentState();
+                        parentFlow.transitionTo(target);
+                        store.recordTransition(parentFlow.id(), from, target,
+                                "subFlow:" + subDef.name() + "/" + subFlow.exitState(), parentFlow.context());
+                        executeAutoChain(parentFlow);
+                    } else {
+                        handleError(parentFlow, parentFlow.currentState());
+                        executeAutoChain(parentFlow);
+                    }
                 }
                 store.save(parentFlow);
                 return parentFlow;
