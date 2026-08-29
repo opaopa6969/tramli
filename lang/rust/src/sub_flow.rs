@@ -23,6 +23,17 @@ pub trait SubFlowRunner: Send + Sync {
     fn nesting_depth(&self) -> usize {
         1
     }
+    /// Names of sub-flows directly referenced by this runner's definition.
+    /// Used for circular-reference detection. Default: empty (leaf sub-flow).
+    fn sub_flow_names(&self) -> Vec<String> {
+        Vec::new()
+    }
+    /// Recursively collect circular sub-flow reference errors.
+    /// `visited` is the chain of names leading to this runner.
+    /// Default: leaf sub-flow, no recursion needed.
+    fn collect_circular_refs(&self, _visited: &mut Vec<String>) -> Vec<String> {
+        Vec::new()
+    }
     /// Create a new sub-flow instance (with its own state).
     fn create_instance(&self) -> Box<dyn SubFlowInstance>;
 }
@@ -72,6 +83,39 @@ impl<T: FlowState> SubFlowRunner for SubFlowAdapter<T> {
             .iter()
             .map(|s| format!("{:?}", s))
             .collect()
+    }
+
+    fn sub_flow_names(&self) -> Vec<String> {
+        self.definition
+            .transitions
+            .iter()
+            .filter(|t| t.transition_type == TransitionType::SubFlow)
+            .filter_map(|t| t.sub_flow.as_ref().map(|c| c.runner.name().to_string()))
+            .collect()
+    }
+
+    fn collect_circular_refs(&self, visited: &mut Vec<String>) -> Vec<String> {
+        let mut errors = Vec::new();
+        let my_name = self.definition.name.clone();
+        if visited.contains(&my_name) {
+            errors.push(format!(
+                "Circular sub-flow reference detected: {} -> {}",
+                visited.join(" -> "),
+                my_name
+            ));
+            return errors;
+        }
+        visited.push(my_name);
+        for t in &self.definition.transitions {
+            if t.transition_type == TransitionType::SubFlow {
+                if let Some(ref config) = t.sub_flow {
+                    let sub_errors = config.runner.collect_circular_refs(visited);
+                    errors.extend(sub_errors);
+                }
+            }
+        }
+        visited.pop();
+        errors
     }
 
     fn create_instance(&self) -> Box<dyn SubFlowInstance> {
