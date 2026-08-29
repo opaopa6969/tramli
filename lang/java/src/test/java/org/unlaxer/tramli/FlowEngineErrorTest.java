@@ -338,6 +338,40 @@ class FlowEngineErrorTest {
                         .build());
     }
 
+    @Test
+    void subFlowGuardRejectedMaxRetries_parentTransitionsToError() {
+        // Sub-flow: S_INIT → auto → S_WAIT → external(S_DONE, always-reject guard), maxGuardRetries=1
+        var subDef = Tramli.define("sub-rej", SubStep.class)
+                .maxGuardRetries(1)
+                .initiallyAvailable(Input.class)
+                .from(SubStep.S_INIT).auto(SubStep.S_PROCESS, ok("SubP1", Set.of(Input.class), Set.of(SubOutput.class)))
+                .from(SubStep.S_PROCESS).external(SubStep.S_DONE, new TransitionGuard() {
+                    @Override public String name() { return "RejectGuard"; }
+                    @Override public Set<Class<?>> requires() { return Set.of(SubOutput.class); }
+                    @Override public Set<Class<?>> produces() { return Set.of(); }
+                    @Override public int maxRetries() { return 1; }
+                    @Override public GuardOutput validate(FlowContext ctx) {
+                        return new GuardOutput.Rejected("nope");
+                    }
+                })
+                .build();
+
+        var mainDef = Tramli.define("main-rej", TwoStep.class)
+                .initiallyAvailable(Input.class)
+                .from(TwoStep.INIT).subFlow(subDef).onExit("S_DONE", TwoStep.DONE).endSubFlow()
+                .onAnyError(TwoStep.ERROR)
+                .build();
+
+        var engine = new FlowEngine(new InMemoryFlowStore());
+        var flow = engine.startFlow(mainDef, "s1", Map.of(Input.class, new Input("x")));
+        assertEquals(TwoStep.INIT, flow.currentState());
+        assertNotNull(flow.activeSubFlow());
+
+        var resumed = engine.resumeAndExecute(flow.id(), mainDef);
+        assertEquals(TwoStep.ERROR, resumed.currentState());
+        assertNull(resumed.activeSubFlow());
+    }
+
     // ─── Error Path Data-Flow Analysis ──────────────────────
 
     enum ErrorPath implements FlowState {

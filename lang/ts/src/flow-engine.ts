@@ -314,6 +314,24 @@ export class FlowEngine {
         subFlow.incrementGuardFailure();
         if (subFlow.guardFailureCount >= subDef.maxGuardRetries) {
           subFlow.complete('ERROR');
+          parentFlow.setActiveSubFlow(null);
+          const subFlowT = parentDef.transitionsFrom(parentFlow.currentState)
+            .find(t => t.type === 'sub_flow');
+          const target = subFlowT?.exitMappings?.get(subFlow.exitState!);
+          if (target) {
+            const exitStart = performance.now();
+            const from = parentFlow.currentState;
+            this.fireExit(parentFlow, from);
+            parentFlow.transitionTo(target);
+            this.fireEnter(parentFlow, target);
+            const trigger = `subFlow:${subDef.name}/${subFlow.exitState}`;
+            this.store.recordTransition(parentFlow.id, from, target, trigger, parentFlow.context);
+            this.logTransition(parentFlow, from, target, trigger, exitStart);
+            await this.executeAutoChain(parentFlow);
+          } else {
+            this.handleError(parentFlow, parentFlow.currentState);
+            await this.executeAutoChain(parentFlow);
+          }
         }
         this.store.save(parentFlow);
         return parentFlow;
