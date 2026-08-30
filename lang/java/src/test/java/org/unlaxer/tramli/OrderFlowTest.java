@@ -320,6 +320,22 @@ class OrderFlowTest {
         assertTrue(store.transitionLog().size() >= 3);
     }
 
+    @Test
+    void transitionLog_subFlowTriggerWithoutSlash_doesNotThrow() {
+        var store = new InMemoryFlowStore();
+        var ctx = new FlowContext("test-oob");
+        // trigger "subFlow:payment" lacks '/' — must not throw StringIndexOutOfBoundsException
+        store.recordTransition("flow-1", OrderState.CREATED, OrderState.PAYMENT_PENDING,
+                "subFlow:payment", ctx);
+        var record = store.transitionLog().getFirst();
+        assertEquals("payment", record.subFlow(),
+                "subFlow name should fall back to the full suffix after 'subFlow:'");
+        // With '/' present, name is extracted up to the slash
+        store.recordTransition("flow-1", OrderState.PAYMENT_PENDING, OrderState.SHIPPED,
+                "subFlow:payment/DONE", ctx);
+        assertEquals("payment", store.transitionLog().get(1).subFlow());
+    }
+
     // ─── explain() / whyMissing() tests ─────────────────────
 
     @Test

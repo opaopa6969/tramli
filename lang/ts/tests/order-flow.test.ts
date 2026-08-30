@@ -5,7 +5,7 @@ import { MermaidGenerator } from '../src/mermaid-generator.js';
 import { DataFlowGraph } from '../src/data-flow-graph.js';
 import { flowKey, type FlowKey } from '../src/flow-key.js';
 import type { StateProcessor, TransitionGuard, StateConfig, GuardOutput } from '../src/types.js';
-import type { FlowContext } from '../src/flow-context.js';
+import { FlowContext } from '../src/flow-context.js';
 
 // ─── State ──────────────────────��───────────────────
 
@@ -322,5 +322,17 @@ describe('OrderFlow', () => {
     expect(log[0].from).toBe('CREATED');
     expect(log[0].to).toBe('PAYMENT_PENDING');
     expect(log[0].timestamp).toBeInstanceOf(Date);
+  });
+
+  it('recordTransition with subFlow: trigger lacking slash does not misparse', () => {
+    const store = new InMemoryFlowStore();
+    const ctx = new FlowContext('test-oob');
+    // trigger "subFlow:payment" lacks '/' — must not return "subFlow:" (TS substring(8, -1) bug)
+    store.recordTransition('flow-1', 'CREATED', 'PAYMENT_PENDING', 'subFlow:payment', ctx);
+    const record = store.transitionLog[0];
+    expect(record.subFlow).toBe('payment');
+    // With '/' present, name is extracted up to the slash
+    store.recordTransition('flow-1', 'PAYMENT_PENDING', 'SHIPPED', 'subFlow:payment/DONE', ctx);
+    expect(store.transitionLog[1].subFlow).toBe('payment');
   });
 });
