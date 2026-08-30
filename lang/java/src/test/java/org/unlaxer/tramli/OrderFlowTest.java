@@ -225,6 +225,18 @@ class OrderFlowTest {
     }
 
     @Test
+    void skeletonGenerator_rustProducesMacroNotRequires() {
+        var def = definition(true);
+        String rust = SkeletonGenerator.generate(def, SkeletonGenerator.Language.RUST);
+        // produces() must emit produces![...], not requires![...]
+        int producesIdx = rust.indexOf("fn produces(&self) -> Vec<TypeId> { produces![");
+        assertTrue(producesIdx >= 0, "produces() should emit produces![ macro");
+        // Ensure no produces() accidentally uses requires![
+        int badProduces = rust.indexOf("fn produces(&self) -> Vec<TypeId> { requires![");
+        assertTrue(badProduces < 0, "produces() must not emit requires![ macro");
+    }
+
+    @Test
     void generateExternalContract() {
         var def = definition(true);
         String mermaid = MermaidGenerator.generateExternalContract(def);

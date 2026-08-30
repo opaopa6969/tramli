@@ -97,7 +97,7 @@ public final class SkeletonGenerator {
         sb.append("    fn requires(&self) -> Vec<TypeId> { requires![");
         sb.append(String.join(", ", reqs));
         sb.append("] }\n");
-        sb.append("    fn produces(&self) -> Vec<TypeId> { requires![");
+        sb.append("    fn produces(&self) -> Vec<TypeId> { produces![");
         sb.append(String.join(", ", prods));
         sb.append("] }\n");
         sb.append("    fn process(&self, ctx: &mut FlowContext) -> Result<(), FlowError> {\n");
@@ -147,7 +147,7 @@ public final class SkeletonGenerator {
         sb.append("impl TransitionGuard<S> for ").append(name).append(" {\n");
         sb.append("    fn name(&self) -> &str { \"").append(name).append("\" }\n");
         sb.append("    fn requires(&self) -> Vec<TypeId> { requires![").append(String.join(", ", reqs)).append("] }\n");
-        sb.append("    fn produces(&self) -> Vec<TypeId> { requires![").append(String.join(", ", prods)).append("] }\n");
+        sb.append("    fn produces(&self) -> Vec<TypeId> { produces![").append(String.join(", ", prods)).append("] }\n");
         sb.append("    fn validate(&self, ctx: &FlowContext) -> GuardOutput {\n");
         sb.append("        // TODO: implement validation\n");
         sb.append("        GuardOutput::Accepted { data: HashMap::new() }\n");
