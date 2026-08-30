@@ -35,7 +35,10 @@ public final class InMemoryFlowStore implements FlowStore {
     public void recordTransition(String flowId, FlowState from, FlowState to,
                                  String trigger, FlowContext ctx) {
         // Extract subFlow name from trigger like "subFlow:payment/DONE"
-        String subFlowName = trigger.startsWith("subFlow:") ? trigger.substring(8, trigger.indexOf('/')) : null;
+        int slash = trigger.indexOf('/');
+        String subFlowName = trigger.startsWith("subFlow:")
+                ? trigger.substring(8, slash >= 0 ? slash : trigger.length())
+                : null;
         transitionLog.add(new TransitionRecord(flowId,
                 from != null ? from.name() : null, to.name(), trigger, subFlowName, Instant.now()));
     }

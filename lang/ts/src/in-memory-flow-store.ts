@@ -37,7 +37,10 @@ export class InMemoryFlowStore {
   recordTransition(
     flowId: string, from: string | null, to: string, trigger: string, _ctx: FlowContext,
   ): void {
-    const subFlow = trigger.startsWith('subFlow:') ? trigger.substring(8, trigger.indexOf('/')) : null;
+    const slash = trigger.indexOf('/');
+    const subFlow = trigger.startsWith('subFlow:')
+      ? trigger.substring(8, slash >= 0 ? slash : trigger.length)
+      : null;
     this._transitionLog.push({ flowId, from, to, trigger, subFlow, timestamp: new Date() });
   }
 
