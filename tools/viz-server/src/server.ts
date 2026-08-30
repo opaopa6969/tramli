@@ -37,7 +37,8 @@ function isMulti(opts: VizServerOptions): opts is VizServerOptionsMulti {
 
 export function startVizServer(sink: VizSink, opts: VizServerOptions) {
   const port = (opts as any).port ?? 3001;
-  const wss = new WebSocketServer({ port });
+  const host = 'localhost';
+  const wss = new WebSocketServer({ host, port });
 
   // Build flow definitions array
   const flowDefs: VizFlowDef[] = isMulti(opts)
