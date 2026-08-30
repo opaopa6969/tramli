@@ -253,6 +253,8 @@ class FlowEngineErrorTest {
 
     record SubInput(String v) {}
     record SubOutput(String v) {}
+    record ExitMarker(String v) {}
+    record EnterMarker(String v) {}
 
     @Test
     void basicSubFlow_autoChainThroughSubFlow() {
@@ -314,6 +316,51 @@ class FlowEngineErrorTest {
         assertEquals(TwoStep.DONE, resumed.currentState());
         assertTrue(resumed.isCompleted());
         assertNull(resumed.activeSubFlow());
+    }
+
+    @Test
+    void subFlowExternalTransition_firesEnterExitActions() {
+        // Sub-flow with enter/exit actions on S_PROCESS and S_DONE
+        var subDef = Tramli.define("sub-actions", SubStep.class)
+                .initiallyAvailable(Input.class)
+                .from(SubStep.S_INIT).auto(SubStep.S_PROCESS, ok("SubP1", Set.of(Input.class), Set.of(SubOutput.class)))
+                .onStateExit(SubStep.S_PROCESS, ctx -> ctx.put(ExitMarker.class, new ExitMarker("exited-S_PROCESS")))
+                .onStateEnter(SubStep.S_DONE, ctx -> ctx.put(EnterMarker.class, new EnterMarker("entered-S_DONE")))
+                .from(SubStep.S_PROCESS).external(SubStep.S_DONE, new TransitionGuard() {
+                    @Override public String name() { return "SubGuard"; }
+                    @Override public Set<Class<?>> requires() { return Set.of(SubOutput.class); }
+                    @Override public Set<Class<?>> produces() { return Set.of(); }
+                    @Override public int maxRetries() { return 3; }
+                    @Override public GuardOutput validate(FlowContext ctx) {
+                        return new GuardOutput.Accepted();
+                    }
+                })
+                .build();
+
+        var mainDef = Tramli.define("main-actions", TwoStep.class)
+                .initiallyAvailable(Input.class)
+                .from(TwoStep.INIT).subFlow(subDef).onExit("S_DONE", TwoStep.DONE).endSubFlow()
+                .onAnyError(TwoStep.ERROR)
+                .build();
+
+        var engine = new FlowEngine(new InMemoryFlowStore());
+        var flow = engine.startFlow(mainDef, "s1", Map.of(Input.class, new Input("x")));
+
+        // Sub-flow stops at S_PROCESS (external) — exit/enter actions not yet fired
+        assertFalse(flow.context().find(ExitMarker.class).isPresent(),
+                "exit action on S_PROCESS must not fire while waiting at external");
+        assertFalse(flow.context().find(EnterMarker.class).isPresent(),
+                "enter action on S_DONE must not fire before transition");
+
+        // Resume — guard accepts → sub-flow external transition fires exit(S_PROCESS) + enter(S_DONE)
+        var resumed = engine.resumeAndExecute(flow.id(), mainDef);
+        assertEquals(TwoStep.DONE, resumed.currentState());
+        assertTrue(resumed.context().find(ExitMarker.class).isPresent(),
+                "exit action on sub-flow S_PROCESS should fire on external transition");
+        assertEquals("exited-S_PROCESS", resumed.context().find(ExitMarker.class).get().v());
+        assertTrue(resumed.context().find(EnterMarker.class).isPresent(),
+                "enter action on sub-flow S_DONE should fire on external transition");
+        assertEquals("entered-S_DONE", resumed.context().find(EnterMarker.class).get().v());
     }
 
     enum SubSimple implements FlowState {
