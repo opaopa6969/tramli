@@ -344,7 +344,9 @@ public final class FlowEngine {
                 for (var entry : accepted.data().entrySet()) {
                     putRaw(parentFlow.context(), entry.getKey(), entry.getValue());
                 }
+                fireExitRaw(subFlow, subCurrent);
                 subFlow.transitionTo(transition.to());
+                fireEnterRaw(subFlow, (Enum) subTo);
                 store.recordTransition(parentFlow.id(), (FlowState) subCurrent, subTo,
                         guard.name(), parentFlow.context());
             } else if (output instanceof TransitionGuard.GuardOutput.Rejected) {
@@ -374,7 +376,9 @@ public final class FlowEngine {
                 return parentFlow;
             }
         } else {
+            fireExitRaw(subFlow, subCurrent);
             subFlow.transitionTo(transition.to());
+            fireEnterRaw(subFlow, (Enum) subTo);
         }
 
         executeAutoChain(subFlow);
@@ -488,6 +492,18 @@ public final class FlowEngine {
     }
 
     private <S extends Enum<S> & FlowState> void fireExit(FlowInstance<S> flow, S state) {
+        var action = flow.definition().exitAction(state);
+        if (action != null) action.accept(flow.context());
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static void fireEnterRaw(FlowInstance flow, Enum state) {
+        var action = flow.definition().enterAction(state);
+        if (action != null) action.accept(flow.context());
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static void fireExitRaw(FlowInstance flow, Enum state) {
         var action = flow.definition().exitAction(state);
         if (action != null) action.accept(flow.context());
     }
