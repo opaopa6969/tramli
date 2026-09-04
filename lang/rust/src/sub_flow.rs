@@ -2,7 +2,8 @@ use crate::context::FlowContext;
 use crate::definition::FlowDefinition;
 use crate::error::FlowError;
 use crate::types::*;
-use std::collections::HashMap;
+use std::any::TypeId;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 /// Result of a sub-flow step.
@@ -51,6 +52,14 @@ pub trait SubFlowInstance: Send {
     }
     fn start(&mut self, ctx: &mut FlowContext) -> Result<SubFlowResult, FlowError>;
     fn resume(&mut self, ctx: &mut FlowContext) -> Result<SubFlowResult, FlowError>;
+    /// Resume with the type keys supplied by the current external event.
+    fn resume_with_external_types(
+        &mut self,
+        ctx: &mut FlowContext,
+        _external_types: &HashSet<TypeId>,
+    ) -> Result<SubFlowResult, FlowError> {
+        self.resume(ctx)
+    }
 }
 
 /// Configuration for a sub-flow transition.
@@ -157,10 +166,21 @@ impl<T: FlowState> SubFlowInstance for SubFlowAdapterInstance<T> {
         let Some(current) = self.state else {
             return Vec::new();
         };
-        self.definition
-            .external_from(current)
-            .and_then(|transition| transition.guard.as_ref())
-            .map_or_else(Vec::new, |guard| guard.requires())
+        let mut waiting = Vec::new();
+        for external in self.definition.externals_from(current) {
+            let Some(guard) = &external.guard else {
+                continue;
+            };
+            let keys = guard
+                .external_trigger()
+                .map_or_else(|| guard.requires(), |trigger| vec![trigger]);
+            for key in keys {
+                if !waiting.contains(&key) {
+                    waiting.push(key);
+                }
+            }
+        }
+        waiting
     }
 
     fn start(&mut self, ctx: &mut FlowContext) -> Result<SubFlowResult, FlowError> {
@@ -173,12 +193,20 @@ impl<T: FlowState> SubFlowInstance for SubFlowAdapterInstance<T> {
     }
 
     fn resume(&mut self, ctx: &mut FlowContext) -> Result<SubFlowResult, FlowError> {
+        self.resume_with_external_types(ctx, &HashSet::new())
+    }
+
+    fn resume_with_external_types(
+        &mut self,
+        ctx: &mut FlowContext,
+        external_types: &HashSet<TypeId>,
+    ) -> Result<SubFlowResult, FlowError> {
         let current = self
             .state
             .ok_or_else(|| FlowError::new("INVALID_STATE", "Sub-flow not started"))?;
 
         if let Some(mut sub_flow) = self.active_sub_flow.take() {
-            let result = match sub_flow.resume(ctx) {
+            let result = match sub_flow.resume_with_external_types(ctx, external_types) {
                 Ok(result) => result,
                 Err(error) => {
                     self.active_sub_flow = Some(sub_flow);
@@ -211,17 +239,15 @@ impl<T: FlowState> SubFlowInstance for SubFlowAdapterInstance<T> {
             }
         }
 
-        let ext = self
-            .definition
-            .transitions
-            .iter()
-            .find(|t| t.from == current && t.transition_type == TransitionType::External)
-            .ok_or_else(|| {
-                FlowError::new(
-                    "INVALID_TRANSITION",
-                    format!("No external transition from sub-flow state {:?}", current),
-                )
-            })?;
+        let externals = self.definition.externals_from(current);
+        if externals.is_empty() {
+            return Err(FlowError::new(
+                "INVALID_TRANSITION",
+                format!("No external transition from sub-flow state {:?}", current),
+            ));
+        }
+        let ext =
+            select_external_transition(&externals, external_types, &format!("{:?}", current))?;
 
         if let Some(guard) = &ext.guard {
             match guard.validate(ctx) {

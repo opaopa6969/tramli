@@ -107,7 +107,13 @@ impl MermaidGenerator {
             TransitionType::External => t
                 .guard
                 .as_ref()
-                .map(|g| format!("[{}]", g.name()))
+                .map(|g| {
+                    let trigger = g
+                        .external_trigger_name()
+                        .and_then(|name| name.rsplit("::").next())
+                        .map_or_else(String::new, |name| format!(" on {name}"));
+                    format!("[{}]{}", g.name(), trigger)
+                })
                 .unwrap_or_default(),
             TransitionType::Branch => t
                 .branch

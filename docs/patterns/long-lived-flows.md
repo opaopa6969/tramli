@@ -17,12 +17,12 @@ var userLifecycle = Tramli.define("user-lifecycle", UserState.class)
     .initiallyAvailable(SignupRequest.class)
     .from(PENDING).auto(ACTIVE, activateProcessor)
     .from(ACTIVE)
-        .external(ACTIVE, profileUpdateGuard)       // self-transition: update profile
-        .external(SUSPENDED, suspendGuard)           // suspend account
-        .external(DEACTIVATED, deactivateGuard)      // close account
+        .externalOn(ProfileUpdated.class, ACTIVE, profileUpdateGuard)
+        .externalOn(SuspendRequested.class, SUSPENDED, suspendGuard)
+        .externalOn(DeactivateRequested.class, DEACTIVATED, deactivateGuard)
     .from(SUSPENDED)
-        .external(ACTIVE, reactivateGuard)           // reactivate
-        .external(DEACTIVATED, deactivateGuard)      // close while suspended
+        .externalOn(ReactivateRequested.class, ACTIVE, reactivateGuard)
+        .externalOn(DeactivateRequested.class, DEACTIVATED, deactivateGuard)
     .onStateEnter(ACTIVE, ctx -> ctx.put(ActivatedAt.class, Instant.now()))
     .onStateEnter(SUSPENDED, ctx -> ctx.put(SuspendedAt.class, Instant.now()))
     .build();
@@ -37,12 +37,12 @@ const userLifecycle = Tramli.define<UserState>('user-lifecycle', userStateConfig
     .initiallyAvailable(SignupRequest)
     .from('PENDING').auto('ACTIVE', activateProcessor)
     .from('ACTIVE')
-        .external('ACTIVE', profileUpdateGuard)
-        .external('SUSPENDED', suspendGuard)
-        .external('DEACTIVATED', deactivateGuard)
+        .externalOn(ProfileUpdated, 'ACTIVE', profileUpdateGuard)
+        .externalOn(SuspendRequested, 'SUSPENDED', suspendGuard)
+        .externalOn(DeactivateRequested, 'DEACTIVATED', deactivateGuard)
     .from('SUSPENDED')
-        .external('ACTIVE', reactivateGuard)
-        .external('DEACTIVATED', deactivateGuard)
+        .externalOn(ReactivateRequested, 'ACTIVE', reactivateGuard)
+        .externalOn(DeactivateRequested, 'DEACTIVATED', deactivateGuard)
     .build();
 ```
 
@@ -55,12 +55,12 @@ let user_lifecycle = Builder::new("user-lifecycle")
     .initially_available(requires![SignupRequest])
     .from(UserState::Pending).auto(UserState::Active, ActivateProcessor)
     .from(UserState::Active)
-        .external(UserState::Active, ProfileUpdateGuard)
-        .external(UserState::Suspended, SuspendGuard)
-        .external(UserState::Deactivated, DeactivateGuard)
+        .external_on::<ProfileUpdated>(UserState::Active, ProfileUpdateGuard)
+        .external_on::<SuspendRequested>(UserState::Suspended, SuspendGuard)
+        .external_on::<DeactivateRequested>(UserState::Deactivated, DeactivateGuard)
     .from(UserState::Suspended)
-        .external(UserState::Active, ReactivateGuard)
-        .external(UserState::Deactivated, DeactivateGuard)
+        .external_on::<ReactivateRequested>(UserState::Active, ReactivateGuard)
+        .external_on::<DeactivateRequested>(UserState::Deactivated, DeactivateGuard)
     .build()
     .unwrap();
 ```
@@ -71,11 +71,11 @@ let user_lifecycle = Builder::new("user-lifecycle")
 stateDiagram-v2
     [*] --> PENDING
     PENDING --> ACTIVE : ActivateProcessor
-    ACTIVE --> ACTIVE : [ProfileUpdateGuard]
-    ACTIVE --> SUSPENDED : [SuspendGuard]
-    ACTIVE --> DEACTIVATED : [DeactivateGuard]
-    SUSPENDED --> ACTIVE : [ReactivateGuard]
-    SUSPENDED --> DEACTIVATED : [DeactivateGuard]
+    ACTIVE --> ACTIVE : [ProfileUpdateGuard] on ProfileUpdated
+    ACTIVE --> SUSPENDED : [SuspendGuard] on SuspendRequested
+    ACTIVE --> DEACTIVATED : [DeactivateGuard] on DeactivateRequested
+    SUSPENDED --> ACTIVE : [ReactivateGuard] on ReactivateRequested
+    SUSPENDED --> DEACTIVATED : [DeactivateGuard] on DeactivateRequested
 ```
 
 ### Guard selection

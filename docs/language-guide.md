@@ -93,8 +93,9 @@ The solution: SM stays sync. Async I/O happens in the caller (tower::Service, to
 | Data-flow Mermaid | `MermaidGenerator.generateDataFlow(def)` | `MermaidGenerator.generateDataFlow(def)` | `MermaidGenerator::generate_data_flow(&def)` |
 | DataFlowGraph | `def.dataFlowGraph()` | `def.dataFlowGraph` | `def.data_flow_graph()` |
 | SubFlow | `.subFlow(sub).onExit("X", S).endSubFlow()` | `.subFlow(sub).onExit("X", S).endSubFlow()` | `.sub_flow(runner).on_exit("X", S).end_sub_flow()` |
+| Explicit External trigger | `.externalOn(Event.class, to, guard)` | `.externalOn(Event, to, guard)` | `.external_on::<Event>(to, guard)` |
 | State path | `flow.statePathString()` | `flow.statePathString()` | `flow.state_path_string()` |
-| Waiting for | `flow.waitingFor()` | `flow.waitingFor()` | N/A (via sub_flow trait) |
+| Waiting for | `flow.waitingFor()` | `flow.waitingFor()` | `flow.waiting_for()` |
 | Entry point | `Tramli.define()` | `Tramli.define()` | `Builder::new()` |
 
 ## Type Safety Comparison

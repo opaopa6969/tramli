@@ -22,6 +22,7 @@
 | from(S).external(to, guard, processor) | EXTERNAL with post-guard processor |
 | from(S).external(to, guard, timeout) | EXTERNAL with per-state timeout |
 | from(S).external(to, guard, processor, timeout) | EXTERNAL with processor + timeout |
+| from(S).externalOn(trigger, to, guard, ...) | EXTERNAL selected by typed trigger; same processor/timeout variants |
 | from(S).branch(branchProcessor).to(S, label).to(S, label, proc).endBranch() | BRANCH transitions |
 | from(S).subFlow(def).onExit(terminal, parentState).endSubFlow() | SUB_FLOW transition |
 
@@ -44,7 +45,7 @@
 
 1. Compute initialState (from FlowState.isInitial)
 2. Compute terminalStates (from FlowState.isTerminal)
-3. Run validation (10 checks)
+3. Run validation
 4. Build DataFlowGraph
 5. Build warnings
 6. Return immutable FlowDefinition
@@ -57,6 +58,7 @@
 | 2 | Reachability | "State X is not reachable from Y" |
 | 3 | Path to terminal (skipped if perpetual) | "No path from X to any terminal state" |
 | 4 | DAG (auto/branch only) | "Auto/Branch transitions contain a cycle" |
+| 4a | Multi-External routing mode and uniqueness | `EXTERNAL_ROUTING_MIXED`, `EXTERNAL_TRIGGER_NOT_DISTINCT`, or `EXTERNAL_REQUIRES_NOT_DISTINCT` |
 | 5 | Branch completeness | "Branch target 'label' -> X is not a valid state" |
 | 6 | Requires/produces | "Guard/Processor/Branch 'X' requires Y but not available" |
 | 7 | Auto-external conflict | "State X has both auto/branch and external transitions" |

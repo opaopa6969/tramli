@@ -77,6 +77,16 @@ class FlowEngineErrorTest {
         };
     }
 
+    static TransitionGuard accepting(String name) {
+        return new TransitionGuard() {
+            @Override public String name() { return name; }
+            @Override public Set<Class<?>> requires() { return Set.of(); }
+            @Override public Set<Class<?>> produces() { return Set.of(); }
+            @Override public int maxRetries() { return 3; }
+            @Override public GuardOutput validate(FlowContext ctx) { return new GuardOutput.Accepted(); }
+        };
+    }
+
     // ─── Tests ───────────────────────────────────────────────
 
     @Test
@@ -251,10 +261,23 @@ class FlowEngineErrorTest {
         @Override public boolean isInitial() { return initial; }
     }
 
+    enum TriggeredSubStep implements FlowState {
+        INIT(false, true), WAIT(false, false), DONE(true, false), CANCELLED(true, false);
+        private final boolean terminal, initial;
+        TriggeredSubStep(boolean terminal, boolean initial) {
+            this.terminal = terminal;
+            this.initial = initial;
+        }
+        @Override public boolean isTerminal() { return terminal; }
+        @Override public boolean isInitial() { return initial; }
+    }
+
     record SubInput(String v) {}
     record SubOutput(String v) {}
     record ExitMarker(String v) {}
     record EnterMarker(String v) {}
+    record ConfirmRequested() {}
+    record CancelRequested() {}
 
     @Test
     void basicSubFlow_autoChainThroughSubFlow() {
@@ -316,6 +339,32 @@ class FlowEngineErrorTest {
         assertEquals(TwoStep.DONE, resumed.currentState());
         assertTrue(resumed.isCompleted());
         assertNull(resumed.activeSubFlow());
+    }
+
+    @Test
+    void subFlowRoutesExplicitExternalTriggersAndReportsTheirUnion() {
+        var subDef = Tramli.define("sub-triggered", TriggeredSubStep.class)
+                .from(TriggeredSubStep.INIT).auto(TriggeredSubStep.WAIT, ok("Wait", Set.of(), Set.of()))
+                .from(TriggeredSubStep.WAIT).externalOn(
+                        ConfirmRequested.class, TriggeredSubStep.DONE, accepting("Confirm"))
+                .from(TriggeredSubStep.WAIT).externalOn(
+                        CancelRequested.class, TriggeredSubStep.CANCELLED, accepting("Cancel"))
+                .build();
+        var mainDef = Tramli.define("main-triggered", TwoStep.class)
+                .from(TwoStep.INIT).subFlow(subDef)
+                .onExit("DONE", TwoStep.DONE)
+                .onExit("CANCELLED", TwoStep.ERROR)
+                .endSubFlow()
+                .build();
+
+        var engine = new FlowEngine(new InMemoryFlowStore());
+        var flow = engine.startFlow(mainDef, "s1", Map.of());
+        assertEquals(Set.of(ConfirmRequested.class, CancelRequested.class), flow.waitingFor());
+
+        var resumed = engine.resumeAndExecute(flow.id(), mainDef,
+                Map.<Class<?>, Object>of(CancelRequested.class, new CancelRequested()));
+        assertEquals(TwoStep.ERROR, resumed.currentState());
+        assertTrue(resumed.isCompleted());
     }
 
     @Test

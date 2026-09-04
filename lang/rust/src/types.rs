@@ -63,6 +63,16 @@ pub trait TransitionGuard<S: FlowState>: Send + Sync {
     fn produces(&self) -> Vec<TypeId>;
     fn validate(&self, ctx: &FlowContext) -> GuardOutput;
 
+    /// Routing type set by `external_on`. It is separate from data dependencies.
+    fn external_trigger(&self) -> Option<TypeId> {
+        None
+    }
+
+    /// Human-readable name for `external_trigger` diagnostics and diagrams.
+    fn external_trigger_name(&self) -> Option<&'static str> {
+        None
+    }
+
     /// Like `requires()` but also returns a human-readable name for each TypeId.
     fn requires_named(&self) -> Vec<(TypeId, &'static str)> {
         self.requires().into_iter().map(|id| (id, "")).collect()
@@ -72,6 +82,95 @@ pub trait TransitionGuard<S: FlowState>: Send + Sync {
     fn produces_named(&self) -> Vec<(TypeId, &'static str)> {
         self.produces().into_iter().map(|id| (id, "")).collect()
     }
+}
+
+pub(crate) fn select_external_transition<'a, S: FlowState>(
+    externals: &[&'a Transition<S>],
+    data_types: &std::collections::HashSet<TypeId>,
+    state_name: &str,
+) -> Result<&'a Transition<S>, FlowError> {
+    let explicit: Vec<_> = externals
+        .iter()
+        .filter(|transition| {
+            transition
+                .guard
+                .as_ref()
+                .is_some_and(|guard| guard.external_trigger().is_some())
+        })
+        .copied()
+        .collect();
+    if !explicit.is_empty() {
+        let matches: Vec<_> = explicit
+            .into_iter()
+            .filter(|transition| {
+                transition
+                    .guard
+                    .as_ref()
+                    .and_then(|guard| guard.external_trigger())
+                    .is_some_and(|trigger| data_types.contains(&trigger))
+            })
+            .collect();
+        return match matches.len() {
+            1 => Ok(matches[0]),
+            0 => Err(FlowError::new(
+                "EXTERNAL_EVENT_NOT_MATCHED",
+                format!("External event did not match a trigger at state {state_name}"),
+            )),
+            _ => Err(FlowError::new(
+                "EXTERNAL_EVENT_AMBIGUOUS",
+                format!("External event matched multiple triggers at state {state_name}"),
+            )),
+        };
+    }
+
+    if externals.len() == 1 {
+        return Ok(externals[0]);
+    }
+    let matches: Vec<_> = externals
+        .iter()
+        .filter(|transition| {
+            transition.guard.as_ref().is_some_and(|guard| {
+                guard
+                    .requires()
+                    .iter()
+                    .all(|required| data_types.contains(required))
+            })
+        })
+        .copied()
+        .collect();
+    let Some(specificity) = matches
+        .iter()
+        .filter_map(|transition| {
+            transition
+                .guard
+                .as_ref()
+                .map(|guard| guard.requires().len())
+        })
+        .max()
+    else {
+        return Err(FlowError::new(
+            "EXTERNAL_EVENT_NOT_MATCHED",
+            format!("External event did not satisfy any guard requirements at state {state_name}"),
+        ));
+    };
+    let most_specific: Vec<_> = matches
+        .into_iter()
+        .filter(|transition| {
+            transition
+                .guard
+                .as_ref()
+                .is_some_and(|guard| guard.requires().len() == specificity)
+        })
+        .collect();
+    if most_specific.len() != 1 {
+        return Err(FlowError::new(
+            "EXTERNAL_EVENT_AMBIGUOUS",
+            format!(
+                "External event matched multiple equally specific guards at state {state_name}"
+            ),
+        ));
+    }
+    Ok(most_specific[0])
 }
 
 /// Decides which branch to take.

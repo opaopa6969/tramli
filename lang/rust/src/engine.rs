@@ -203,9 +203,9 @@ impl<S: FlowState> FlowEngine<S> {
             let def = flow.definition.clone();
 
             if flow.has_active_sub_flow() {
-                Self::resume_active_sub_flow(flow, current, &def)?
+                Self::resume_active_sub_flow(flow, current, &def, &data_type_ids)?
             } else {
-                // Multi-external: select guard by requires matching
+                // Multi-external: select by explicit trigger or legacy requirement specificity.
                 let externals = def.externals_from(current);
                 if externals.is_empty() {
                     return Err(FlowError::invalid_transition(
@@ -213,15 +213,11 @@ impl<S: FlowState> FlowEngine<S> {
                         &format!("{:?}", current),
                     ));
                 }
-                let transition = externals
-                    .iter()
-                    .find(|ext| {
-                        ext.guard
-                            .as_ref()
-                            .is_some_and(|g| g.requires().iter().all(|r| data_type_ids.contains(r)))
-                    })
-                    .copied()
-                    .unwrap_or(externals[0]);
+                let transition = select_external_transition(
+                    &externals,
+                    &data_type_ids,
+                    &format!("{:?}", current),
+                )?;
 
                 // Per-state timeout check
                 if let Some(timeout) = transition.timeout {
@@ -460,13 +456,14 @@ impl<S: FlowState> FlowEngine<S> {
         flow: &mut FlowInstance<S>,
         current: S,
         def: &FlowDefinition<S>,
+        data_type_ids: &std::collections::HashSet<std::any::TypeId>,
     ) -> Result<Option<(String, String, String)>, FlowError> {
         use crate::sub_flow::SubFlowResult;
 
         let mut instance = flow
             .take_active_sub_flow()
             .expect("active sub-flow must exist after has_active_sub_flow");
-        let result = match instance.resume(&mut flow.context) {
+        let result = match instance.resume_with_external_types(&mut flow.context, data_type_ids) {
             Ok(result) => result,
             Err(error) => {
                 flow.set_active_sub_flow(instance);

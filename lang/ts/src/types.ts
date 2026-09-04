@@ -54,6 +54,8 @@ export interface TransitionGuard<S extends string> {
   requires: FlowKey<unknown>[];
   produces: FlowKey<unknown>[];
   maxRetries: number;
+  /** Routing key set by externalOn(). Not part of the guard's data dependencies. */
+  externalTrigger?: FlowKey<unknown>;
   validate(ctx: FlowContext): Promise<GuardOutput> | GuardOutput;
 }
 

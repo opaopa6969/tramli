@@ -459,6 +459,39 @@ pub struct FromBuilder<S: FlowState> {
     from: S,
 }
 
+struct TriggeredGuard<S: FlowState> {
+    trigger: TypeId,
+    trigger_name: &'static str,
+    delegate: Arc<dyn TransitionGuard<S>>,
+}
+
+impl<S: FlowState> TransitionGuard<S> for TriggeredGuard<S> {
+    fn name(&self) -> &str {
+        self.delegate.name()
+    }
+    fn requires(&self) -> Vec<TypeId> {
+        self.delegate.requires()
+    }
+    fn produces(&self) -> Vec<TypeId> {
+        self.delegate.produces()
+    }
+    fn validate(&self, ctx: &crate::FlowContext) -> GuardOutput {
+        self.delegate.validate(ctx)
+    }
+    fn requires_named(&self) -> Vec<(TypeId, &'static str)> {
+        self.delegate.requires_named()
+    }
+    fn produces_named(&self) -> Vec<(TypeId, &'static str)> {
+        self.delegate.produces_named()
+    }
+    fn external_trigger(&self) -> Option<TypeId> {
+        Some(self.trigger)
+    }
+    fn external_trigger_name(&self) -> Option<&'static str> {
+        Some(self.trigger_name)
+    }
+}
+
 impl<S: FlowState> FromBuilder<S> {
     pub fn auto(mut self, to: S, processor: impl StateProcessor<S> + 'static) -> Builder<S> {
         self.builder.add_transition(Transition {
@@ -556,6 +589,90 @@ impl<S: FlowState> FromBuilder<S> {
         self.builder
     }
 
+    pub fn external_on<T: 'static>(
+        mut self,
+        to: S,
+        guard: impl TransitionGuard<S> + 'static,
+    ) -> Builder<S> {
+        self.builder.add_transition(Transition {
+            from: self.from,
+            to,
+            transition_type: TransitionType::External,
+            processor: None,
+            guard: Some(triggered_guard::<S, T>(guard)),
+            branch: None,
+            branch_targets: HashMap::new(),
+            branch_label: None,
+            sub_flow: None,
+            timeout: None,
+        });
+        self.builder
+    }
+
+    pub fn external_on_with_processor<T: 'static>(
+        mut self,
+        to: S,
+        guard: impl TransitionGuard<S> + 'static,
+        processor: impl StateProcessor<S> + 'static,
+    ) -> Builder<S> {
+        self.builder.add_transition(Transition {
+            from: self.from,
+            to,
+            transition_type: TransitionType::External,
+            processor: Some(Arc::new(processor)),
+            guard: Some(triggered_guard::<S, T>(guard)),
+            branch: None,
+            branch_targets: HashMap::new(),
+            branch_label: None,
+            sub_flow: None,
+            timeout: None,
+        });
+        self.builder
+    }
+
+    pub fn external_on_with_timeout<T: 'static>(
+        mut self,
+        to: S,
+        guard: impl TransitionGuard<S> + 'static,
+        timeout: std::time::Duration,
+    ) -> Builder<S> {
+        self.builder.add_transition(Transition {
+            from: self.from,
+            to,
+            transition_type: TransitionType::External,
+            processor: None,
+            guard: Some(triggered_guard::<S, T>(guard)),
+            branch: None,
+            branch_targets: HashMap::new(),
+            branch_label: None,
+            sub_flow: None,
+            timeout: Some(timeout),
+        });
+        self.builder
+    }
+
+    pub fn external_on_with_processor_and_timeout<T: 'static>(
+        mut self,
+        to: S,
+        guard: impl TransitionGuard<S> + 'static,
+        processor: impl StateProcessor<S> + 'static,
+        timeout: std::time::Duration,
+    ) -> Builder<S> {
+        self.builder.add_transition(Transition {
+            from: self.from,
+            to,
+            transition_type: TransitionType::External,
+            processor: Some(Arc::new(processor)),
+            guard: Some(triggered_guard::<S, T>(guard)),
+            branch: None,
+            branch_targets: HashMap::new(),
+            branch_label: None,
+            sub_flow: None,
+            timeout: Some(timeout),
+        });
+        self.builder
+    }
+
     pub fn sub_flow(self, runner: Box<dyn crate::sub_flow::SubFlowRunner>) -> SubFlowBuilder<S> {
         SubFlowBuilder {
             builder: self.builder,
@@ -573,6 +690,16 @@ impl<S: FlowState> FromBuilder<S> {
             targets: HashMap::new(),
         }
     }
+}
+
+fn triggered_guard<S: FlowState, T: 'static>(
+    guard: impl TransitionGuard<S> + 'static,
+) -> Arc<dyn TransitionGuard<S>> {
+    Arc::new(TriggeredGuard {
+        trigger: TypeId::of::<T>(),
+        trigger_name: std::any::type_name::<T>(),
+        delegate: Arc::new(guard),
+    })
 }
 
 // ─── BranchBuilder ───────────────────────────────────────
@@ -684,6 +811,8 @@ fn validate<S: FlowState>(
         check_path_to_terminal(def, &mut errors);
     }
     check_dag(def, &mut errors);
+    check_external_routing_mixed(def, &mut errors);
+    check_external_trigger_distinct(def, &mut errors);
     check_external_requires_distinct(def, &mut errors);
     check_branch_completeness(def, &mut errors);
     check_requires_produces(def, initially_available, externally_provided, &mut errors);
@@ -760,6 +889,32 @@ fn collect_errors<S: FlowState>(
             let st = parse_state_from_msg(&msg);
             result.push(ValidationError {
                 code: "DAG_CYCLE".into(),
+                message: msg,
+                state: st,
+            });
+        }
+    }
+
+    {
+        let mut errs = Vec::new();
+        check_external_routing_mixed(def, &mut errs);
+        for msg in errs {
+            let st = parse_state_from_msg(&msg);
+            result.push(ValidationError {
+                code: "EXTERNAL_ROUTING_MIXED".into(),
+                message: msg,
+                state: st,
+            });
+        }
+    }
+
+    {
+        let mut errs = Vec::new();
+        check_external_trigger_distinct(def, &mut errs);
+        for msg in errs {
+            let st = parse_state_from_msg(&msg);
+            result.push(ValidationError {
+                code: "EXTERNAL_TRIGGER_NOT_DISTINCT".into(),
                 message: msg,
                 state: st,
             });
@@ -899,6 +1054,14 @@ fn check_external_requires_distinct<S: FlowState>(
 ) {
     for state in S::all_states() {
         let externals = def.externals_from(*state);
+        if externals.iter().any(|transition| {
+            transition
+                .guard
+                .as_ref()
+                .is_some_and(|guard| guard.external_trigger().is_some())
+        }) {
+            continue;
+        }
         for i in 0..externals.len() {
             for j in (i + 1)..externals.len() {
                 let Some(first) = externals[i].guard.as_ref() else {
@@ -915,6 +1078,63 @@ fn check_external_requires_distinct<S: FlowState>(
                         state, first.name(), second.name()
                     ));
                 }
+            }
+        }
+    }
+}
+
+fn check_external_routing_mixed<S: FlowState>(def: &FlowDefinition<S>, errors: &mut Vec<String>) {
+    for state in S::all_states() {
+        let externals = def.externals_from(*state);
+        if externals.len() < 2 {
+            continue;
+        }
+        let explicit_count = externals
+            .iter()
+            .filter(|transition| {
+                transition
+                    .guard
+                    .as_ref()
+                    .is_some_and(|guard| guard.external_trigger().is_some())
+            })
+            .count();
+        if explicit_count > 0 && explicit_count < externals.len() {
+            errors.push(format!(
+                "State {:?} mixes explicit and legacy external routing",
+                state
+            ));
+        }
+    }
+}
+
+fn check_external_trigger_distinct<S: FlowState>(
+    def: &FlowDefinition<S>,
+    errors: &mut Vec<String>,
+) {
+    for state in S::all_states() {
+        let externals = def.externals_from(*state);
+        if externals.len() < 2 {
+            continue;
+        }
+        let mut triggers = HashSet::new();
+        for transition in externals {
+            let Some(trigger) = transition
+                .guard
+                .as_ref()
+                .and_then(|guard| guard.external_trigger())
+            else {
+                continue;
+            };
+            if !triggers.insert(trigger) {
+                let name = transition
+                    .guard
+                    .as_ref()
+                    .and_then(|guard| guard.external_trigger_name())
+                    .unwrap_or("unknown");
+                errors.push(format!(
+                    "State {:?} has duplicate external trigger {}",
+                    state, name
+                ));
             }
         }
     }

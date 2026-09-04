@@ -1,12 +1,13 @@
 ---
-status: draft
+status: accepted
 generated_by: DGE
 session: ../sessions/2026-09-04-external-trigger-routing.md
+implemented_by: issue-103
 ---
 
 # TECH-012: External trigger routing
 
-> DGE によって生成された draft 仕様。実装と3言語 parity test が完了するまで accepted にしない。
+> DGE によって生成され、3言語の parity test で受け入れた仕様。
 
 ## 目的
 
@@ -44,6 +45,8 @@ externalOn(
 ```
 
 `external_on<T: 'static>(to, guard)` と `external_on_with_processor<T: 'static>(to, guard, processor)` を追加する。既存 timeout builder と合成可能にする。
+timeout 用に `external_on_with_timeout` と
+`external_on_with_processor_and_timeout` も同じ規則で提供する。
 
 ## Routing metadata
 

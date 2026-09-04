@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { Tramli } from '../src/tramli.js';
 import { InMemoryFlowStore } from '../src/in-memory-flow-store.js';
+import { MermaidGenerator } from '../src/mermaid-generator.js';
 import { flowKey } from '../src/flow-key.js';
 import type { StateConfig, StateProcessor, TransitionGuard, GuardOutput } from '../src/types.js';
 import type { FlowContext } from '../src/flow-context.js';
@@ -22,6 +23,8 @@ const EnteredC = flowKey<boolean>('EnteredC');
 const ExitedA = flowKey<boolean>('ExitedA');
 const ExitedB = flowKey<boolean>('ExitedB');
 const PluginResult = flowKey<string>('PluginResult');
+const PaymentSubmitted = flowKey<boolean>('PaymentSubmitted');
+const CancelRequested = flowKey<boolean>('CancelRequested');
 
 // ─── Helpers ────────────────────────────────────────
 
@@ -220,6 +223,16 @@ describe('S10: Multi-External Guard Selection', () => {
     };
   }
 
+  function emptyGuard(name: string): TransitionGuard<S10> {
+    return {
+      name,
+      requires: [],
+      produces: [],
+      maxRetries: 3,
+      validate(): GuardOutput { return { type: 'accepted' }; },
+    };
+  }
+
   it('s10_multi_external_payment', async () => {
     const def = Tramli.define<S10>('s10', s10Config)
       .initiallyAvailable(PaymentData, CancelRequest)
@@ -304,6 +317,101 @@ describe('S10: Multi-External Guard Selection', () => {
 
     expect(result.definition).not.toBeNull();
     expect(result.errors).toEqual([]);
+  });
+
+  it('s10_explicit_trigger_routes_empty_requires_and_reports_waiting_for', async () => {
+    const def = Tramli.define<S10>('s10-explicit', s10Config)
+      .from('A').auto('B', noop('Noop'))
+      .from('B').externalOn(PaymentSubmitted, 'C', emptyGuard('PaymentGuard'))
+      .from('B').externalOn(CancelRequested, 'D', emptyGuard('CancelGuard'))
+      .build();
+
+    const store = new InMemoryFlowStore();
+    const engine = Tramli.engine(store);
+    const flow = await engine.startFlow(def, 's1', new Map());
+    expect(flow.waitingFor()).toEqual(['PaymentSubmitted', 'CancelRequested']);
+    expect(MermaidGenerator.generate(def)).toContain('[PaymentGuard] on PaymentSubmitted');
+
+    const resumed = await engine.resumeAndExecute(
+      flow.id, def, new Map([[CancelRequested as string, true]]),
+    );
+    expect(resumed.currentState).toBe('D');
+  });
+
+  it('s10_duplicate_explicit_trigger_rejected', () => {
+    const result = Tramli.define<S10>('s10-duplicate-trigger', s10Config)
+      .from('A').auto('B', noop('Noop'))
+      .from('B').externalOn(PaymentSubmitted, 'C', emptyGuard('First'))
+      .from('B').externalOn(PaymentSubmitted, 'D', emptyGuard('Second'))
+      .buildAndValidate();
+
+    expect(result.errors.some(error => error.code === 'EXTERNAL_TRIGGER_NOT_DISTINCT')).toBe(true);
+  });
+
+  it('s10_mixed_explicit_and_legacy_routing_rejected', () => {
+    const result = Tramli.define<S10>('s10-mixed', s10Config)
+      .from('A').auto('B', noop('Noop'))
+      .from('B').externalOn(PaymentSubmitted, 'C', emptyGuard('Explicit'))
+      .from('B').external('D', emptyGuard('Legacy'))
+      .buildAndValidate();
+
+    expect(result.errors.some(error => error.code === 'EXTERNAL_ROUTING_MIXED')).toBe(true);
+  });
+
+  it('s10_explicit_trigger_no_match_and_ambiguity_are_errors', async () => {
+    const def = Tramli.define<S10>('s10-explicit-errors', s10Config)
+      .from('A').auto('B', noop('Noop'))
+      .from('B').externalOn(PaymentSubmitted, 'C', emptyGuard('Payment'))
+      .from('B').externalOn(CancelRequested, 'D', emptyGuard('Cancel'))
+      .build();
+
+    const noMatchEngine = Tramli.engine(new InMemoryFlowStore());
+    const noMatchFlow = await noMatchEngine.startFlow(def, 'no-match', new Map());
+    await expect(noMatchEngine.resumeAndExecute(
+      noMatchFlow.id, def, new Map([[Result as string, 'unknown']]),
+    )).rejects.toMatchObject({ code: 'EXTERNAL_EVENT_NOT_MATCHED' });
+
+    const ambiguousEngine = Tramli.engine(new InMemoryFlowStore());
+    const ambiguousFlow = await ambiguousEngine.startFlow(def, 'ambiguous', new Map());
+    await expect(ambiguousEngine.resumeAndExecute(ambiguousFlow.id, def, new Map([
+      [PaymentSubmitted as string, true],
+      [CancelRequested as string, true],
+    ]))).rejects.toMatchObject({ code: 'EXTERNAL_EVENT_AMBIGUOUS' });
+  });
+
+  it('s10_legacy_routes_most_specific_and_rejects_ties_or_no_match', async () => {
+    const specificDef = Tramli.define<S10>('s10-specific', s10Config)
+      .initiallyAvailable(PaymentData, CancelRequest)
+      .from('A').auto('B', noop('Noop'))
+      .from('B').external('C', guardA())
+      .from('B').external('D', { ...guardB(), name: 'Combined', requires: [PaymentData, CancelRequest] })
+      .build();
+    const specificEngine = Tramli.engine(new InMemoryFlowStore());
+    const specificFlow = await specificEngine.startFlow(specificDef, 'specific', new Map());
+    const routed = await specificEngine.resumeAndExecute(specificFlow.id, specificDef, new Map([
+      [PaymentData as string, 'card'],
+      [CancelRequest as string, 'user'],
+    ]));
+    expect(routed.currentState).toBe('D');
+
+    const tieDef = Tramli.define<S10>('s10-tie', s10Config)
+      .initiallyAvailable(PaymentData, CancelRequest)
+      .from('A').auto('B', noop('Noop'))
+      .from('B').external('C', guardA())
+      .from('B').external('D', guardB())
+      .build();
+    const tieEngine = Tramli.engine(new InMemoryFlowStore());
+    const tieFlow = await tieEngine.startFlow(tieDef, 'tie', new Map());
+    await expect(tieEngine.resumeAndExecute(tieFlow.id, tieDef, new Map([
+      [PaymentData as string, 'card'],
+      [CancelRequest as string, 'user'],
+    ]))).rejects.toMatchObject({ code: 'EXTERNAL_EVENT_AMBIGUOUS' });
+
+    const noMatchEngine = Tramli.engine(new InMemoryFlowStore());
+    const noMatchFlow = await noMatchEngine.startFlow(tieDef, 'none', new Map());
+    await expect(noMatchEngine.resumeAndExecute(
+      noMatchFlow.id, tieDef, new Map([[Result as string, 'unknown']]),
+    )).rejects.toMatchObject({ code: 'EXTERNAL_EVENT_NOT_MATCHED' });
   });
 });
 

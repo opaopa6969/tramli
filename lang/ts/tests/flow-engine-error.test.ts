@@ -271,6 +271,43 @@ describe('FlowEngineError', () => {
     expect(resumed.activeSubFlow).toBeNull();
   });
 
+  it('subFlow routes explicit external triggers and reports their union', async () => {
+    type SubStep = 'S_INIT' | 'S_WAIT' | 'S_DONE' | 'S_CANCELLED';
+    const subConfig: Record<SubStep, StateConfig> = {
+      S_INIT: { terminal: false, initial: true },
+      S_WAIT: { terminal: false },
+      S_DONE: { terminal: true },
+      S_CANCELLED: { terminal: true },
+    };
+    const ConfirmRequested = flowKey<boolean>('ConfirmRequested');
+    const CancelRequested = flowKey<boolean>('CancelRequested');
+    const guard = (name: string): TransitionGuard<SubStep> => ({
+      name, requires: [], produces: [], maxRetries: 3,
+      validate: () => ({ type: 'accepted' }),
+    });
+    const subDef = Tramli.define<SubStep>('sub-triggered', subConfig)
+      .from('S_INIT').auto('S_WAIT', ok('Wait', [], []))
+      .from('S_WAIT').externalOn(ConfirmRequested, 'S_DONE', guard('Confirm'))
+      .from('S_WAIT').externalOn(CancelRequested, 'S_CANCELLED', guard('Cancel'))
+      .build();
+    const mainDef = Tramli.define<TwoStep>('main-triggered', twoStepConfig)
+      .from('INIT').subFlow(subDef)
+      .onExit('S_DONE', 'DONE')
+      .onExit('S_CANCELLED', 'ERROR')
+      .endSubFlow()
+      .build();
+
+    const engine = Tramli.engine(new InMemoryFlowStore());
+    const flow = await engine.startFlow(mainDef, 's1', new Map());
+    expect(flow.waitingFor()).toEqual(['ConfirmRequested', 'CancelRequested']);
+
+    const resumed = await engine.resumeAndExecute(
+      flow.id, mainDef, new Map([[CancelRequested as string, true]]),
+    );
+    expect(resumed.currentState).toBe('ERROR');
+    expect(resumed.isCompleted).toBe(true);
+  });
+
   it('subFlow exit missing — build fails', () => {
     type SubSimple = 'SS_INIT' | 'SS_DONE';
     const ssConfig: Record<SubSimple, StateConfig> = {

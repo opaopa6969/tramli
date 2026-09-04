@@ -157,6 +157,15 @@
 - resumeAndExecute with {CancelRequest: "user"}
 - Expect: guardB selected, state = D
 
+**Additional S10 parity cases**:
+- `externalOn(PaymentSubmitted, ..., emptyGuard)` routes with an empty `requires`
+- `waitingFor` returns every explicit trigger at the current state
+- duplicate explicit triggers fail with `EXTERNAL_TRIGGER_NOT_DISTINCT`
+- mixed explicit/legacy routing fails with `EXTERNAL_ROUTING_MIXED`
+- zero explicit/legacy matches fail with `EXTERNAL_EVENT_NOT_MATCHED`
+- multiple explicit or equally specific legacy matches fail with `EXTERNAL_EVENT_AMBIGUOUS`
+- a matching legacy superset wins over a matching subset regardless of declaration order
+
 ---
 
 ## S11: Per-State Timeout

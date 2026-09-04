@@ -63,15 +63,23 @@ if flow.activeSubFlow != null:
 externals = definition.externalsFrom(currentState)
 if externals.isEmpty: throw INVALID_TRANSITION
 
-transition = null
 dataTypes = externalData.keySet()
-for ext in externals:
-  if ext.guard != null AND dataTypes.containsAll(ext.guard.requires):
-    transition = ext
-    break
-if transition == null:
-  transition = externals[0]  // fallback
+if externals use explicit triggers:
+  matches = externals where dataTypes contains guard.externalTrigger
+else if externals.size == 1:
+  matches = [externals[0]]  // legacy compatibility
+else:
+  matches = externals where dataTypes containsAll guard.requires
+  matches = entries with the largest requires size
+
+if matches.empty: throw EXTERNAL_EVENT_NOT_MATCHED
+if matches.size > 1: throw EXTERNAL_EVENT_AMBIGUOUS
+transition = matches[0]
 ```
+
+At build time, multiple Externals from one state must be all explicit or all
+legacy. Explicit triggers must be distinct. Legacy `requires` sets must remain
+distinct. Declaration order is never a routing tie-breaker.
 
 ### Per-State Timeout
 

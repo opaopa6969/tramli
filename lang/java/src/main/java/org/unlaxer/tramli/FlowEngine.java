@@ -140,24 +140,14 @@ public final class FlowEngine {
 
         S currentState = flow.currentState();
 
-        // Multi-external: select guard by requires matching
+        // Multi-external: select by explicit trigger or legacy requirement specificity.
         var externals = definition.externalsFrom(currentState);
         if (externals.isEmpty()) {
             throw FlowException.invalidTransition(currentState, currentState);
         }
 
-        Transition<S> transition = null;
         Set<Class<?>> dataTypes = externalData.keySet();
-        for (var ext : externals) {
-            if (ext.guard() != null && dataTypes.containsAll(ext.guard().requires())) {
-                transition = ext;
-                break;
-            }
-        }
-        if (transition == null) {
-            // Fallback: single external with no guard or first external
-            transition = externals.get(0);
-        }
+        Transition<S> transition = selectExternalTransition(externals, dataTypes, currentState.name());
 
         // Per-state timeout check
         if (transition.timeout() != null && flow.stateEnteredAt() != null) {
@@ -328,13 +318,13 @@ public final class FlowEngine {
         }
 
         Enum subCurrent = (Enum) subFlow.currentState();
-        var externalOpt = subDef.externalFrom((Enum & FlowState) subCurrent);
-        if (externalOpt.isEmpty()) {
+        var externals = subDef.externalsFrom((Enum & FlowState) subCurrent);
+        if (externals.isEmpty()) {
             throw new FlowException("INVALID_TRANSITION",
                     "No external transition from sub-flow state " + subCurrent.name());
         }
 
-        Transition transition = (Transition) externalOpt.get();
+        Transition transition = selectExternalTransition(externals, externalData.keySet(), subCurrent.name());
         TransitionGuard guard = transition.guard();
         FlowState subTo = (FlowState) transition.to();
 
@@ -401,6 +391,43 @@ public final class FlowEngine {
 
         store.save(parentFlow);
         return parentFlow;
+    }
+
+    private static <S extends Enum<S> & FlowState> Transition<S> selectExternalTransition(
+            java.util.List<Transition<S>> externals, Set<Class<?>> dataTypes, String stateName) {
+        var explicit = externals.stream()
+                .filter(t -> t.guard() != null && t.guard().externalTrigger() != null)
+                .toList();
+        if (!explicit.isEmpty()) {
+            var matches = explicit.stream()
+                    .filter(t -> dataTypes.contains(t.guard().externalTrigger()))
+                    .toList();
+            if (matches.size() == 1) return matches.get(0);
+            if (matches.isEmpty()) {
+                throw new FlowException("EXTERNAL_EVENT_NOT_MATCHED",
+                        "External event did not match a trigger at state " + stateName);
+            }
+            throw new FlowException("EXTERNAL_EVENT_AMBIGUOUS",
+                    "External event matched multiple triggers at state " + stateName);
+        }
+
+        if (externals.size() == 1) return externals.get(0);
+        var matches = externals.stream()
+                .filter(t -> t.guard() != null && dataTypes.containsAll(t.guard().requires()))
+                .toList();
+        if (matches.isEmpty()) {
+            throw new FlowException("EXTERNAL_EVENT_NOT_MATCHED",
+                    "External event did not satisfy any guard requirements at state " + stateName);
+        }
+        int specificity = matches.stream().mapToInt(t -> t.guard().requires().size()).max().orElse(-1);
+        var mostSpecific = matches.stream()
+                .filter(t -> t.guard().requires().size() == specificity)
+                .toList();
+        if (mostSpecific.size() != 1) {
+            throw new FlowException("EXTERNAL_EVENT_AMBIGUOUS",
+                    "External event matched multiple equally specific guards at state " + stateName);
+        }
+        return mostSpecific.get(0);
     }
 
     @SuppressWarnings("unchecked")

@@ -1,11 +1,16 @@
 # TECH-010: Multi-External Transitions
 
+> Superseded by [TECH-012](TECH-012-external-trigger-routing.md) for routing.
+> Entry/exit actions and self-transition decisions remain valid.
+
 **DD:** DD-020
 **Priority:** High (volta-gateway, user lifecycle flows)
 
 ## Summary
 
-Allow multiple external transitions from a single state. Guard selection by requires() type matching.
+Allow multiple external transitions from a single state. New definitions use
+typed trigger routing from TECH-012; legacy `requires()` routing remains for
+compatibility.
 
 ## API Changes
 
@@ -14,20 +19,18 @@ Allow multiple external transitions from a single state. Guard selection by requ
 ```java
 // Multiple externals from same state (currently build() error)
 .from(ACTIVE)
-    .external(ACTIVE, profileUpdateGuard)     // requires: ProfileUpdate
-    .external(SUSPENDED, suspendGuard)        // requires: SuspendRequest
-    .external(DEACTIVATED, deactivateGuard)   // requires: DeactivateRequest
+    .externalOn(ProfileUpdate.class, ACTIVE, profileUpdateGuard)
+    .externalOn(SuspendRequest.class, SUSPENDED, suspendGuard)
+    .externalOn(DeactivateRequest.class, DEACTIVATED, deactivateGuard)
 ```
 
 ### Engine: resumeAndExecute guard selection
 
 ```
 1. Get all external transitions from current state
-2. For each transition's guard:
-   a. Check if guard.requires() types are ALL present in externalData
-   b. If yes → evaluate this guard
-3. If no guard matches → throw INVALID_TRANSITION
-4. If multiple match → first in definition order wins (deterministic)
+2. Select the unique explicit trigger present in the current externalData
+3. If none matches → `EXTERNAL_EVENT_NOT_MATCHED`
+4. If multiple match → `EXTERNAL_EVENT_AMBIGUOUS`
 ```
 
 ### Entry/Exit Actions
@@ -40,8 +43,8 @@ Allow multiple external transitions from a single state. Guard selection by requ
 ### Build Validation Changes
 
 - Remove check #4 (at most 1 External per state) — replace with:
-  - Multiple externals OK if each guard has **distinct requires types**
-  - Warning if two guards require the same types (ambiguous routing)
+  - Multiple explicit externals require distinct trigger types
+  - Explicit and legacy routing cannot be mixed at one state
 
 ### FlowInstance Changes
 
@@ -73,10 +76,10 @@ Allow multiple external transitions from a single state. Guard selection by requ
 
 ## Test Cases
 
-1. Multi-external: 3 externals from ACTIVE, each with distinct requires
+1. Multi-external: 3 externals from ACTIVE, each with a distinct trigger
 2. Guard selection: correct guard selected by externalData types
-3. No match: externalData doesn't match any guard → INVALID_TRANSITION
+3. No match: externalData doesn't match any trigger → EXTERNAL_EVENT_NOT_MATCHED
 4. Self-transition: ACTIVE → ACTIVE, guard_failure_count preserved
 5. Entry/exit: callbacks fire on transition
 6. Entry/exit on self-transition: both fire
-7. Build warning: two guards with same requires types
+7. Build error: two transitions with the same trigger type

@@ -3,6 +3,21 @@
 All notable changes to tramli are documented here. Versions are published to
 crates.io, npm (@unlaxer/tramli), and Maven Central (org.unlaxer:tramli).
 
+## [3.9.0] - 2026-09-04
+
+### Added
+- Typed Multi-External routing with `externalOn` (Java/TypeScript) and
+  `external_on` (Rust), including processor and timeout variants.
+- Explicit trigger names in Mermaid diagrams and complete trigger unions from
+  `waitingFor` / `waiting_for`.
+
+### Changed
+- Legacy Multi-External routing now selects the most-specific matching
+  `requires` set. Ties and unmatched events return explicit errors instead of
+  depending on declaration order or falling back to the first transition.
+- Build validation rejects mixed explicit/legacy routing and duplicate explicit
+  triggers at the same state.
+
 ## [1.8.0] - 2026-04-07
 
 ### Fixed (Code Review)
