@@ -6,7 +6,7 @@
 
     <groupId>org.unlaxer</groupId>
     <artifactId>tramli-bom</artifactId>
-    <version>3.7.1</version>
+    <version>3.8.0</version>
     <packaging>pom</packaging>
 
     <name>tramli-bom</name>
@@ -40,7 +40,7 @@
             <dependency>
                 <groupId>org.unlaxer</groupId>
                 <artifactId>tramli</artifactId>
-                <version>3.7.1</version>
+                <version>3.8.0</version>
             </dependency>
             <dependency>
                 <groupId>org.unlaxer</groupId>
@@ -61,6 +61,7 @@
                 <configuration>
                     <publishingServerId>central</publishingServerId>
                     <autoPublish>true</autoPublish>
+                    <waitUntil>published</waitUntil>
                 </configuration>
             </plugin>
 

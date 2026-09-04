@@ -104,6 +104,45 @@ documented in the PR description.
 - **TypeScript**: ESM-first. `tsc` for build, `vitest` for tests.
 - **Rust**: `cargo fmt` + `cargo clippy` before committing.
 
+## Core Release
+
+Core releases use one version for `@unlaxer/tramli`, the `tramli` crate,
+`org.unlaxer:tramli`, and `org.unlaxer:tramli-bom`. Plugin packages keep their
+own release cadence.
+
+1. Set and verify the version:
+   ```bash
+   node scripts/set-core-version.mjs --write 3.8.0
+   node scripts/set-core-version.mjs --check 3.8.0
+   ```
+2. Merge the version change after the normal test and PR workflow.
+3. Run the `Release core` workflow on `main` with that version. Keep
+   `publish` disabled first to exercise all tests and package dry-runs, then
+   run it again with `publish` enabled.
+4. The publish run skips versions already found in a registry, which makes a
+   retry safe after a partial release. It finishes by compiling consumers
+   against the public npm, crates.io, and Maven Central artifacts.
+
+The GitHub `release` environment requires these secrets:
+
+| Secret | Purpose |
+|--------|---------|
+| `CARGO_REGISTRY_TOKEN` | crates.io granular publish token |
+| `MAVEN_CENTRAL_USERNAME` | Maven Central Portal token username |
+| `MAVEN_CENTRAL_PASSWORD` | Maven Central Portal token password |
+| `MAVEN_GPG_PRIVATE_KEY` | ASCII-armored signing key |
+| `MAVEN_GPG_PASSPHRASE` | signing-key passphrase |
+
+npm uses a Trusted Publisher instead of a long-lived token. Configure
+`opaopa6969/tramli`, workflow `release-core.yml`, and environment `release` on
+npmjs.com. The workflow grants OIDC only to the publish job.
+
+To verify an existing public version independently:
+
+```bash
+scripts/smoke-public-core.sh 3.7.1
+```
+
 ## License
 
 By contributing, you agree that your contributions are licensed under the MIT
