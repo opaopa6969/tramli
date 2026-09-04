@@ -277,6 +277,20 @@ describe('S10: Multi-External Guard Selection', () => {
     expect(result.errors.some(error => error.code === 'EXTERNAL_REQUIRES_NOT_DISTINCT')).toBe(true);
   });
 
+  it('s10_duplicate_empty_external_requires_rejected', () => {
+    const first = { ...guardA(), name: 'FirstGuard', requires: [] };
+    const second = { ...guardA(), name: 'SecondGuard', requires: [] };
+
+    const result = Tramli.define<S10>('s10-duplicate-empty', s10Config)
+      .from('A').auto('B', noop('Noop'))
+      .from('B').external('C', first)
+      .from('B').external('D', second)
+      .buildAndValidate();
+
+    expect(result.definition).toBeNull();
+    expect(result.errors.some(error => error.code === 'EXTERNAL_REQUIRES_NOT_DISTINCT')).toBe(true);
+  });
+
   it('s10_subset_external_requires_allowed', () => {
     const subset = guardA();
     const superset = { ...guardA(), name: 'SupersetGuard', requires: [PaymentData, CancelRequest] };

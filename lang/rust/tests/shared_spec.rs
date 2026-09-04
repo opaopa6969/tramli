@@ -399,6 +399,24 @@ mod s10 {
         }
     }
 
+    struct EmptyGuard;
+    impl TransitionGuard<S> for EmptyGuard {
+        fn name(&self) -> &str {
+            "emptyGuard"
+        }
+        fn requires(&self) -> Vec<TypeId> {
+            vec![]
+        }
+        fn produces(&self) -> Vec<TypeId> {
+            vec![]
+        }
+        fn validate(&self, _ctx: &FlowContext) -> GuardOutput {
+            GuardOutput::Accepted {
+                data: HashMap::new(),
+            }
+        }
+    }
+
     #[test]
     fn s10_multi_external_payment() {
         let def = Arc::new(
@@ -477,6 +495,24 @@ mod s10 {
             .external(S::C, PaymentGuard)
             .from(S::B)
             .external(S::D, PaymentGuard)
+            .build_and_validate();
+
+        assert!(result.definition.is_none());
+        assert!(result
+            .errors
+            .iter()
+            .any(|error| error.code == "EXTERNAL_REQUIRES_NOT_DISTINCT"));
+    }
+
+    #[test]
+    fn s10_duplicate_empty_external_requires_rejected() {
+        let result = Builder::<S>::new("s10-duplicate-empty")
+            .from(S::A)
+            .auto(S::B, Noop)
+            .from(S::B)
+            .external(S::C, EmptyGuard)
+            .from(S::B)
+            .external(S::D, EmptyGuard)
             .build_and_validate();
 
         assert!(result.definition.is_none());
