@@ -61,11 +61,21 @@ cat > "$WORK_DIR/java/pom.xml" <<EOF
   <artifactId>tramli-public-smoke</artifactId>
   <version>0.0.0</version>
   <properties><maven.compiler.release>21</maven.compiler.release></properties>
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.unlaxer</groupId>
+        <artifactId>tramli-bom</artifactId>
+        <version>$VERSION</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
   <dependencies>
     <dependency>
       <groupId>org.unlaxer</groupId>
       <artifactId>tramli</artifactId>
-      <version>$VERSION</version>
     </dependency>
   </dependencies>
 </project>
