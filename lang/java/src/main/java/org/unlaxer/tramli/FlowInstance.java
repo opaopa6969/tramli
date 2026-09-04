@@ -127,10 +127,14 @@ public final class FlowInstance<S extends Enum<S> & FlowState> {
      */
     public java.util.Set<Class<?>> waitingFor() {
         if (activeSubFlow != null) return activeSubFlow.waitingFor();
-        var ext = definition.externalFrom(currentState);
-        if (ext.isEmpty()) return java.util.Set.of();
-        var guard = ext.get().guard();
-        return guard != null ? guard.requires() : java.util.Set.of();
+        var waiting = new java.util.LinkedHashSet<Class<?>>();
+        for (var external : definition.externalsFrom(currentState)) {
+            var guard = external.guard();
+            if (guard == null) continue;
+            if (guard.externalTrigger() != null) waiting.add(guard.externalTrigger());
+            else waiting.addAll(guard.requires());
+        }
+        return java.util.Collections.unmodifiableSet(waiting);
     }
 
     /**

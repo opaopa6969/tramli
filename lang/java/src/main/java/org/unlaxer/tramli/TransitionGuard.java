@@ -21,6 +21,8 @@ public interface TransitionGuard {
     Set<Class<?>> requires();
     Set<Class<?>> produces();
     int maxRetries();
+    /** Routing key set by externalOn(). Not part of the guard's data dependencies. */
+    default Class<?> externalTrigger() { return null; }
     GuardOutput validate(FlowContext ctx);
 
     sealed interface GuardOutput permits GuardOutput.Accepted, GuardOutput.Rejected, GuardOutput.Expired {

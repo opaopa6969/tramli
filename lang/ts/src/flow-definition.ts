@@ -60,6 +60,14 @@ function parseValidationError(msg: string): ValidationError {
   if (ambiguousExternal) {
     result.code = 'EXTERNAL_REQUIRES_NOT_DISTINCT'; result.state = ambiguousExternal[1]; return result;
   }
+  const mixedExternal = msg.match(/State (\S+) mixes explicit and legacy external routing/);
+  if (mixedExternal) {
+    result.code = 'EXTERNAL_ROUTING_MIXED'; result.state = mixedExternal[1]; return result;
+  }
+  const duplicateTrigger = msg.match(/State (\S+) has duplicate external trigger/);
+  if (duplicateTrigger) {
+    result.code = 'EXTERNAL_TRIGGER_NOT_DISTINCT'; result.state = duplicateTrigger[1]; return result;
+  }
   // "Terminal state X has an outgoing transition"
   const term = msg.match(/Terminal state (\S+)/);
   if (term) { result.code = 'TERMINAL_OUTGOING'; result.state = term[1]; return result; }
@@ -374,6 +382,23 @@ export class Builder<S extends string> {
   private checkExternalRequiresDistinct(def: FlowDefinition<S>, errors: string[]): void {
     for (const state of def.allStates()) {
       const externals = def.externalsFrom(state);
+      if (externals.length < 2) continue;
+      const explicit = externals.filter(t => t.guard?.externalTrigger !== undefined);
+      if (explicit.length > 0 && explicit.length < externals.length) {
+        errors.push(`State ${state} mixes explicit and legacy external routing`);
+        continue;
+      }
+      if (explicit.length === externals.length) {
+        const triggers = new Set<string>();
+        for (const transition of explicit) {
+          const trigger = transition.guard!.externalTrigger as string;
+          if (triggers.has(trigger)) {
+            errors.push(`State ${state} has duplicate external trigger ${trigger}`);
+          }
+          triggers.add(trigger);
+        }
+        continue;
+      }
       for (let i = 0; i < externals.length; i++) {
         for (let j = i + 1; j < externals.length; j++) {
           const first = externals[i].guard;
@@ -602,6 +627,21 @@ export class FromBuilder<S extends string> {
       guard, branch: undefined, branchTargets: new Map(), timeout,
     });
     return this.builder;
+  }
+
+  externalOn(
+    trigger: FlowKey<unknown>, to: S, guard: TransitionGuard<S>,
+    processorOrOptions?: StateProcessor<S> | { processor?: StateProcessor<S>; timeout?: number },
+  ): Builder<S> {
+    const triggeredGuard: TransitionGuard<S> = {
+      name: guard.name,
+      requires: guard.requires,
+      produces: guard.produces,
+      maxRetries: guard.maxRetries,
+      externalTrigger: trigger,
+      validate: ctx => guard.validate(ctx),
+    };
+    return this.external(to, triggeredGuard, processorOrOptions);
   }
 
   branch(branch: BranchProcessor<S>): BranchBuilder<S> {

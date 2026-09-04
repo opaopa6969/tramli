@@ -80,6 +80,7 @@ export class FlowEngine {
     if (externalData) {
       for (const [key, value] of externalData) flow.context.put(key as any, value);
     }
+    const dataKeys = externalData ? new Set(externalData.keys()) : new Set<string>();
 
     if (new Date() > flow.expiresAt) {
       flow.complete('EXPIRED');
@@ -89,27 +90,16 @@ export class FlowEngine {
 
     // If actively in a sub-flow, delegate resume
     if (flow.activeSubFlow) {
-      return this.resumeSubFlow(flow, definition);
+      return this.resumeSubFlow(flow, definition, dataKeys);
     }
 
     const currentState = flow.currentState;
 
-    // Multi-external: select guard by requires matching
+    // Multi-external: select by explicit trigger or legacy requirement specificity.
     const externals = definition.externalsFrom(currentState);
     if (externals.length === 0) throw FlowError.invalidTransition(currentState, currentState);
 
-    let transition: Transition<S> | undefined;
-    const dataKeys = externalData ? new Set(externalData.keys()) : new Set<string>();
-    for (const ext of externals) {
-      if (ext.guard && ext.guard.requires.every(r => dataKeys.has(r))) {
-        transition = ext;
-        break;
-      }
-    }
-    if (!transition) {
-      // Fallback: first external
-      transition = externals[0];
-    }
+    const transition = this.selectExternalTransition(externals, dataKeys, currentState);
 
     // Per-state timeout check
     if (transition.timeout != null) {
@@ -284,16 +274,17 @@ export class FlowEngine {
   }
 
   private async resumeSubFlow<S extends string>(
-    parentFlow: FlowInstance<S>, parentDef: FlowDefinition<S>,
+    parentFlow: FlowInstance<S>, parentDef: FlowDefinition<S>, dataKeys: Set<string>,
   ): Promise<FlowInstance<S>> {
     const subFlow = parentFlow.activeSubFlow!;
     const subDef = subFlow.definition;
 
-    const transition = subDef.externalFrom(subFlow.currentState);
-    if (!transition) {
+    const externals = subDef.externalsFrom(subFlow.currentState);
+    if (externals.length === 0) {
       throw new FlowError('INVALID_TRANSITION',
         `No external transition from sub-flow state ${subFlow.currentState}`);
     }
+    const transition = this.selectExternalTransition(externals, dataKeys, subFlow.currentState);
 
     const guard = transition.guard;
     if (guard) {
@@ -368,6 +359,38 @@ export class FlowEngine {
 
     this.store.save(parentFlow);
     return parentFlow;
+  }
+
+  private selectExternalTransition<S extends string>(
+    externals: Transition<S>[], dataKeys: Set<string>, state: S,
+  ): Transition<S> {
+    const explicit = externals.filter(ext => ext.guard?.externalTrigger !== undefined);
+    if (explicit.length > 0) {
+      const matches = explicit.filter(ext => dataKeys.has(ext.guard!.externalTrigger as string));
+      if (matches.length === 1) return matches[0];
+      if (matches.length === 0) {
+        throw new FlowError('EXTERNAL_EVENT_NOT_MATCHED',
+          `External event did not match a trigger at state ${state}`);
+      }
+      throw new FlowError('EXTERNAL_EVENT_AMBIGUOUS',
+        `External event matched multiple triggers at state ${state}`);
+    }
+
+    if (externals.length === 1) return externals[0];
+    const matches = externals.filter(ext =>
+      ext.guard?.requires.every(required => dataKeys.has(required)) ?? false,
+    );
+    if (matches.length === 0) {
+      throw new FlowError('EXTERNAL_EVENT_NOT_MATCHED',
+        `External event did not satisfy any guard requirements at state ${state}`);
+    }
+    const specificity = Math.max(...matches.map(ext => ext.guard!.requires.length));
+    const mostSpecific = matches.filter(ext => ext.guard!.requires.length === specificity);
+    if (mostSpecific.length !== 1) {
+      throw new FlowError('EXTERNAL_EVENT_AMBIGUOUS',
+        `External event matched multiple equally specific guards at state ${state}`);
+    }
+    return mostSpecific[0];
   }
 
   private verifyProduces(processor: { name: string; produces: any[] }, ctx: FlowContext, defStrictMode?: boolean): void {

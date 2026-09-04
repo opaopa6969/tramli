@@ -85,6 +85,8 @@ let auth_result = volta_client.check_auth(&req).await;
 | Data-flow Mermaid | `MermaidGenerator.generateDataFlow(def)` | `MermaidGenerator.generateDataFlow(def)` | `MermaidGenerator::generate_data_flow(&def)` |
 | DataFlowGraph | `def.dataFlowGraph()` | `def.dataFlowGraph` | `def.data_flow_graph()` |
 | SubFlow | `.subFlow(sub).onExit("X", S).endSubFlow()` | `.subFlow(sub).onExit("X", S).endSubFlow()` | `.sub_flow(runner).on_exit("X", S).end_sub_flow()` |
+| 明示的 External trigger | `.externalOn(Event.class, to, guard)` | `.externalOn(Event, to, guard)` | `.external_on::<Event>(to, guard)` |
+| 待機中の型 | `flow.waitingFor()` | `flow.waitingFor()` | `flow.waiting_for()` |
 
 ## どの言語を使うべきか
 

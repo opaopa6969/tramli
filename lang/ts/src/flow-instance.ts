@@ -101,9 +101,16 @@ export class FlowInstance<S extends string> {
   /** Types required by the next external transition (including in active sub-flows). */
   waitingFor(): string[] {
     if (this._activeSubFlow) return this._activeSubFlow.waitingFor();
-    const ext = this.definition.externalFrom(this._currentState);
-    if (!ext?.guard) return [];
-    return [...ext.guard.requires];
+    const waiting = new Set<string>();
+    for (const ext of this.definition.externalsFrom(this._currentState)) {
+      if (!ext.guard) continue;
+      if (ext.guard.externalTrigger !== undefined) {
+        waiting.add(ext.guard.externalTrigger);
+      } else {
+        for (const required of ext.guard.requires) waiting.add(required);
+      }
+    }
+    return [...waiting];
   }
 
   /** Return a copy with the given version. For FlowStore optimistic locking. */

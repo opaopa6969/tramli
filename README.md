@@ -790,6 +790,34 @@ Every arrow in the [flow diagram](#mermaid-diagram-generation) is one of three t
 | [**External**](#external-transition) | Outside event (HTTP, message) | Only on `resumeAndExecute()` | `PENDING → CONFIRMED` |
 | [**Branch**](#branch-transition) | [BranchProcessor](#branchprocessor) returns label | Immediately, like Auto | `RESOLVED → COMPLETE or MFA_PENDING` |
 
+### Multiple External events
+
+When one state accepts multiple event kinds, use a typed trigger key instead of
+overloading the guard's data dependencies as a routing hint:
+
+```java
+.from(READY).externalOn(DrainRequested.class, DRAINING, drainGuard)
+```
+
+```typescript
+.from('READY').externalOn(DrainRequested, 'DRAINING', drainGuard)
+```
+
+```rust
+.from(State::Ready).external_on::<DrainRequested>(State::Draining, DrainGuard)
+```
+
+Pass that key in the existing `externalData` argument to `resumeAndExecute` /
+`resume_and_execute`. The trigger selects the transition; it is not implicitly
+a data dependency. If the guard reads its value, also list it in `requires`.
+
+For migration, the existing `external` API remains compatible. A single legacy
+External is always selected. Multiple legacy Externals select the matching guard
+with the largest `requires` set; a tie or no match raises
+`EXTERNAL_EVENT_AMBIGUOUS` or `EXTERNAL_EVENT_NOT_MATCHED`. Do not mix
+`externalOn` and `external` at the same state. `waitingFor()` returns the union
+of all trigger keys (explicit mode) or guard requirements (legacy mode).
+
 ---
 
 ## Auto-Chain
@@ -826,7 +854,7 @@ Safety: auto-chain has a max depth of 10 to prevent infinite loops. [DAG validat
 | 1 | All non-terminal states [reachable](#reachable) from [initial](#initial-state) | Dead states that can never be entered |
 | 2 | Path from initial to [terminal](#terminal-state) exists | Flows that can never complete |
 | 3 | [Auto](#auto-transition)/[Branch](#branch-transition) transitions form a [DAG](#dag) | Infinite auto-chain loops |
-| 4 | Multi-[External](#external-transition) guards have distinct `requires` | Ambiguous "which guard handles this data?" (DD-020) |
+| 4 | Multi-[External](#external-transition) routing is one mode with distinct trigger/`requires` keys | Ambiguous event routing (DD-020) |
 | 5 | All [branch](#branch-transition) targets defined | `decide()` returning a label with no target state |
 | 6 | [requires/produces](#requires--produces-contract) chain integrity | "Data not available" errors at runtime |
 | 7 | No transitions from [terminal](#terminal-state) states | States that should be final but aren't |
@@ -1150,7 +1178,7 @@ This is the same advantage that Airflow/Temporal users wish they had: **build-ti
 | `activeSubFlow()` | Active sub-flow instance (null if not in sub-flow) |
 | `statePath()` | State path from root: `["PAYMENT", "CONFIRM"]` |
 | `statePathString()` | Slash-separated: `"PAYMENT/CONFIRM"` |
-| `waitingFor()` | Types required by current external transition |
+| `waitingFor()` | Union of trigger/required types for all current external transitions |
 | `availableData()` | Types available at current state (from DataFlowGraph) |
 | `missingFor()` | Types missing for the next transition |
 | `withVersion(n)` | Copy with updated version (for FlowStore optimistic locking) |
@@ -1185,6 +1213,7 @@ This is the same advantage that Airflow/Temporal users wish they had: **build-ti
 |--------|-------------|
 | `.from(state).auto(to, processor)` | Auto transition |
 | `.from(state).external(to, guard)` | External transition (waits for event) |
+| `.from(state).externalOn(trigger, to, guard)` | External transition selected by a typed trigger (`external_on` in Rust) |
 | `.from(state).branch(branch).to(s, label).endBranch()` | Conditional routing |
 | `.from(state).subFlow(def).onExit("X", s).endSubFlow()` | Embed sub-flow |
 | `.onError(from, to)` | State-based error routing |
@@ -1843,9 +1872,9 @@ tramli is a **monorepo** with three language implementations sharing the same de
 
 | Language | Directory | Async | Status |
 |----------|-----------|-------|--------|
-| **Java** | [`java/`](java/) | Sync only (virtual threads for I/O) | Stable |
-| **TypeScript** | [`ts/`](ts/) | Sync + optional async (External only) | Stable |
-| **Rust** | [`rust/`](rust/) | Sync only (async outside SM) | Stable |
+| **Java** | [`lang/java/`](lang/java/) | Sync only (virtual threads for I/O) | Stable |
+| **TypeScript** | [`lang/ts/`](lang/ts/) | Sync + optional async (External only) | Stable |
+| **Rust** | [`lang/rust/`](lang/rust/) | Sync only (async outside SM) | Stable |
 
 All three share the same **8-item build validation**, the same **FlowDefinition DSL**, and the same **Mermaid generation**. See [`docs/language-guide.md`](docs/language-guide.md) for differences.
 

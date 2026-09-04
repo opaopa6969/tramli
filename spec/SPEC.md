@@ -952,7 +952,7 @@ Total: 4 transitions, 4 depth steps. Well under `maxChainDepth = 10`.
 
 A guard participates in a three-step sequence:
 
-1. **Selection** (multi-external). When multiple externals leave a state, the engine picks the first whose `requires()` is satisfied by the union of `externalData.keys` (DD-020). Falls back to `externals[0]` if none matches.
+1. **Selection** (multi-external). Explicit mode selects the unique transition whose typed trigger is present in the current `externalData`. Legacy mode selects the unique most-specific satisfied `requires()` set. Zero or multiple matches are errors (DD-020, TECH-012).
 2. **Validation**. `guard.validate(context)` returns `GuardOutput`. Must be pure — no context mutation.
 3. **Post-guard action**. On `Accepted`, the engine merges `Accepted.data` into context and optionally runs the transition's post-guard processor. On any thrown processor exception, context is rolled back.
 
@@ -1113,7 +1113,7 @@ Invariants hold at every observable point (before / after `startFlow`, before / 
 - **I2.** Every non-terminal state is reachable from the initial state via transitions.
 - **I3.** A path to at least one terminal exists (unless `allowPerpetual()`).
 - **I4.** The Auto / Branch subgraph is a DAG.
-- **I5.** No two External transitions leaving the same state share the same `requires` set (multi-external disambiguation — DD-020).
+- **I5.** Multiple External transitions leaving one state use one routing mode: explicit triggers are unique, or legacy `requires` sets are distinct (DD-020, TECH-012).
 - **I6.** For every path P from initial to any state S, and every guard / processor / branch G at S, `G.requires() ⊆ union(produces of prior steps on P) ∪ initiallyAvailable`.
 - **I7.** No state has both Auto/Branch and External transitions.
 - **I8.** No terminal state has an outgoing transition.
@@ -1548,9 +1548,33 @@ Rationale: Auto-chain is the only execution mode that fires without external sti
 
 ## 5.5 Multi-External Disambiguation (DD-020)
 
-When a state has ≥ 2 External transitions, each guard's `requires()` set must be distinct. Overlap creates ambiguity ("which guard does externalData with both types activate?") that the engine resolves deterministically (first declared wins), but the build emits an error because the ambiguity is almost always a user mistake.
+New Multi-External definitions should identify events with `externalOn(trigger, to,
+guard)` (Java/TypeScript) or `external_on::<T>(to, guard)` (Rust). The trigger
+reuses the binding's typed context key and is stored as backward-compatible guard
+metadata; the public Transition record/struct does not gain a field. The existing
+resume API is unchanged and the current `externalData` must contain the trigger.
 
-Exact rule: for every pair of external transitions `(E1, E2)` leaving state S, it must hold that `E1.guard.requires() ≠ E2.guard.requires()`. (Subset relationships are allowed; only equality is rejected.)
+Trigger identity and `guard.requires()` have separate meanings. The trigger only
+selects a transition. `requires()` lists data the guard reads; when the guard reads
+the trigger value, it must also declare it there.
+
+When a state has at least two External transitions:
+
+1. All must be explicit or all must be legacy (`EXTERNAL_ROUTING_MIXED`).
+2. Explicit triggers must be distinct (`EXTERNAL_TRIGGER_NOT_DISTINCT`).
+3. Legacy `requires()` sets must be distinct (`EXTERNAL_REQUIRES_NOT_DISTINCT`).
+
+At runtime, explicit mode requires exactly one trigger present in the current
+`externalData`. Legacy mode preserves unconditional selection for a single
+External; for multiple Externals it selects the matching guard with the largest
+`requires()` set. Zero matches raise `EXTERNAL_EVENT_NOT_MATCHED`; multiple
+explicit matches or an equally-specific legacy tie raise
+`EXTERNAL_EVENT_AMBIGUOUS`. Declaration order is not a tie-breaker.
+
+`waitingFor()` / `waiting_for()` returns the de-duplicated union of all explicit
+triggers or all legacy requirements at the current state, recursively using the
+deepest active sub-flow. Mermaid External labels append `on TriggerName` in
+explicit mode.
 
 ## 5.6 Warnings (Non-Fatal)
 
@@ -1773,7 +1797,10 @@ engine.resumeAndExecute(flow.id(), def, Map.of(PaymentCallback.class, cb));
 
 ### Exceptions
 
-`FlowException` (sealed) carries a `FlowErrorCode`. Error codes: `FLOW_NOT_FOUND`, `FLOW_ALREADY_COMPLETED`, `INVALID_TRANSITION`, `MAX_CHAIN_DEPTH`, `EXPIRED`, `PRODUCES_VIOLATION`, `UNKNOWN_BRANCH`, `MISSING_CONTEXT`. See Appendix A.
+`FlowException` carries a stable error code, including `FLOW_NOT_FOUND`,
+`FLOW_ALREADY_COMPLETED`, `INVALID_TRANSITION`, the Multi-External selection
+codes, `MAX_CHAIN_DEPTH`, `EXPIRED`, `PRODUCES_VIOLATION`, `UNKNOWN_BRANCH`, and
+`MISSING_CONTEXT`. See Appendix A.
 
 ## 6.2 TypeScript Binding
 
@@ -2475,6 +2502,10 @@ Each shared scenario is specified as an input triple `(definition, actions, expe
 
 **What it validates:** Multi-external disambiguation by `requires` (DD-020). I5.
 
+Additional parity cases cover explicit typed triggers with empty `requires`,
+trigger unions from `waitingFor`, mixed/duplicate build failures, most-specific
+legacy selection, and runtime no-match/ambiguous errors (TECH-012).
+
 ### 11.8.5 S13: Max Chain Depth
 
 | Field | Value |
@@ -2656,6 +2687,8 @@ Normative catalog. Every binding uses these exact codes / variant names.
 | `FLOW_NOT_FOUND` | `resumeAndExecute` on an unknown `flowId`. |
 | `FLOW_ALREADY_COMPLETED` | `resumeAndExecute` on a flow whose `exitState` is set. |
 | `INVALID_TRANSITION` | `resumeAndExecute` when no External transition leaves the current state. |
+| `EXTERNAL_EVENT_NOT_MATCHED` | The current external data matches no explicit trigger or legacy Multi-External requirements. |
+| `EXTERNAL_EVENT_AMBIGUOUS` | The current external data matches multiple explicit triggers or equally specific legacy guards. |
 | `MAX_CHAIN_DEPTH` | Auto-chain exceeded `engine.maxChainDepth`. |
 | `EXPIRED` | Flow TTL or per-state timeout exceeded. Set as `exitState = "EXPIRED"`; engine returns normally (not thrown) in most cases. |
 | `PRODUCES_VIOLATION` | `strictMode` on: a processor did not produce its declared type. |
@@ -2674,6 +2707,9 @@ Build-time (thrown / returned from `build()`):
 | `REQUIRES_UNSATISFIED` | Check #6 fails. |
 | `AUTO_EXTERNAL_CONFLICT` | Check #7 fails. |
 | `TERMINAL_HAS_OUTGOING` | Check #8 fails. |
+| `EXTERNAL_ROUTING_MIXED` | A state mixes explicit trigger and legacy requirements routing. |
+| `EXTERNAL_TRIGGER_NOT_DISTINCT` | Explicit External transitions from one state reuse a trigger. |
+| `EXTERNAL_REQUIRES_NOT_DISTINCT` | Legacy External transitions from one state have identical requirements. |
 | `SUBFLOW_EXIT_MISSING` | Check #9 fails. |
 | `SUBFLOW_NESTING_EXCEEDED` | Check #10 fails. |
 | `SUBFLOW_CIRCULAR` | Check #11 fails. |
@@ -2693,8 +2729,9 @@ Build-time (thrown / returned from `build()`):
 | Auto + Branch at same state | build-time error (check #4 DAG + logical exclusivity). |
 | Auto/Branch + External at same state | build-time error (check #7). |
 | External (1) | Stop auto-chain. On next `resumeAndExecute`, validate guard, transition or error. |
-| External (≥2, distinct requires) | Multi-external selection (DD-020). |
-| External (≥2, overlapping requires) | build-time error (check #4, external disambiguation). |
+| Explicit External (≥2, distinct triggers) | Select the unique trigger present in the current external data (DD-020, TECH-012). |
+| Legacy External (≥2, distinct requires) | Select the unique most-specific matching requirements set. |
+| Explicit + legacy External | Build-time `EXTERNAL_ROUTING_MIXED`. |
 | SubFlow + parent-Auto | SubFlow takes precedence (§2.7 dispatch order). |
 
 ---

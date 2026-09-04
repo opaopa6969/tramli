@@ -439,6 +439,123 @@ fn sub_flow_with_external_resume() {
 }
 
 #[test]
+fn sub_flow_routes_explicit_external_triggers_and_reports_their_union() {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    enum Sub {
+        Init,
+        Wait,
+        Done,
+        Cancelled,
+    }
+    impl FlowState for Sub {
+        fn is_terminal(&self) -> bool {
+            matches!(self, Self::Done | Self::Cancelled)
+        }
+        fn is_initial(&self) -> bool {
+            matches!(self, Self::Init)
+        }
+        fn all_states() -> &'static [Self] {
+            &[Self::Init, Self::Wait, Self::Done, Self::Cancelled]
+        }
+    }
+    #[derive(Clone)]
+    struct ConfirmRequested;
+    #[derive(Clone)]
+    struct CancelRequested;
+    struct Accept;
+    impl TransitionGuard<Sub> for Accept {
+        fn name(&self) -> &str {
+            "Accept"
+        }
+        fn requires(&self) -> Vec<TypeId> {
+            vec![]
+        }
+        fn produces(&self) -> Vec<TypeId> {
+            vec![]
+        }
+        fn validate(&self, _ctx: &FlowContext) -> GuardOutput {
+            GuardOutput::Accepted {
+                data: std::collections::HashMap::new(),
+            }
+        }
+    }
+    struct Noop;
+    impl StateProcessor<Sub> for Noop {
+        fn name(&self) -> &str {
+            "Noop"
+        }
+        fn requires(&self) -> Vec<TypeId> {
+            vec![]
+        }
+        fn produces(&self) -> Vec<TypeId> {
+            vec![]
+        }
+        fn process(&self, _ctx: &mut FlowContext) -> Result<(), FlowError> {
+            Ok(())
+        }
+    }
+    let sub = Arc::new(
+        Builder::<Sub>::new("sub-triggered")
+            .from(Sub::Init)
+            .auto(Sub::Wait, Noop)
+            .from(Sub::Wait)
+            .external_on::<ConfirmRequested>(Sub::Done, Accept)
+            .from(Sub::Wait)
+            .external_on::<CancelRequested>(Sub::Cancelled, Accept)
+            .build()
+            .unwrap(),
+    );
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    enum Parent {
+        Start,
+        Done,
+        Cancelled,
+    }
+    impl FlowState for Parent {
+        fn is_terminal(&self) -> bool {
+            matches!(self, Self::Done | Self::Cancelled)
+        }
+        fn is_initial(&self) -> bool {
+            matches!(self, Self::Start)
+        }
+        fn all_states() -> &'static [Self] {
+            &[Self::Start, Self::Done, Self::Cancelled]
+        }
+    }
+    let main = Arc::new(
+        Builder::<Parent>::new("main-triggered")
+            .from(Parent::Start)
+            .sub_flow(Box::new(tramli::sub_flow::SubFlowAdapter::new(sub)))
+            .on_exit("Done", Parent::Done)
+            .on_exit("Cancelled", Parent::Cancelled)
+            .end_sub_flow()
+            .build()
+            .unwrap(),
+    );
+    let mut engine = FlowEngine::new(InMemoryFlowStore::new());
+    let id = engine.start_flow(main, "s1", vec![]).unwrap();
+    let waiting = engine.store.get(&id).unwrap().waiting_for();
+    assert_eq!(waiting.len(), 2);
+    assert!(waiting.contains(&TypeId::of::<ConfirmRequested>()));
+    assert!(waiting.contains(&TypeId::of::<CancelRequested>()));
+
+    engine
+        .resume_and_execute(
+            &id,
+            vec![(
+                TypeId::of::<CancelRequested>(),
+                Box::new(CancelRequested) as Box<dyn CloneAny>,
+            )],
+        )
+        .unwrap();
+    assert_eq!(
+        engine.store.get(&id).unwrap().current_state(),
+        Parent::Cancelled
+    );
+}
+
+#[test]
 fn nested_sub_flow_state_path_and_resume() {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     enum Inner {

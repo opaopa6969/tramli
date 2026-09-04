@@ -794,6 +794,33 @@ pub trait FlowStore<S: FlowState> {
 | [**External**](#external-遷移) | 外部イベント（HTTP, メッセージ） | `resumeAndExecute()` 時のみ | `PENDING → CONFIRMED` |
 | [**Branch**](#branch-遷移) | [BranchProcessor](#branchprocessor) がラベルを返す | 即座、Auto と同様 | `RESOLVED → COMPLETE or MFA_PENDING` |
 
+### 複数の External イベント
+
+1つの状態が複数種類のイベントを受け取る場合は、Guard のデータ依存を routing に兼用せず、
+型付き trigger key を使う:
+
+```java
+.from(READY).externalOn(DrainRequested.class, DRAINING, drainGuard)
+```
+
+```typescript
+.from('READY').externalOn(DrainRequested, 'DRAINING', drainGuard)
+```
+
+```rust
+.from(State::Ready).external_on::<DrainRequested>(State::Draining, DrainGuard)
+```
+
+既存の `resumeAndExecute` / `resume_and_execute` の `externalData` にこの key を含める。
+trigger は遷移選択専用で、暗黙のデータ依存にはならない。Guard が値を読む場合は
+`requires` にも明示する。
+
+移行期間も既存の `external` API は利用できる。legacy External が1本なら常にその遷移を選ぶ。
+複数なら、一致した中で `requires` が最も多い Guard を選び、同率または未一致は
+`EXTERNAL_EVENT_AMBIGUOUS` / `EXTERNAL_EVENT_NOT_MATCHED` になる。同じ状態で
+`externalOn` と `external` を混在させてはいけない。`waitingFor()` は explicit mode では
+全 trigger key、legacy mode では全 Guard 要件の和集合を返す。
+
 ---
 
 ## Auto-Chain（自動連鎖）
@@ -830,7 +857,7 @@ HTTPリクエスト到着（callback）
 | 1 | 全ての非終端状態が[初期](#初期状態)から[到達可能](#到達可能) | 決して入れない死に状態 |
 | 2 | 初期から[終端](#終端状態)へのパスが存在 | 完了できないフロー |
 | 3 | [Auto](#auto-遷移)/[Branch](#branch-遷移) 遷移が [DAG](#dag) を形成 | 無限自動連鎖ループ |
-| 4 | 複数 [External](#external-遷移) のガードは `requires` が異なること | 「どのガードがこのデータを処理するか」が曖昧 (DD-020) |
+| 4 | 複数 [External](#external-遷移) の routing mode が統一され、trigger / `requires` が一意 | イベント routing の曖昧さ (DD-020) |
 | 5 | 全ての [Branch](#branch-遷移) ターゲットが定義済み | `decide()` がターゲット状態のないラベルを返す |
 | 6 | [requires/produces](#requires--produces-契約) チェーンの整合性 | 実行時の「データがない」エラー |
 | 7 | [終端](#終端状態)状態からの遷移がない | 最終であるべき状態がそうなっていない |
@@ -1184,7 +1211,7 @@ Airflow/Temporal ユーザーが欲しがる機能: **ビルド時の静的デ�
 | `activeSubFlow()` | アクティブなサブフロー（なければ null） |
 | `statePath()` | ルートからの状態パス: `["PAYMENT", "CONFIRM"]` |
 | `statePathString()` | スラッシュ区切り: `"PAYMENT/CONFIRM"` |
-| `waitingFor()` | 現在の External 遷移が必要とする型 |
+| `waitingFor()` | 現在の全 External 遷移が待つ trigger / 必須型の和集合 |
 | `availableData()` | 現在の状態で利用可能な型（DataFlowGraph より） |
 | `missingFor()` | 次の遷移に不足している型 |
 | `withVersion(n)` | バージョン更新コピー（FlowStore の楽観ロック用） |
@@ -1219,6 +1246,7 @@ Airflow/Temporal ユーザーが欲しがる機能: **ビルド時の静的デ�
 |---------|------|
 | `.from(state).auto(to, processor)` | Auto 遷移 |
 | `.from(state).external(to, guard)` | External 遷移（イベント待ち） |
+| `.from(state).externalOn(trigger, to, guard)` | 型付き trigger で選択する External 遷移（Rust は `external_on`） |
 | `.from(state).branch(branch).to(s, label).endBranch()` | 条件分岐 |
 | `.from(state).subFlow(def).onExit("X", s).endSubFlow()` | サブフロー埋め込み |
 | `.onError(from, to)` | 状態ベースのエラー遷移 |
@@ -1969,9 +1997,9 @@ tramli は3つの言語実装を持つ **monorepo**:
 
 | 言語 | ディレクトリ | Async | 状態 |
 |------|------------|-------|------|
-| **Java** | [`java/`](java/) | Sync のみ（I/O は virtual threads） | 安定 |
-| **TypeScript** | [`ts/`](ts/) | Sync + optional async（External のみ） | 安定 |
-| **Rust** | [`rust/`](rust/) | Sync のみ（async は SM の外） | 安定 |
+| **Java** | [`lang/java/`](lang/java/) | Sync のみ（I/O は virtual threads） | 安定 |
+| **TypeScript** | [`lang/ts/`](lang/ts/) | Sync + optional async（External のみ） | 安定 |
+| **Rust** | [`lang/rust/`](lang/rust/) | Sync のみ（async は SM の外） | 安定 |
 
 3つとも同じ **8項目 build 検証**、同じ **FlowDefinition DSL**、同じ **Mermaid 生成**。違いは [`docs/language-guide.md`](docs/language-guide.md) を参照。
 

@@ -107,6 +107,8 @@ class SharedSpecTest {
     record EnteredC(boolean value) {}
     record ExitedA(boolean value) {}
     record ExitedB(boolean value) {}
+    record PaymentSubmitted() {}
+    record CancelRequested() {}
 
     // ═══════════════════════════════════════════════════════════
     //  Exceptions for S09
@@ -409,6 +411,109 @@ class SharedSpecTest {
 
         assertNotNull(result.definition());
         assertTrue(result.errors().isEmpty());
+    }
+
+    @Test
+    void s10_explicit_trigger_routes_empty_requires_and_reports_waiting_for() {
+        var def = Tramli.define("s10-explicit", MultiExtState.class)
+                .from(MultiExtState.A).auto(MultiExtState.B, noop("Noop"))
+                .from(MultiExtState.B).externalOn(PaymentSubmitted.class, MultiExtState.C,
+                        acceptingGuard("PaymentGuard", Set.of(), Map.of()))
+                .from(MultiExtState.B).externalOn(CancelRequested.class, MultiExtState.D,
+                        acceptingGuard("CancelGuard", Set.of(), Map.of()))
+                .build();
+
+        var engine = new FlowEngine(new InMemoryFlowStore());
+        var flow = engine.startFlow(def, null, Map.of());
+        assertEquals(Set.of(PaymentSubmitted.class, CancelRequested.class), flow.waitingFor());
+        assertTrue(MermaidGenerator.generate(def).contains("[PaymentGuard] on PaymentSubmitted"));
+
+        flow = engine.resumeAndExecute(flow.id(), def,
+                Map.<Class<?>, Object>of(CancelRequested.class, new CancelRequested()));
+        assertEquals(MultiExtState.D, flow.currentState());
+    }
+
+    @Test
+    void s10_explicit_trigger_validation_rejects_duplicate_and_mixed_modes() {
+        var duplicate = Tramli.define("s10-duplicate-trigger", MultiExtState.class)
+                .from(MultiExtState.A).auto(MultiExtState.B, noop("Noop"))
+                .from(MultiExtState.B).externalOn(PaymentSubmitted.class, MultiExtState.C,
+                        acceptingGuard("First", Set.of(), Map.of()))
+                .from(MultiExtState.B).externalOn(PaymentSubmitted.class, MultiExtState.D,
+                        acceptingGuard("Second", Set.of(), Map.of()))
+                .buildAndValidate();
+        assertTrue(duplicate.errors().stream()
+                .anyMatch(error -> error.code().equals("EXTERNAL_TRIGGER_NOT_DISTINCT")));
+
+        var mixed = Tramli.define("s10-mixed", MultiExtState.class)
+                .from(MultiExtState.A).auto(MultiExtState.B, noop("Noop"))
+                .from(MultiExtState.B).externalOn(PaymentSubmitted.class, MultiExtState.C,
+                        acceptingGuard("Explicit", Set.of(), Map.of()))
+                .from(MultiExtState.B).external(MultiExtState.D,
+                        acceptingGuard("Legacy", Set.of(CancelRequest.class), Map.of()))
+                .buildAndValidate();
+        assertTrue(mixed.errors().stream()
+                .anyMatch(error -> error.code().equals("EXTERNAL_ROUTING_MIXED")));
+    }
+
+    @Test
+    void s10_explicit_trigger_no_match_and_ambiguity_are_errors() {
+        var def = Tramli.define("s10-explicit-errors", MultiExtState.class)
+                .from(MultiExtState.A).auto(MultiExtState.B, noop("Noop"))
+                .from(MultiExtState.B).externalOn(PaymentSubmitted.class, MultiExtState.C,
+                        acceptingGuard("Payment", Set.of(), Map.of()))
+                .from(MultiExtState.B).externalOn(CancelRequested.class, MultiExtState.D,
+                        acceptingGuard("Cancel", Set.of(), Map.of()))
+                .build();
+
+        var noMatchEngine = new FlowEngine(new InMemoryFlowStore());
+        var noMatchFlow = noMatchEngine.startFlow(def, null, Map.of());
+        var noMatch = assertThrows(FlowException.class, () -> noMatchEngine.resumeAndExecute(
+                noMatchFlow.id(), def, Map.<Class<?>, Object>of(Result.class, new Result("unknown"))));
+        assertEquals("EXTERNAL_EVENT_NOT_MATCHED", noMatch.code());
+
+        var ambiguousEngine = new FlowEngine(new InMemoryFlowStore());
+        var ambiguousFlow = ambiguousEngine.startFlow(def, null, Map.of());
+        var ambiguous = assertThrows(FlowException.class, () -> ambiguousEngine.resumeAndExecute(
+                ambiguousFlow.id(), def, Map.<Class<?>, Object>of(
+                        PaymentSubmitted.class, new PaymentSubmitted(),
+                        CancelRequested.class, new CancelRequested())));
+        assertEquals("EXTERNAL_EVENT_AMBIGUOUS", ambiguous.code());
+    }
+
+    @Test
+    void s10_legacy_routes_most_specific_and_rejects_ties_or_no_match() {
+        TransitionGuard subset = acceptingGuard("Subset", Set.of(PaymentData.class), Map.of());
+        TransitionGuard superset = acceptingGuard("Superset",
+                Set.of(PaymentData.class, CancelRequest.class), Map.of());
+        var specificDef = Tramli.define("s10-specific", MultiExtState.class)
+                .initiallyAvailable(PaymentData.class, CancelRequest.class)
+                .from(MultiExtState.A).auto(MultiExtState.B, noop("Noop"))
+                .from(MultiExtState.B).external(MultiExtState.C, subset)
+                .from(MultiExtState.B).external(MultiExtState.D, superset)
+                .build();
+        var specificEngine = new FlowEngine(new InMemoryFlowStore());
+        var specificFlow = specificEngine.startFlow(specificDef, null, Map.of());
+        var routed = specificEngine.resumeAndExecute(specificFlow.id(), specificDef,
+                Map.<Class<?>, Object>of(
+                        PaymentData.class, new PaymentData("card"),
+                        CancelRequest.class, new CancelRequest("user")));
+        assertEquals(MultiExtState.D, routed.currentState());
+
+        var tieDef = buildMultiExternalDef();
+        var tieEngine = new FlowEngine(new InMemoryFlowStore());
+        var tieFlow = tieEngine.startFlow(tieDef, null, Map.of());
+        var tie = assertThrows(FlowException.class, () -> tieEngine.resumeAndExecute(
+                tieFlow.id(), tieDef, Map.<Class<?>, Object>of(
+                        PaymentData.class, new PaymentData("card"),
+                        CancelRequest.class, new CancelRequest("user"))));
+        assertEquals("EXTERNAL_EVENT_AMBIGUOUS", tie.code());
+
+        var noMatchEngine = new FlowEngine(new InMemoryFlowStore());
+        var noMatchFlow = noMatchEngine.startFlow(tieDef, null, Map.of());
+        var noMatch = assertThrows(FlowException.class, () -> noMatchEngine.resumeAndExecute(
+                noMatchFlow.id(), tieDef, Map.<Class<?>, Object>of(Result.class, new Result("unknown"))));
+        assertEquals("EXTERNAL_EVENT_NOT_MATCHED", noMatch.code());
     }
 
     private FlowDefinition<MultiExtState> buildMultiExternalDef() {

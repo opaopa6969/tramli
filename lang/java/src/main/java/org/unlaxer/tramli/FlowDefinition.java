@@ -231,6 +231,14 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
         if (ambiguousExternal.find()) return new ValidationError(
                 "EXTERNAL_REQUIRES_NOT_DISTINCT", msg, ambiguousExternal.group(1), null, null);
 
+        var mixedExternal = java.util.regex.Pattern.compile("State (\\S+) mixes explicit and legacy external routing").matcher(msg);
+        if (mixedExternal.find()) return new ValidationError(
+                "EXTERNAL_ROUTING_MIXED", msg, mixedExternal.group(1), null, null);
+
+        var duplicateTrigger = java.util.regex.Pattern.compile("State (\\S+) has duplicate external trigger").matcher(msg);
+        if (duplicateTrigger.find()) return new ValidationError(
+                "EXTERNAL_TRIGGER_NOT_DISTINCT", msg, duplicateTrigger.group(1), null, null);
+
         // "Terminal state X has an outgoing transition to Y"
         var term = java.util.regex.Pattern.compile("Terminal state (\\S+)").matcher(msg);
         if (term.find()) return new ValidationError("TERMINAL_OUTGOING", msg, term.group(1), null, null);
@@ -376,6 +384,34 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
             public Builder<S> external(S to, TransitionGuard guard, StateProcessor processor, Duration timeout) {
                 transitions.add(new Transition<>(from, to, TransitionType.EXTERNAL, processor, guard, null, Map.of(), null, null, Map.of(), timeout));
                 return Builder.this;
+            }
+
+            public Builder<S> externalOn(Class<?> trigger, S to, TransitionGuard guard) {
+                return external(to, withTrigger(trigger, guard));
+            }
+
+            public Builder<S> externalOn(Class<?> trigger, S to, TransitionGuard guard, Duration timeout) {
+                return external(to, withTrigger(trigger, guard), timeout);
+            }
+
+            public Builder<S> externalOn(Class<?> trigger, S to, TransitionGuard guard, StateProcessor processor) {
+                return external(to, withTrigger(trigger, guard), processor);
+            }
+
+            public Builder<S> externalOn(Class<?> trigger, S to, TransitionGuard guard,
+                                         StateProcessor processor, Duration timeout) {
+                return external(to, withTrigger(trigger, guard), processor, timeout);
+            }
+
+            private TransitionGuard withTrigger(Class<?> trigger, TransitionGuard delegate) {
+                return new TransitionGuard() {
+                    @Override public String name() { return delegate.name(); }
+                    @Override public Set<Class<?>> requires() { return delegate.requires(); }
+                    @Override public Set<Class<?>> produces() { return delegate.produces(); }
+                    @Override public int maxRetries() { return delegate.maxRetries(); }
+                    @Override public Class<?> externalTrigger() { return trigger; }
+                    @Override public GuardOutput validate(FlowContext ctx) { return delegate.validate(ctx); }
+                };
             }
 
             public BranchBuilder branch(BranchProcessor branch) {
@@ -616,6 +652,25 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
         private void checkExternalRequiresDistinct(FlowDefinition<S> def, List<String> errors) {
             for (S state : def.allStates()) {
                 List<Transition<S>> externals = def.externalsFrom(state);
+                if (externals.size() < 2) continue;
+                long explicitCount = externals.stream()
+                        .filter(t -> t.guard() != null && t.guard().externalTrigger() != null)
+                        .count();
+                if (explicitCount > 0 && explicitCount < externals.size()) {
+                    errors.add("State " + state.name() + " mixes explicit and legacy external routing");
+                    continue;
+                }
+                if (explicitCount == externals.size()) {
+                    Set<Class<?>> triggers = new HashSet<>();
+                    for (Transition<S> external : externals) {
+                        Class<?> trigger = external.guard().externalTrigger();
+                        if (!triggers.add(trigger)) {
+                            errors.add("State " + state.name() + " has duplicate external trigger " +
+                                    trigger.getSimpleName());
+                        }
+                    }
+                    continue;
+                }
                 for (int i = 0; i < externals.size(); i++) {
                     for (int j = i + 1; j < externals.size(); j++) {
                         TransitionGuard first = externals.get(i).guard();

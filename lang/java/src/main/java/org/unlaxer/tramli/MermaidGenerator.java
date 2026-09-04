@@ -99,7 +99,12 @@ public final class MermaidGenerator {
     private static <S extends Enum<S> & FlowState> String transitionLabel(Transition<S> t) {
         return switch (t.type()) {
             case AUTO -> t.processor() != null ? t.processor().name() : "";
-            case EXTERNAL -> t.guard() != null ? "[" + t.guard().name() + "]" : "";
+            case EXTERNAL -> {
+                if (t.guard() == null) yield "";
+                String trigger = t.guard().externalTrigger() != null
+                        ? " on " + t.guard().externalTrigger().getSimpleName() : "";
+                yield "[" + t.guard().name() + "]" + trigger;
+            }
             case BRANCH -> t.branch() != null ? t.branch().name() : "";
             case SUB_FLOW -> t.subFlowDefinition() != null ? "{" + t.subFlowDefinition().name() + "}" : "";
         };

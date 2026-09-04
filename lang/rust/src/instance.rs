@@ -158,12 +158,21 @@ impl<S: FlowState> FlowInstance<S> {
         if let Some(sub_flow) = &self.active_sub_flow {
             return sub_flow.waiting_for();
         }
-        if let Some(ext) = self.definition.external_from(self.current_state) {
-            if let Some(g) = &ext.guard {
-                return g.requires();
+        let mut waiting = Vec::new();
+        for external in self.definition.externals_from(self.current_state) {
+            let Some(guard) = &external.guard else {
+                continue;
+            };
+            let keys = guard
+                .external_trigger()
+                .map_or_else(|| guard.requires(), |trigger| vec![trigger]);
+            for key in keys {
+                if !waiting.contains(&key) {
+                    waiting.push(key);
+                }
             }
         }
-        Vec::new()
+        waiting
     }
 
     /// Update the version in-place. For FlowStore optimistic locking after save.

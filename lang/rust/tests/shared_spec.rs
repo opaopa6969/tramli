@@ -344,6 +344,12 @@ mod s10 {
     struct PaymentData(String);
     #[derive(Clone)]
     struct CancelRequest(String);
+    #[derive(Clone)]
+    struct PaymentSubmitted;
+    #[derive(Clone)]
+    struct CancelRequested;
+    #[derive(Clone)]
+    struct UnknownEvent;
 
     struct PaymentGuard;
     impl TransitionGuard<S> for PaymentGuard {
@@ -536,6 +542,215 @@ mod s10 {
 
         assert!(result.definition.is_some());
         assert!(result.errors.is_empty());
+    }
+
+    #[test]
+    fn s10_explicit_trigger_routes_empty_requires_and_reports_waiting_for() {
+        let def = Arc::new(
+            Builder::<S>::new("s10-explicit")
+                .from(S::A)
+                .auto(S::B, Noop)
+                .from(S::B)
+                .external_on::<PaymentSubmitted>(S::C, EmptyGuard)
+                .from(S::B)
+                .external_on::<CancelRequested>(S::D, EmptyGuard)
+                .build()
+                .unwrap(),
+        );
+        assert!(MermaidGenerator::generate(&def).contains("[emptyGuard] on PaymentSubmitted"));
+
+        let mut engine = FlowEngine::new(InMemoryFlowStore::new());
+        let fid = engine.start_flow(def, "s10", vec![]).unwrap();
+        let waiting = engine.store.get(&fid).unwrap().waiting_for();
+        assert_eq!(waiting.len(), 2);
+        assert!(waiting.contains(&TypeId::of::<PaymentSubmitted>()));
+        assert!(waiting.contains(&TypeId::of::<CancelRequested>()));
+
+        engine
+            .resume_and_execute(
+                &fid,
+                vec![(
+                    TypeId::of::<CancelRequested>(),
+                    Box::new(CancelRequested) as Box<dyn CloneAny>,
+                )],
+            )
+            .unwrap();
+        assert_eq!(engine.store.get(&fid).unwrap().current_state(), S::D);
+    }
+
+    #[test]
+    fn s10_explicit_trigger_validation_rejects_duplicate_and_mixed_modes() {
+        let duplicate = Builder::<S>::new("s10-duplicate-trigger")
+            .from(S::A)
+            .auto(S::B, Noop)
+            .from(S::B)
+            .external_on::<PaymentSubmitted>(S::C, EmptyGuard)
+            .from(S::B)
+            .external_on::<PaymentSubmitted>(S::D, EmptyGuard)
+            .build_and_validate();
+        assert!(duplicate
+            .errors
+            .iter()
+            .any(|error| error.code == "EXTERNAL_TRIGGER_NOT_DISTINCT"));
+
+        let mixed = Builder::<S>::new("s10-mixed")
+            .from(S::A)
+            .auto(S::B, Noop)
+            .from(S::B)
+            .external_on::<PaymentSubmitted>(S::C, EmptyGuard)
+            .from(S::B)
+            .external(S::D, CancelGuard)
+            .build_and_validate();
+        assert!(mixed
+            .errors
+            .iter()
+            .any(|error| error.code == "EXTERNAL_ROUTING_MIXED"));
+    }
+
+    #[test]
+    fn s10_explicit_trigger_no_match_and_ambiguity_are_errors() {
+        fn definition() -> Arc<FlowDefinition<S>> {
+            Arc::new(
+                Builder::<S>::new("s10-explicit-errors")
+                    .from(S::A)
+                    .auto(S::B, Noop)
+                    .from(S::B)
+                    .external_on::<PaymentSubmitted>(S::C, EmptyGuard)
+                    .from(S::B)
+                    .external_on::<CancelRequested>(S::D, EmptyGuard)
+                    .build()
+                    .unwrap(),
+            )
+        }
+
+        let mut no_match_engine = FlowEngine::new(InMemoryFlowStore::new());
+        let no_match_id = no_match_engine
+            .start_flow(definition(), "no-match", vec![])
+            .unwrap();
+        let no_match = no_match_engine
+            .resume_and_execute(
+                &no_match_id,
+                vec![(
+                    TypeId::of::<UnknownEvent>(),
+                    Box::new(UnknownEvent) as Box<dyn CloneAny>,
+                )],
+            )
+            .unwrap_err();
+        assert_eq!(no_match.code, "EXTERNAL_EVENT_NOT_MATCHED");
+
+        let mut ambiguous_engine = FlowEngine::new(InMemoryFlowStore::new());
+        let ambiguous_id = ambiguous_engine
+            .start_flow(definition(), "ambiguous", vec![])
+            .unwrap();
+        let ambiguous = ambiguous_engine
+            .resume_and_execute(
+                &ambiguous_id,
+                vec![
+                    (
+                        TypeId::of::<PaymentSubmitted>(),
+                        Box::new(PaymentSubmitted) as Box<dyn CloneAny>,
+                    ),
+                    (
+                        TypeId::of::<CancelRequested>(),
+                        Box::new(CancelRequested) as Box<dyn CloneAny>,
+                    ),
+                ],
+            )
+            .unwrap_err();
+        assert_eq!(ambiguous.code, "EXTERNAL_EVENT_AMBIGUOUS");
+    }
+
+    #[test]
+    fn s10_legacy_routes_most_specific_and_rejects_ties_or_no_match() {
+        let specific = Arc::new(
+            Builder::<S>::new("s10-specific")
+                .initially_available(requires![PaymentData, CancelRequest])
+                .from(S::A)
+                .auto(S::B, Noop)
+                .from(S::B)
+                .external(S::C, PaymentGuard)
+                .from(S::B)
+                .external(S::D, CombinedGuard)
+                .build()
+                .unwrap(),
+        );
+        let mut specific_engine = FlowEngine::new(InMemoryFlowStore::new());
+        let specific_id = specific_engine
+            .start_flow(specific, "specific", vec![])
+            .unwrap();
+        specific_engine
+            .resume_and_execute(
+                &specific_id,
+                vec![
+                    (
+                        TypeId::of::<PaymentData>(),
+                        Box::new(PaymentData("card".into())) as Box<dyn CloneAny>,
+                    ),
+                    (
+                        TypeId::of::<CancelRequest>(),
+                        Box::new(CancelRequest("user".into())) as Box<dyn CloneAny>,
+                    ),
+                ],
+            )
+            .unwrap();
+        assert_eq!(
+            specific_engine
+                .store
+                .get(&specific_id)
+                .unwrap()
+                .current_state(),
+            S::D
+        );
+
+        fn tie_definition() -> Arc<FlowDefinition<S>> {
+            Arc::new(
+                Builder::<S>::new("s10-tie")
+                    .initially_available(requires![PaymentData, CancelRequest])
+                    .from(S::A)
+                    .auto(S::B, Noop)
+                    .from(S::B)
+                    .external(S::C, PaymentGuard)
+                    .from(S::B)
+                    .external(S::D, CancelGuard)
+                    .build()
+                    .unwrap(),
+            )
+        }
+        let mut tie_engine = FlowEngine::new(InMemoryFlowStore::new());
+        let tie_id = tie_engine
+            .start_flow(tie_definition(), "tie", vec![])
+            .unwrap();
+        let tie = tie_engine
+            .resume_and_execute(
+                &tie_id,
+                vec![
+                    (
+                        TypeId::of::<PaymentData>(),
+                        Box::new(PaymentData("card".into())) as Box<dyn CloneAny>,
+                    ),
+                    (
+                        TypeId::of::<CancelRequest>(),
+                        Box::new(CancelRequest("user".into())) as Box<dyn CloneAny>,
+                    ),
+                ],
+            )
+            .unwrap_err();
+        assert_eq!(tie.code, "EXTERNAL_EVENT_AMBIGUOUS");
+
+        let mut no_match_engine = FlowEngine::new(InMemoryFlowStore::new());
+        let no_match_id = no_match_engine
+            .start_flow(tie_definition(), "no-match", vec![])
+            .unwrap();
+        let no_match = no_match_engine
+            .resume_and_execute(
+                &no_match_id,
+                vec![(
+                    TypeId::of::<UnknownEvent>(),
+                    Box::new(UnknownEvent) as Box<dyn CloneAny>,
+                )],
+            )
+            .unwrap_err();
+        assert_eq!(no_match.code, "EXTERNAL_EVENT_NOT_MATCHED");
     }
 }
 

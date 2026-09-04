@@ -91,7 +91,11 @@ export class MermaidGenerator {
 
   private static transitionLabel<S extends string>(t: Transition<S>): string {
     if (t.type === 'auto') return t.processor?.name ?? '';
-    if (t.type === 'external') return t.guard ? `[${t.guard.name}]` : '';
+    if (t.type === 'external') {
+      if (!t.guard) return '';
+      const trigger = t.guard.externalTrigger ? ` on ${t.guard.externalTrigger}` : '';
+      return `[${t.guard.name}]${trigger}`;
+    }
     if (t.type === 'branch') return t.branch?.name ?? '';
     return '';
   }
