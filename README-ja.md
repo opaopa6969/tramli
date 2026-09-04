@@ -6,6 +6,14 @@
 
 **不正な遷移が構造的に存在できない**ステートマシン — コンパイラと [8項目検証](#8項目-build-検証) がビルド時に保証。
 
+**公開済み core:**
+[![npm](https://img.shields.io/npm/v/@unlaxer/tramli?label=npm)](https://www.npmjs.com/package/@unlaxer/tramli)
+[![crates.io](https://img.shields.io/crates/v/tramli?label=crates.io)](https://crates.io/crates/tramli)
+[![Maven Central](https://img.shields.io/maven-central/v/org.unlaxer/tramli?label=Maven%20Central)](https://central.sonatype.com/artifact/org.unlaxer/tramli)
+
+> この README は `main` を記述するため、registry ではまだ利用できない API を含む場合があります。
+> 使用前に上の公開版と API を照合し、[変更履歴](CHANGELOG.md)を確認してください。
+
 > **tramli** = tramline（路面電車の軌道）。コードはレールの上を走る — 敷かれた軌道以外には行けない。
 
 **読む**: [なぜ tramli は効くのか — アテンション・バジェット](docs/why-tramli-works-attention-budget-ja.md) | [English](docs/why-tramli-works.md)
