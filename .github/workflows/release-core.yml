@@ -1,0 +1,142 @@
+name: Release core
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/release-core.yml
+      - scripts/set-core-version.mjs
+      - scripts/smoke-public-core.sh
+      - lang/ts/**
+      - lang/rust/**
+      - lang/java/**
+      - lang/java-bom/**
+  workflow_dispatch:
+    inputs:
+      version:
+        description: SemVer already present in all core manifests
+        required: true
+        type: string
+      publish:
+        description: Publish missing artifacts, then run public consumer smoke tests
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: release-core-${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: lang/ts/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: dtolnay/rust-toolchain@stable
+      - id: version
+        name: Resolve and verify version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          version="${INPUT_VERSION:-$(node -p "require('./lang/ts/package.json').version")}" 
+          node scripts/set-core-version.mjs --check "$version"
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+      - name: TypeScript test and package dry-run
+        working-directory: lang/ts
+        run: |
+          npm ci --workspaces=false --no-audit
+          npm test
+          npm pack --dry-run
+      - name: Rust test and package dry-run
+        working-directory: lang/rust
+        run: |
+          cargo test
+          cargo publish --dry-run --allow-dirty
+      - name: Java test and package dry-run
+        run: |
+          mvn -q -f lang/java/pom.xml test
+          mvn -q -f lang/java/pom.xml package -DskipTests -Dgpg.skip=true
+          mvn -q -f lang/java-bom/pom.xml package -Dgpg.skip=true
+
+  publish:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      VERSION: ${{ needs.validate.outputs.version }}
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+      MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+      MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          server-id: central
+          server-username: MAVEN_CENTRAL_USERNAME
+          server-password: MAVEN_CENTRAL_PASSWORD
+          gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
+      - name: Publish npm package when missing
+        working-directory: lang/ts
+        run: |
+          if npm view "@unlaxer/tramli@$VERSION" version >/dev/null 2>&1; then
+            echo "npm artifact already published"
+          else
+            npm ci --workspaces=false --no-audit
+            npm publish --access public
+          fi
+      - name: Publish crate when missing
+        working-directory: lang/rust
+        run: |
+          if curl --fail --silent "https://crates.io/api/v1/crates/tramli/$VERSION" >/dev/null; then
+            echo "crate already published"
+          else
+            test -n "$CARGO_REGISTRY_TOKEN"
+            cargo publish
+          fi
+      - name: Publish Maven artifacts when missing
+        run: |
+          base="https://repo1.maven.org/maven2/org/unlaxer"
+          if curl --fail --silent --head "$base/tramli/$VERSION/tramli-$VERSION.pom" >/dev/null; then
+            echo "Maven core artifact already published"
+          else
+            test -n "$MAVEN_CENTRAL_USERNAME"
+            test -n "$MAVEN_CENTRAL_PASSWORD"
+            test -n "$MAVEN_GPG_PASSPHRASE"
+            mvn -q -f lang/java/pom.xml deploy -DskipTests
+          fi
+          if curl --fail --silent --head "$base/tramli-bom/$VERSION/tramli-bom-$VERSION.pom" >/dev/null; then
+            echo "Maven BOM already published"
+          else
+            test -n "$MAVEN_CENTRAL_USERNAME"
+            test -n "$MAVEN_CENTRAL_PASSWORD"
+            test -n "$MAVEN_GPG_PASSPHRASE"
+            mvn -q -f lang/java-bom/pom.xml deploy -DskipTests
+          fi
+      - name: Verify public consumer installs
+        run: scripts/smoke-public-core.sh "$VERSION"
