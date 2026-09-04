@@ -832,6 +832,36 @@ HTTPリクエスト到着（callback）
 
 **LLM が tramli コードを安全に生成できる理由** — 生成した遷移が間違っていても `build()` が即座に拒否する。フィードバックループ: 生成 → コンパイル → build() → 修正。実行時サプライズなし。
 
+### 既存システムへの後付け: 宣言と観測を対応させる
+
+`build()` が検証するのは `FlowDefinition` 内部の整合性です。既存システムでは、それとは別に、ログ・DB・プロセス状態などの観測可能な事実から現在状態を返す関数（ここでは `stateOf`）を1か所に集約し、宣言との対応をアプリケーションのテストで固定します。エンジンを実行せず、モデル検証と Mermaid 生成だけを使う場合にも有効です。
+
+```typescript
+import assert from 'node:assert/strict';
+
+const declared = new Set<string>(def.allStates());
+const observed = new Set<string>(FACT_SAMPLES.map(facts => stateOf(facts)));
+
+const unreachableByObserver = [...declared]
+  .filter(state => !observed.has(state))
+  .sort();
+const undeclaredReturned = [...observed]
+  .filter(state => !declared.has(state))
+  .sort();
+
+assert.deepEqual({ unreachableByObserver, undeclaredReturned }, {
+  unreachableByObserver: [],
+  undeclaredReturned: [],
+});
+```
+
+- `unreachableByObserver`: 宣言にはあるが、どの事実サンプルからも復元できない状態。観測用の印、サンプル、またはモデル自体が不足している可能性があります。
+- `undeclaredReturned`: `stateOf` が返すが、宣言されていない状態。観測関数かモデルが古くなっています。
+
+`FACT_SAMPLES` には正常系だけでなく、応答待ち、時間のかかる処理中、失敗、再開といった一時状態も含めます。有限サンプルによる検査は全入力の証明ではありませんが、宣言と観測が別々に変更されたときの回帰を検出できます。
+
+これは `.allowUnreachable()` とは別の検査です。`.allowUnreachable()` は共有 enum を複数フローで使う場合などに、初期状態からのグラフ到達可能性チェックだけを無効にします。観測事実から状態を復元できるかどうかは検証しません。
+
 ---
 
 ## requires / produces 契約
