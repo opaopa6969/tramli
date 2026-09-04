@@ -93,6 +93,6 @@ final class Main {
     }
 }
 EOF
-retry mvn -q -f "$WORK_DIR/java/pom.xml" compile
+retry mvn -q -U -Dmaven.repo.local="$WORK_DIR/m2" -f "$WORK_DIR/java/pom.xml" compile
 
 echo "Public core artifacts for $VERSION are consumable"
