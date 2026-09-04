@@ -378,6 +378,22 @@ class SharedSpecTest {
     }
 
     @Test
+    void s10_duplicate_empty_external_requires_rejected() {
+        TransitionGuard first = acceptingGuard("FirstGuard", Set.of(), Map.of());
+        TransitionGuard second = acceptingGuard("SecondGuard", Set.of(), Map.of());
+
+        var result = Tramli.define("s10-duplicate-empty", MultiExtState.class)
+                .from(MultiExtState.A).auto(MultiExtState.B, noop("Noop"))
+                .from(MultiExtState.B).external(MultiExtState.C, first)
+                .from(MultiExtState.B).external(MultiExtState.D, second)
+                .buildAndValidate();
+
+        assertNull(result.definition());
+        assertTrue(result.errors().stream()
+                .anyMatch(error -> error.code().equals("EXTERNAL_REQUIRES_NOT_DISTINCT")));
+    }
+
+    @Test
     void s10_subset_external_requires_allowed() {
         TransitionGuard subset = acceptingGuard("SubsetGuard",
                 Set.of(PaymentData.class), Map.of());
