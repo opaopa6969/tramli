@@ -825,6 +825,36 @@ Safety: auto-chain has a max depth of 10 to prevent infinite loops. [DAG validat
 
 **This is why LLMs can safely generate tramli code** — even if the generated transition is wrong, `build()` rejects it immediately. The feedback loop is: generate → compile → build() → fix. No runtime surprises.
 
+### Brownfield adoption: keep declarations and observations aligned
+
+`build()` validates the internal consistency of a `FlowDefinition`. In an existing system, separately centralize the mapping from observable facts (logs, database fields, process status, and so on) to the current state in one function, called `stateOf` here. Then pin both directions of that mapping in an application test. This also applies when you use tramli only for model validation and Mermaid generation, without running the engine.
+
+```typescript
+import assert from 'node:assert/strict';
+
+const declared = new Set<string>(def.allStates());
+const observed = new Set<string>(FACT_SAMPLES.map(facts => stateOf(facts)));
+
+const unreachableByObserver = [...declared]
+  .filter(state => !observed.has(state))
+  .sort();
+const undeclaredReturned = [...observed]
+  .filter(state => !declared.has(state))
+  .sort();
+
+assert.deepEqual({ unreachableByObserver, undeclaredReturned }, {
+  unreachableByObserver: [],
+  undeclaredReturned: [],
+});
+```
+
+- `unreachableByObserver`: declared states that no fact sample can reconstruct. An observation marker, a sample, or the model itself may be missing.
+- `undeclaredReturned`: states returned by `stateOf` but absent from the declaration. Either the observer or the model is stale.
+
+Include transient cases in `FACT_SAMPLES`, not just happy paths: waiting for a response, long-running work, failure, and recovery. A finite sample set is not proof over every possible input, but it catches drift when the declaration and observer evolve separately.
+
+This check is separate from `.allowUnreachable()`. That option only disables graph reachability from the initial state, for cases such as sharing one enum across multiple flows. It does not check whether observable facts can reconstruct each state.
+
 ---
 
 ## requires / produces Contract
