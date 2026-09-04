@@ -10,6 +10,7 @@ status: accepted
 - [R3: requires-routing](../sessions/dge-session-r3-requires-routing.md)
 - [R4: self-transition](../sessions/dge-session-r4-self-transition.md)
 - [external-review](../sessions/dge-session-external-review.md)
+- [2026 trigger review](../sessions/2026-09-04-external-trigger-routing.md)
 
 ## Decision
 
@@ -64,7 +65,23 @@ Entry/exit callbacks on states, but **no I/O** — sync core principle.
 
 ## NOT-DOING
 
-- Event names / event enum — breaks API
-- TransitionHint — unnecessary with requires-based routing
+- Separate event-name argument on `resumeAndExecute` — breaks every caller
+- Untyped string event enum — typo-prone; reuse the existing typed key system instead
 - Entry/exit with I/O — contradicts sync core (DD-012, DD-013)
 - Further SubFlow feature expansion — stop at current level (external review recommendation)
+
+## Amendment: explicit External trigger (2026-09-04)
+
+Issue #91 の実利用により、「requires-based routing は新APIを増やさないので単純」という前提が崩れた。`requires` は guard のデータ依存とイベント識別を兼務し、データを必要としないイベントを `requires: []` で表現できなかった。また、subset の同時一致が宣言順に依存し、不一致時に先頭 guard へ fallback する実装も確認された。
+
+以下で Decision 1 を改訂する。
+
+- 新規 Multi-External は、既存の型付きキーを使う `externalOn(triggerKey, to, guard)` / `external_on::<T>(to, guard)` を推奨する。
+- `resumeAndExecute` のシグネチャは変更しない。trigger key は既存の externalData に含める。
+- `requires` は guard が読むデータだけを宣言する。
+- trigger metadata は `TransitionGuard` の後方互換な default / optional hook に保持し、`externalOn` が内部 wrapper を作る。public `Transition` の形は変えない。
+- 同一 state で明示 trigger routing と legacy requires routing を混在させない。
+- legacy Multi-External は最長一致とし、同率・不一致を明示エラーにする。宣言順 fallback は行わない。
+- `waitingFor` は先頭遷移ではなく全 External の trigger / requires の和集合を返す。
+
+既存 `.external()` は後方互換のため維持する。新しい文字列イベント型や `resumeAndExecute` の追加引数は導入しないため、以前の NOT-DOING の目的である呼び出し側互換性は保たれる。詳細は [TECH-012](../specs/TECH-012-external-trigger-routing.md) を参照。
