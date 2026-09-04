@@ -6,6 +6,15 @@ Constrained flow engine — **Java, TypeScript, Rust.**
 
 State machines where **invalid transitions cannot exist** — enforced at build time by the compiler and [8-item validation](#8-item-build-validation).
 
+**Published core releases:**
+[![npm](https://img.shields.io/npm/v/@unlaxer/tramli?label=npm)](https://www.npmjs.com/package/@unlaxer/tramli)
+[![crates.io](https://img.shields.io/crates/v/tramli?label=crates.io)](https://crates.io/crates/tramli)
+[![Maven Central](https://img.shields.io/maven-central/v/org.unlaxer/tramli?label=Maven%20Central)](https://central.sonatype.com/artifact/org.unlaxer/tramli)
+
+> This README tracks `main` and may describe APIs not yet available in every
+> registry. Before using an example, compare its API with the published version
+> above and check the [changelog](CHANGELOG.md).
+
 > **tramli** = tramline (路面電車の軌道). Your code runs on rails — it can only go where tracks are laid.
 
 **Read**: [Why tramli Works — The Attention Budget](docs/why-tramli-works.md) | [日本語版](docs/why-tramli-works-attention-budget-ja.md)
