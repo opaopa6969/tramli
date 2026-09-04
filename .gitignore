@@ -31,3 +31,6 @@ bower_components/
 
 # MCP server config (contains personal absolute paths)
 .mcp.json
+
+# Ephemeral agent worktrees
+.claude/worktrees/
