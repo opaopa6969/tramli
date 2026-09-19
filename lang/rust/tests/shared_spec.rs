@@ -1715,11 +1715,7 @@ mod s33 {
         assert!(
             result.errors.is_empty(),
             "3 levels of nesting should be allowed: {:?}",
-            result
-                .errors
-                .iter()
-                .map(|e| &e.message)
-                .collect::<Vec<_>>()
+            result.errors.iter().map(|e| &e.message).collect::<Vec<_>>()
         );
         assert!(result.definition.is_some());
     }
@@ -1743,11 +1739,7 @@ mod s33 {
         assert!(
             result.errors.iter().any(|e| e.code == "SUB_FLOW_NESTING"),
             "expected a SUB_FLOW_NESTING error, got: {:?}",
-            result
-                .errors
-                .iter()
-                .map(|e| &e.message)
-                .collect::<Vec<_>>()
+            result.errors.iter().map(|e| &e.message).collect::<Vec<_>>()
         );
     }
 }
