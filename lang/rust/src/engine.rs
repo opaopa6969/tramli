@@ -5,7 +5,7 @@ use crate::context::FlowContext;
 use crate::definition::FlowDefinition;
 use crate::error::FlowError;
 use crate::instance::FlowInstance;
-use crate::store::InMemoryFlowStore;
+use crate::store::{FlowStore, InMemoryFlowStore};
 use crate::types::*;
 
 const MAX_CHAIN_DEPTH: usize = 10;
@@ -56,9 +56,10 @@ pub struct GuardLogEntry {
     pub duration_micros: u64,
 }
 
-pub struct FlowEngine<S: FlowState> {
-    pub store: InMemoryFlowStore<S>,
+pub struct FlowEngine<S: FlowState, Store: FlowStore<S> = InMemoryFlowStore<S>> {
+    pub store: Store,
     pub strict_mode: bool,
+    state: std::marker::PhantomData<S>,
     max_chain_depth: usize,
     transition_logger: Option<Box<dyn Fn(&TransitionLogEntry) + Send + Sync>>,
     state_logger: Option<Box<dyn Fn(&StateLogEntry) + Send + Sync>>,
@@ -66,11 +67,12 @@ pub struct FlowEngine<S: FlowState> {
     guard_logger: Option<Box<dyn Fn(&GuardLogEntry) + Send + Sync>>,
 }
 
-impl<S: FlowState> FlowEngine<S> {
-    pub fn new(store: InMemoryFlowStore<S>) -> Self {
+impl<S: FlowState, Store: FlowStore<S>> FlowEngine<S, Store> {
+    pub fn new(store: Store) -> Self {
         Self {
             store,
             strict_mode: false,
+            state: std::marker::PhantomData,
             max_chain_depth: MAX_CHAIN_DEPTH,
             transition_logger: None,
             state_logger: None,
@@ -78,14 +80,11 @@ impl<S: FlowState> FlowEngine<S> {
             guard_logger: None,
         }
     }
-    pub fn with_options(
-        store: InMemoryFlowStore<S>,
-        strict_mode: bool,
-        max_chain_depth: usize,
-    ) -> Self {
+    pub fn with_options(store: Store, strict_mode: bool, max_chain_depth: usize) -> Self {
         Self {
             store,
             strict_mode,
+            state: std::marker::PhantomData,
             max_chain_depth,
             transition_logger: None,
             state_logger: None,
@@ -93,10 +92,11 @@ impl<S: FlowState> FlowEngine<S> {
             guard_logger: None,
         }
     }
-    pub fn with_strict_mode(store: InMemoryFlowStore<S>) -> Self {
+    pub fn with_strict_mode(store: Store) -> Self {
         Self {
             store,
             strict_mode: true,
+            state: std::marker::PhantomData,
             max_chain_depth: MAX_CHAIN_DEPTH,
             transition_logger: None,
             state_logger: None,
