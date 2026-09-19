@@ -1,5 +1,5 @@
 //! Shared test scenarios (docs/specs/shared-test-scenarios.md)
-//! Covers: S06, S08, S09, S10, S11, S14, S15, S17, S18, S21
+//! Covers: S06, S08, S09, S10, S11, S14, S15, S17, S18, S21, S33
 
 #![allow(dead_code)]
 
@@ -1646,5 +1646,108 @@ mod s32 {
                 e.message
             ),
         }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// S33: SubFlow max nesting depth (3 levels ok, 4 levels rejected)
+// ═══════════════════════════════════════════════════════════════
+
+mod s33 {
+    use super::*;
+    use tramli::sub_flow::SubFlowAdapter;
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    enum Level {
+        Init,
+        Done,
+    }
+    impl FlowState for Level {
+        fn is_terminal(&self) -> bool {
+            matches!(self, Self::Done)
+        }
+        fn is_initial(&self) -> bool {
+            matches!(self, Self::Init)
+        }
+        fn all_states() -> &'static [Self] {
+            &[Self::Init, Self::Done]
+        }
+    }
+
+    /// Leaf definition: Init -auto-> Done, no further nesting.
+    fn leaf(name: &str) -> Arc<FlowDefinition<Level>> {
+        Arc::new(
+            Builder::<Level>::new(name)
+                .from(Level::Init)
+                .auto(Level::Done, Noop)
+                .build()
+                .unwrap(),
+        )
+    }
+
+    /// Wraps `child` one level deeper: Init -sub_flow(child)-> Done.
+    fn wrap(name: &str, child: Arc<FlowDefinition<Level>>) -> Arc<FlowDefinition<Level>> {
+        Arc::new(
+            Builder::<Level>::new(name)
+                .from(Level::Init)
+                .sub_flow(Box::new(SubFlowAdapter::new(child)))
+                .on_exit("Done", Level::Done)
+                .end_sub_flow()
+                .build()
+                .unwrap(),
+        )
+    }
+
+    #[test]
+    fn s33_subflow_nesting_depth_within_limit_builds() {
+        // main -> sub1 -> sub2 -> sub3(leaf): 3 nested levels, at the limit.
+        let sub3 = leaf("sub3");
+        let sub2 = wrap("sub2", sub3);
+        let sub1 = wrap("sub1", sub2);
+
+        let result = Builder::<Level>::new("main")
+            .from(Level::Init)
+            .sub_flow(Box::new(SubFlowAdapter::new(sub1)))
+            .on_exit("Done", Level::Done)
+            .end_sub_flow()
+            .build_and_validate();
+
+        assert!(
+            result.errors.is_empty(),
+            "3 levels of nesting should be allowed: {:?}",
+            result
+                .errors
+                .iter()
+                .map(|e| &e.message)
+                .collect::<Vec<_>>()
+        );
+        assert!(result.definition.is_some());
+    }
+
+    #[test]
+    fn s33_subflow_nesting_depth_exceeds_limit_build_fails() {
+        // main -> sub1 -> sub2 -> sub3 -> sub4(leaf): 4 nested levels, one too many.
+        let sub4 = leaf("sub4");
+        let sub3 = wrap("sub3", sub4);
+        let sub2 = wrap("sub2", sub3);
+        let sub1 = wrap("sub1", sub2);
+
+        let result = Builder::<Level>::new("main")
+            .from(Level::Init)
+            .sub_flow(Box::new(SubFlowAdapter::new(sub1)))
+            .on_exit("Done", Level::Done)
+            .end_sub_flow()
+            .build_and_validate();
+
+        assert!(result.definition.is_none());
+        assert!(
+            result.errors.iter().any(|e| e.code == "SUB_FLOW_NESTING"),
+            "expected a SUB_FLOW_NESTING error, got: {:?}",
+            result
+                .errors
+                .iter()
+                .map(|e| &e.message)
+                .collect::<Vec<_>>()
+        );
     }
 }

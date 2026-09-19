@@ -86,6 +86,20 @@ impl<T: FlowState> SubFlowRunner for SubFlowAdapter<T> {
         &self.definition.name
     }
 
+    /// Own depth (1) plus the deepest sub-flow nested inside this definition, so
+    /// a chain of N nested sub-flows reports depth N instead of always 1.
+    fn nesting_depth(&self) -> usize {
+        let mut deepest_child = 0;
+        for t in &self.definition.transitions {
+            if t.transition_type == TransitionType::SubFlow {
+                if let Some(ref config) = t.sub_flow {
+                    deepest_child = deepest_child.max(config.runner.nesting_depth());
+                }
+            }
+        }
+        1 + deepest_child
+    }
+
     fn terminal_names(&self) -> Vec<String> {
         self.definition
             .terminal_states()

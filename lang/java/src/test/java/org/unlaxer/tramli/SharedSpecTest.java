@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Shared test scenarios from docs/specs/shared-test-scenarios.md.
- * Covers S06, S08, S09, S10, S11, S14, S15, S17, S21, S22, S23, S30, S31.
+ * Covers S06, S08, S09, S10, S11, S14, S15, S17, S21, S22, S23, S30, S31, S33.
  */
 class SharedSpecTest {
 
@@ -88,6 +88,15 @@ class SharedSpecTest {
         INIT(false, true), DONE(true, false);
         private final boolean terminal, initial;
         SubFlowValidationSub(boolean t, boolean i) { terminal = t; initial = i; }
+        @Override public boolean isTerminal() { return terminal; }
+        @Override public boolean isInitial() { return initial; }
+    }
+
+    /** Reused at every level of the S33 nesting-depth chain. */
+    enum NestingLevel implements FlowState {
+        INIT(false, true), DONE(true, false);
+        private final boolean terminal, initial;
+        NestingLevel(boolean t, boolean i) { terminal = t; initial = i; }
         @Override public boolean isTerminal() { return terminal; }
         @Override public boolean isInitial() { return initial; }
     }
@@ -861,6 +870,56 @@ class SharedSpecTest {
 
         assertTrue(error.getMessage().contains(
                 "SubFlow 'sub-incomplete' at A has terminal state DONE with no onExit mapping"));
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  S33: SubFlow Max Nesting Depth
+    // ═══════════════════════════════════════════════════════════
+
+    /** Leaf definition: INIT -auto-> DONE, no further nesting. */
+    private static FlowDefinition<NestingLevel> nestingLeaf(String name) {
+        return Tramli.define(name, NestingLevel.class)
+                .from(NestingLevel.INIT).auto(NestingLevel.DONE, noop(name + "-noop"))
+                .build();
+    }
+
+    /** Wraps {@code child} one level deeper: INIT -subFlow(child)-> DONE. */
+    private static FlowDefinition<NestingLevel> nestingWrap(String name, FlowDefinition<?> child) {
+        return Tramli.define(name, NestingLevel.class)
+                .from(NestingLevel.INIT).subFlow(child).onExit("DONE", NestingLevel.DONE).endSubFlow()
+                .build();
+    }
+
+    @Test
+    void s33_subflow_nesting_depth_within_limit_builds() {
+        // main -> sub1 -> sub2 -> sub3(leaf): 3 nested levels, at the limit.
+        var sub3 = nestingLeaf("sub3");
+        var sub2 = nestingWrap("sub2", sub3);
+        var sub1 = nestingWrap("sub1", sub2);
+
+        var result = Tramli.define("main", NestingLevel.class)
+                .from(NestingLevel.INIT).subFlow(sub1).onExit("DONE", NestingLevel.DONE).endSubFlow()
+                .buildAndValidate();
+
+        assertNotNull(result.definition(), "3 levels of nesting should be allowed: " + result.errors());
+        assertTrue(result.errors().isEmpty());
+    }
+
+    @Test
+    void s33_subflow_nesting_depth_exceeds_limit_build_fails() {
+        // main -> sub1 -> sub2 -> sub3 -> sub4(leaf): 4 nested levels, one too many.
+        var sub4 = nestingLeaf("sub4");
+        var sub3 = nestingWrap("sub3", sub4);
+        var sub2 = nestingWrap("sub2", sub3);
+        var sub1 = nestingWrap("sub1", sub2);
+
+        var result = Tramli.define("main", NestingLevel.class)
+                .from(NestingLevel.INIT).subFlow(sub1).onExit("DONE", NestingLevel.DONE).endSubFlow()
+                .buildAndValidate();
+
+        assertNull(result.definition());
+        assertTrue(result.errors().stream().anyMatch(e -> e.code().equals("SUBFLOW_NESTING_DEPTH")),
+                "expected a SUBFLOW_NESTING_DEPTH error, got: " + result.errors());
     }
 
     // ═══════════════════════════════════════════════════════════

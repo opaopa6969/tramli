@@ -21,6 +21,15 @@ crates.io, npm (@unlaxer/tramli), and Maven Central (org.unlaxer:tramli).
   strict_mode, max_chain_depth) and the store's allocated capacity intact.
 
 ### Fixed
+- Rust `SubFlowAdapter::nesting_depth()` now recurses into the wrapped
+  definition's own sub-flow transitions instead of always reporting `1`. Build
+  validation's max-nesting-depth check (limit 3) relies on this value, so a
+  chain of 4+ sub-flows nested inside each other silently passed `build()` in
+  Rust while Java/TypeScript correctly rejected it — an undetected
+  cross-language behaviour divergence. Added shared spec scenario S33
+  (`shared_spec.rs`/`SharedSpecTest.java`/`shared-spec.test.ts`) covering both
+  the 3-level (allowed) and 4-level (rejected) cases in all three languages;
+  previously this validation path had no test coverage anywhere.
 - Rust crate の Quick Start の未実装 guard を実行可能な例に置き換え、
   外部イベント待ちから完了までの状態を検証するようにした。
   README を crate ドキュメントとして取り込み、既存の `cargo test` で例を検証する。
