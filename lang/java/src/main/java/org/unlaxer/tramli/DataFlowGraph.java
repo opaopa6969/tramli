@@ -633,7 +633,8 @@ public final class DataFlowGraph<S extends Enum<S> & FlowState> {
         if (stateAvail.containsKey(state)) {
             Set<Class<?>> existing = stateAvail.get(state);
             if (existing.containsAll(available)) return;
-            existing.retainAll(available);
+            // Stop when the intersection leaves the guaranteed set unchanged (issue #114).
+            if (!existing.retainAll(available)) return;
         } else {
             stateAvail.put(state, new HashSet<>(available));
         }
