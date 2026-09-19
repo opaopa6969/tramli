@@ -467,7 +467,10 @@ function traverse<S extends string>(
     let isSubset = true;
     for (const a of available) { if (!existing.has(a)) { isSubset = false; break; } }
     if (isSubset) return;
-    for (const a of [...existing]) { if (!available.has(a)) existing.delete(a); }
+    // Stop when the intersection leaves the guaranteed set unchanged (issue #114).
+    let changed = false;
+    for (const a of [...existing]) { if (!available.has(a)) { existing.delete(a); changed = true; } }
+    if (!changed) return;
   } else {
     stateAvail.set(state, new Set(available));
   }

@@ -3,6 +3,17 @@
 All notable changes to tramli are documented here. Versions are published to
 crates.io, npm (@unlaxer/tramli), and Maven Central (org.unlaxer:tramli).
 
+## [Unreleased]
+
+### Fixed
+- Build validation no longer recurses forever on cyclic flows whose revisits
+  bring a strict superset of the guaranteed data set (TypeScript/Java
+  `checkRequiresProducesFrom` and `DataFlowGraph` traversal). The traversal now
+  stops when the join intersection leaves the set unchanged and only re-evaluates
+  downstream when it shrinks; missing `requires` on join paths are still
+  reported. Rust already behaved this way and gains the same regression test.
+  (#114)
+
 ## [3.9.0] - 2026-09-04
 
 ### Added

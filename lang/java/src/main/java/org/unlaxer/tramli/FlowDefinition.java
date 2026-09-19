@@ -713,7 +713,10 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
             if (stateAvailable.containsKey(state)) {
                 Set<Class<?>> existing = stateAvailable.get(state);
                 if (existing.containsAll(available)) return;
-                existing.retainAll(available);
+                // Intersection (join semantics): only re-evaluate downstream if the
+                // guaranteed set actually shrinks. A revisit with a superset leaves it
+                // unchanged; recursing then loops forever on cyclic flows (issue #114).
+                if (!existing.retainAll(available)) return;
             } else {
                 stateAvailable.put(state, new HashSet<>(available));
             }

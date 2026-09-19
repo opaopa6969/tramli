@@ -498,8 +498,12 @@ export class Builder<S extends string> {
       let isSubset = true;
       for (const a of available) { if (!existing.has(a)) { isSubset = false; break; } }
       if (isSubset) return;
-      // intersection
-      for (const a of [...existing]) { if (!available.has(a)) existing.delete(a); }
+      // intersection (join semantics): only re-evaluate downstream if the
+      // guaranteed set actually shrinks. A revisit with a superset leaves it
+      // unchanged; recursing then loops forever on cyclic flows (issue #114).
+      let changed = false;
+      for (const a of [...existing]) { if (!available.has(a)) { existing.delete(a); changed = true; } }
+      if (!changed) return;
     } else {
       stateAvailable.set(state, new Set(available));
     }
