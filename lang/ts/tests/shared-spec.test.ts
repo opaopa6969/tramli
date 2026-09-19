@@ -1,6 +1,6 @@
 /**
  * Shared test scenarios from docs/specs/shared-test-scenarios.md.
- * Covers S06, S08, S09, S10, S11, S14, S15, S17, S18, S21, S22, S30.
+ * Covers S06, S08, S09, S10, S11, S14, S15, S17, S18, S21, S22, S30, S31, S33.
  */
 import { describe, it, expect } from 'vitest';
 import { Tramli } from '../src/tramli.js';
@@ -830,5 +830,60 @@ describe('S31: SubFlow Exit Completeness', () => {
         .from('A').auto('DONE', noop('MainNoop'))
         .build()
     ).toThrow("SubFlow 'sub-incomplete' at A has terminal state DONE with no onExit mapping");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// S33: SubFlow Max Nesting Depth
+// ═══════════════════════════════════════════════════════════════
+
+describe('S33: SubFlow Max Nesting Depth', () => {
+  type Level = 'INIT' | 'DONE';
+  const levelConfig: Record<Level, StateConfig> = {
+    INIT: { initial: true },
+    DONE: { terminal: true },
+  };
+
+  // Leaf definition: INIT -auto-> DONE, no further nesting.
+  function leaf(name: string) {
+    return Tramli.define<Level>(name, levelConfig)
+      .from('INIT').auto('DONE', noop(`${name}-noop`))
+      .build();
+  }
+
+  // Wraps `child` one level deeper: INIT -subFlow(child)-> DONE.
+  function wrap(name: string, child: ReturnType<typeof leaf>) {
+    return Tramli.define<Level>(name, levelConfig)
+      .from('INIT').subFlow(child).onExit('DONE', 'DONE').endSubFlow()
+      .build();
+  }
+
+  it('s33_subflow_nesting_depth_within_limit_builds', () => {
+    // main -> sub1 -> sub2 -> sub3(leaf): 3 nested levels, at the limit.
+    const sub3 = leaf('sub3');
+    const sub2 = wrap('sub2', sub3);
+    const sub1 = wrap('sub1', sub2);
+
+    expect(() =>
+      Tramli.define<Level>('main', levelConfig)
+        .from('INIT').subFlow(sub1).onExit('DONE', 'DONE').endSubFlow()
+        .build()
+    ).not.toThrow();
+  });
+
+  it('s33_subflow_nesting_depth_exceeds_limit_build_fails', () => {
+    // main -> sub1 -> sub2 -> sub3 -> sub4(leaf): 4 nested levels, one too many.
+    const sub4 = leaf('sub4');
+    const sub3 = wrap('sub3', sub4);
+    const sub2 = wrap('sub2', sub3);
+    const sub1 = wrap('sub1', sub2);
+
+    // The recursive check reports the deepest definition it was inspecting
+    // when the depth-3 limit was exceeded (sub4), not the root (main).
+    expect(() =>
+      Tramli.define<Level>('main', levelConfig)
+        .from('INIT').subFlow(sub1).onExit('DONE', 'DONE').endSubFlow()
+        .build()
+    ).toThrow('SubFlow nesting depth exceeds maximum of 3 (flow: sub4)');
   });
 });

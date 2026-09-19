@@ -464,3 +464,26 @@
 - Build the parent definition
 - Expect: build fails with `SubFlow 'sub-incomplete' at A has terminal state DONE/Done with no onExit mapping`
 - Expect: structured validation reports `SUB_FLOW_EXIT_INCOMPLETE` where structured error codes are exposed
+
+## S33: SubFlow Max Nesting Depth
+
+**States (reused at every nesting level)**: INIT(initial) → DONE(terminal)
+**Setup**: A chain of sub-flows nested inside each other — `main` wraps `sub1`,
+`sub1` wraps `sub2`, and so on, each via `subFlow(...).onExit("DONE", DONE).endSubFlow()`.
+The innermost sub-flow is a leaf with a plain `INIT auto DONE` transition.
+
+**Test: s33_subflow_nesting_depth_within_limit_builds**
+- Nest 3 levels deep: `main → sub1 → sub2 → sub3(leaf)`
+- Expect: build succeeds with no validation errors
+
+**Test: s33_subflow_nesting_depth_exceeds_limit_build_fails**
+- Nest 4 levels deep: `main → sub1 → sub2 → sub3 → sub4(leaf)`
+- Expect: build fails with a nesting-depth error (`SubFlow nesting depth exceeds maximum of 3`)
+- Expect: structured validation reports a nesting-depth error code where structured error codes are exposed
+
+Note: at the time this scenario was added, the Rust implementation computed each
+sub-flow's contribution to nesting depth as a constant `1` regardless of how deeply
+that sub-flow was itself nested, so depth-4+ chains silently passed validation
+(divergence from Java/TypeScript, which recurse into the nested definition). Fixed
+by computing `SubFlowAdapter::nesting_depth()` recursively from the wrapped
+definition's own sub-flow transitions.
