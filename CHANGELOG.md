@@ -21,6 +21,9 @@ crates.io, npm (@unlaxer/tramli), and Maven Central (org.unlaxer:tramli).
   strict_mode, max_chain_depth) and the store's allocated capacity intact.
 
 ### Fixed
+- Rust crate の Quick Start の未実装 guard を実行可能な例に置き換え、
+  外部イベント待ちから完了までの状態を検証するようにした。
+  README を crate ドキュメントとして取り込み、既存の `cargo test` で例を検証する。
 - Rust `Builder::branch()` now adds transitions in `.to()` declaration order
   instead of `HashMap` iteration order. `DataFlowGraph::traverse` is
   order-sensitive for cyclic joins, so the randomized order made
