@@ -183,7 +183,17 @@ impl<S: FlowState> FlowInstance<S> {
     pub fn state_entered_at(&self) -> Instant {
         self.state_entered_at
     }
-    pub(crate) fn has_active_sub_flow(&self) -> bool {
+    /// The sub-flow this flow is currently suspended inside, if any.
+    ///
+    /// Mirrors Java `FlowInstance.activeSubFlow()` and TypeScript
+    /// `FlowInstance.activeSubFlow`. Returns `None` once the sub-flow exits
+    /// and control returns to the parent flow.
+    pub fn active_sub_flow(&self) -> Option<&dyn crate::sub_flow::SubFlowInstance> {
+        self.active_sub_flow.as_deref()
+    }
+
+    /// Whether this flow is currently suspended inside a sub-flow.
+    pub fn has_active_sub_flow(&self) -> bool {
         self.active_sub_flow.is_some()
     }
     pub(crate) fn take_active_sub_flow(
