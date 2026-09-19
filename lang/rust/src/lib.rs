@@ -1,8 +1,4 @@
-//! # tramli
-//!
-//! Constrained flow engine — state machines that prevent invalid transitions at build time.
-//! Intentionally synchronous. See `docs/async-integration.md` for async I/O patterns.
-
+#![doc = include_str!("../README.md")]
 #![allow(clippy::result_large_err)]
 #![allow(clippy::type_complexity)]
 #![allow(clippy::too_many_arguments)]
