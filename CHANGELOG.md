@@ -6,6 +6,12 @@ crates.io, npm (@unlaxer/tramli), and Maven Central (org.unlaxer:tramli).
 ## [Unreleased]
 
 ### Fixed
+- Rust `Builder::branch()` now adds transitions in `.to()` declaration order
+  instead of `HashMap` iteration order. `DataFlowGraph::traverse` is
+  order-sensitive for cyclic joins, so the randomized order made
+  `available_at()` at a join state non-deterministic across process runs
+  (flaky `cyclic_data_flow` regression test from #114). TS/Java already used
+  insertion-ordered maps here; Rust's `BranchBuilder` now matches. (#118)
 - Build validation no longer recurses forever on cyclic flows whose revisits
   bring a strict superset of the guaranteed data set (TypeScript/Java
   `checkRequiresProducesFrom` and `DataFlowGraph` traversal). The traversal now
