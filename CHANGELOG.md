@@ -6,6 +6,15 @@ crates.io, npm (@unlaxer/tramli), and Maven Central (org.unlaxer:tramli).
 ## [Unreleased]
 
 ### Added
+- Rust `FlowInstance::active_sub_flow()` and `FlowInstance::has_active_sub_flow()`
+  are now public, mirroring Java `activeSubFlow()` and TypeScript
+  `activeSubFlow`. Rust callers can now tell whether a flow is suspended inside
+  a sub-flow (and inspect that sub-flow's state) instead of only seeing the
+  parent state. (#124)
+- Rust now runs the shared scenarios in `shared-tests/scenarios/*.yaml`
+  (`lang/rust/tests/shared_scenarios.rs`). Java and TypeScript already did; Rust
+  was the only language not executing them, so cross-language behaviour drift in
+  the order and sub-flow scenarios could not be caught. (#124)
 - Rust `FlowEngine::reset()` and `FlowEngine::with_capacity(n)` /
   `InMemoryFlowStore::with_capacity(n)` for pool/reuse patterns: clear all
   flows and transition history while keeping engine configuration (loggers,

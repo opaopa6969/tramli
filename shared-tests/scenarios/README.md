@@ -3,9 +3,11 @@
 These YAML files define the expected behavior of tramli flows across all 3 languages.
 Each scenario is implemented as a test in each language:
 
-- **Java**: `src/test/java/com/tramli/SharedScenarioTest.java`
-- **TypeScript**: `tests/shared-scenarios.test.ts`
-- **Rust**: `tests/shared_scenarios.rs`
+- **Java**: `lang/java/src/test/java/org/unlaxer/tramli/SharedScenarioTest.java`
+- **TypeScript**: `lang/ts/tests/shared-scenarios.test.ts`
+- **Rust**: `lang/rust/tests/shared_scenarios.rs`
+
+Paths are relative to the repository root.
 
 To add a new scenario:
 1. Write the YAML specification here
