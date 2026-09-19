@@ -41,11 +41,11 @@ jobs:
         with:
           components: rustfmt, clippy
       - run: cd lang/rust && cargo fmt --all -- --check
-      - run: cd lang/rust && cargo clippy --all-targets -- -D warnings
-      - run: cd lang/rust && cargo test
+      - run: cd lang/rust && cargo clippy --locked --all-targets -- -D warnings
+      - run: cd lang/rust && cargo test --locked
       - run: cd lang/rust-plugins && cargo fmt --all -- --check
-      - run: cd lang/rust-plugins && cargo clippy --all-targets -- -D warnings
-      - run: cd lang/rust-plugins && cargo test
+      - run: cd lang/rust-plugins && cargo clippy --locked --all-targets -- -D warnings
+      - run: cd lang/rust-plugins && cargo test --locked
 
   rust-msrv:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
@@ -53,5 +53,5 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.75.0
-      - run: cd lang/rust && cargo build
-      - run: cd lang/rust-plugins && cargo build
+      - run: cd lang/rust && cargo build --locked
+      - run: cd lang/rust-plugins && cargo build --locked

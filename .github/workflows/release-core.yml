@@ -64,8 +64,8 @@ jobs:
       - name: Rust test and package dry-run
         working-directory: lang/rust
         run: |
-          cargo test
-          cargo publish --dry-run --allow-dirty
+          cargo test --locked
+          cargo publish --dry-run --locked --allow-dirty
       - name: Java test and package dry-run
         run: |
           mvn -q -f lang/java/pom.xml test
