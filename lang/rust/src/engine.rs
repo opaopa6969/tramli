@@ -143,6 +143,13 @@ impl<S: FlowState, Store: FlowStore<S>> FlowEngine<S, Store> {
         self.guard_logger = None;
     }
 
+    /// Clear all flows and transition history from the store, keeping the
+    /// engine's configuration (strict_mode, max_chain_depth, loggers) and the
+    /// store's allocated capacity intact. For pool/reuse patterns.
+    pub fn reset(&mut self) {
+        self.store.clear();
+    }
+
     pub fn start_flow(
         &mut self,
         definition: Arc<FlowDefinition<S>>,
@@ -715,6 +722,15 @@ impl<S: FlowState, Store: FlowStore<S>> FlowEngine<S, Store> {
         } else {
             flow.complete("TERMINAL_ERROR");
         }
+    }
+}
+
+impl<S: FlowState> FlowEngine<S, InMemoryFlowStore<S>> {
+    /// Create an engine backed by an `InMemoryFlowStore` pre-allocated for
+    /// `capacity` flows. For pool/reuse patterns where the expected load is
+    /// known upfront.
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self::new(InMemoryFlowStore::with_capacity(capacity))
     }
 }
 

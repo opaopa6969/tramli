@@ -5,6 +5,12 @@ crates.io, npm (@unlaxer/tramli), and Maven Central (org.unlaxer:tramli).
 
 ## [Unreleased]
 
+### Added
+- Rust `FlowEngine::reset()` and `FlowEngine::with_capacity(n)` /
+  `InMemoryFlowStore::with_capacity(n)` for pool/reuse patterns: clear all
+  flows and transition history while keeping engine configuration (loggers,
+  strict_mode, max_chain_depth) and the store's allocated capacity intact.
+
 ### Fixed
 - Rust `Builder::branch()` now adds transitions in `.to()` declaration order
   instead of `HashMap` iteration order. `DataFlowGraph::traverse` is
