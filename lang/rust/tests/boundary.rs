@@ -402,3 +402,67 @@ fn build_with_no_initial_state_fails() {
         .iter()
         .any(|e| e.code == "NO_INITIAL_STATE"));
 }
+
+// ═══════════════════════════════════════════════════════════════
+// 6. branch().to().to().end_branch() preserves declaration order
+//    (issue #118: was a HashMap internally, so DataFlowGraph traversal
+//    order — and thus which guaranteed set wins at a join — was randomized
+//    per process instead of following the order .to() was called in).
+// ═══════════════════════════════════════════════════════════════
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum BranchOrder {
+    Start,
+    First,
+    Second,
+    Third,
+}
+impl FlowState for BranchOrder {
+    fn is_terminal(&self) -> bool {
+        matches!(self, Self::First | Self::Second | Self::Third)
+    }
+    fn is_initial(&self) -> bool {
+        matches!(self, Self::Start)
+    }
+    fn all_states() -> &'static [Self] {
+        &[Self::Start, Self::First, Self::Second, Self::Third]
+    }
+}
+
+struct ThreeWayRoute;
+impl BranchProcessor<BranchOrder> for ThreeWayRoute {
+    fn name(&self) -> &str {
+        "route"
+    }
+    fn requires(&self) -> Vec<TypeId> {
+        vec![]
+    }
+    fn decide(&self, _ctx: &FlowContext) -> String {
+        "first".into()
+    }
+}
+
+#[test]
+fn branch_transitions_are_added_in_to_call_order() {
+    let def = Builder::<BranchOrder>::new("branch-order")
+        .from(BranchOrder::Start)
+        .branch(ThreeWayRoute)
+        .to(BranchOrder::First, "first")
+        .to(BranchOrder::Second, "second")
+        .to(BranchOrder::Third, "third")
+        .end_branch()
+        .build()
+        .expect("branch flow should build");
+
+    let order: Vec<BranchOrder> = def
+        .transitions
+        .iter()
+        .filter(|t| t.from == BranchOrder::Start)
+        .map(|t| t.to)
+        .collect();
+    assert_eq!(
+        order,
+        vec![BranchOrder::First, BranchOrder::Second, BranchOrder::Third],
+        "branch transitions must follow .to() declaration order, not HashMap iteration order"
+    );
+}

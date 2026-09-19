@@ -687,7 +687,7 @@ impl<S: FlowState> FromBuilder<S> {
             builder: self.builder,
             from: self.from,
             branch: Some(Arc::new(branch)),
-            targets: HashMap::new(),
+            targets: Vec::new(),
         }
     }
 }
@@ -708,17 +708,26 @@ pub struct BranchBuilder<S: FlowState> {
     builder: Builder<S>,
     from: S,
     branch: Option<Arc<dyn BranchProcessor<S>>>,
-    targets: HashMap<String, S>,
+    // Vec, not HashMap: end_branch() must add transitions in declaration order.
+    // Traversal (DataFlowGraph::traverse) is order-sensitive for cyclic joins
+    // (issue #118), so a HashMap's randomized iteration order made builds
+    // non-deterministic. TS/Java already use insertion-ordered maps here.
+    targets: Vec<(String, S)>,
 }
 
 impl<S: FlowState> BranchBuilder<S> {
     pub fn to(mut self, state: S, label: impl Into<String>) -> Self {
-        self.targets.insert(label.into(), state);
+        let label = label.into();
+        if let Some(entry) = self.targets.iter_mut().find(|(l, _)| *l == label) {
+            entry.1 = state;
+        } else {
+            self.targets.push((label, state));
+        }
         self
     }
 
     pub fn end_branch(mut self) -> Builder<S> {
-        let targets_clone = self.targets.clone();
+        let targets_clone: HashMap<String, S> = self.targets.iter().cloned().collect();
         let mut first = true;
         for (label, target) in &self.targets {
             self.builder.add_transition(Transition {
