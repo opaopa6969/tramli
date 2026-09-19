@@ -151,6 +151,34 @@ fn audit_store_captures_transitions() {
 }
 
 #[test]
+fn auditing_store_integrates_with_flow_engine() {
+    let def = build_def(true);
+    let store = audit::AuditingStore::<S>::new(InMemoryFlowStore::new());
+    let mut engine = FlowEngine::new(store);
+
+    let flow_id = engine.start_flow(def, "s1", initial_data()).unwrap();
+
+    assert_eq!(
+        engine.store.get(&flow_id).unwrap().current_state(),
+        S::Pending
+    );
+    let audited = engine.store.audited_transitions();
+    assert_eq!(audited.len(), 1);
+    assert_eq!(audited[0].from, "Created");
+    assert_eq!(audited[0].to, "Pending");
+
+    engine.resume_and_execute(&flow_id, vec![]).unwrap();
+
+    assert!(engine.store.get(&flow_id).unwrap().is_completed());
+    let audited = engine.store.audited_transitions();
+    assert_eq!(audited.len(), 3);
+    assert_eq!(audited[1].from, "Pending");
+    assert_eq!(audited[1].to, "Confirmed");
+    assert_eq!(audited[2].from, "Confirmed");
+    assert_eq!(audited[2].to, "Done");
+}
+
+#[test]
 fn eventstore_replay() {
     let mut store = eventstore::EventLogStore::new(InMemoryFlowStore::<S>::new());
     store.record_transition("f1", "CREATED", "PENDING", "Proc1", "{}");

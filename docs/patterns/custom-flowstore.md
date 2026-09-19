@@ -22,7 +22,7 @@ pub trait FlowStore<S: FlowState> {
 tramli-plugins の `AuditingStore` は FlowStore を実装しています:
 
 ```rust
-use tramli::{FlowStore, FlowInstance, TransitionRecord, FlowState, InMemoryFlowStore};
+use tramli::{FlowEngine, FlowStore, FlowInstance, TransitionRecord, FlowState, InMemoryFlowStore};
 
 pub struct AuditingStore<S: FlowState> {
     delegate: InMemoryFlowStore<S>,
@@ -40,6 +40,18 @@ impl<S: FlowState> FlowStore<S> for AuditingStore<S> {
     fn transition_log(&self) -> &[TransitionRecord] { self.delegate.transition_log() }
     fn clear(&mut self) { self.delegate.clear(); self.audit_log.clear(); }
 }
+```
+
+`FlowEngine` は store の型を推論するため、そのまま渡して実行できます。従来の
+`FlowEngine<S>` はデフォルトの `InMemoryFlowStore<S>` を指すため、既存コードとの
+互換性も維持されます。
+
+```rust
+let store = AuditingStore::new(InMemoryFlowStore::new());
+let mut engine = FlowEngine::new(store);
+let flow_id = engine.start_flow(definition, "session-1", initial_data)?;
+
+assert_eq!(engine.store.audited_transitions().len(), 1);
 ```
 
 ## SqlFlowStore を作る場合
