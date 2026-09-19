@@ -6,6 +6,10 @@ crates.io, npm (@unlaxer/tramli), and Maven Central (org.unlaxer:tramli).
 ## [Unreleased]
 
 ### Added
+- Rust `FlowInstance::set_version()` provides an idiomatic public API for
+  persistent `FlowStore` implementations to advance optimistic-lock versions
+  without replacing the instance or losing its context. The existing
+  `set_version_public()` name remains as a deprecated compatibility alias.
 - Rust `FlowInstance::active_sub_flow()` and `FlowInstance::has_active_sub_flow()`
   are now public, mirroring Java `activeSubFlow()` and TypeScript
   `activeSubFlow`. Rust callers can now tell whether a flow is suspended inside

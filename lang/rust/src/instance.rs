@@ -175,9 +175,18 @@ impl<S: FlowState> FlowInstance<S> {
         waiting
     }
 
-    /// Update the version in-place. For FlowStore optimistic locking after save.
-    pub fn set_version_public(&mut self, new_version: u32) {
+    /// Update the optimistic-lock version after a persistent store saves this flow.
+    ///
+    /// This only changes the version; the current state, context, and sub-flow state
+    /// are preserved.
+    pub fn set_version(&mut self, new_version: u32) {
         self.version = new_version;
+    }
+
+    /// Update the version in-place. For FlowStore optimistic locking after save.
+    #[deprecated(note = "use FlowInstance::set_version instead")]
+    pub fn set_version_public(&mut self, new_version: u32) {
+        self.set_version(new_version);
     }
 
     pub fn state_entered_at(&self) -> Instant {

@@ -271,7 +271,7 @@ flow.availableData();  // Set {'OidcRequest', 'OidcRedirect'} — 現在利用�
 flow.missingFor();     // ['PaymentResult'] — 次の遷移に不足
 ```
 
-### `withVersion(n)` / `stateEnteredAt()`
+### `withVersion(n)` / `set_version(n)` (Rust) / `stateEnteredAt()`
 
 いつ: FlowStore の楽観ロック / per-state タイムアウト。
 
@@ -284,6 +284,13 @@ Duration elapsed = Duration.between(flow.stateEnteredAt(), Instant.now());
 const updated = flow.withVersion(flow.version + 1);  // DB save 後
 const elapsedMs = Date.now() - flow.stateEnteredAt.getTime();
 ```
+
+```rust
+let next_version = flow.version() + 1;
+flow.set_version(next_version);  // DB save 後
+```
+
+Rust の `set_version_public()` は非推奨の互換 alias として残されています。
 
 ---
 

@@ -639,7 +639,7 @@ let missing: Vec<TypeId> = flow.missing_for();
 // [TypeId::of::<PaymentResult>()] — this type is required but not yet in context
 ```
 
-### `withVersion(n)` / `setVersionPublic(n)` (Rust)
+### `withVersion(n)` / `set_version(n)` (Rust)
 
 When: FlowStore optimistic locking — update version after save.
 
@@ -654,10 +654,12 @@ const updated = flow.withVersion(flow.version + 1);
 ```
 
 ```rust
-// version() returns the current optimistic lock version
-let v = flow.version();
-// set_version_public() is available to FlowStore implementations (pub(crate))
+// After SQL UPDATE ... SET version = version + 1
+let next_version = flow.version() + 1;
+flow.set_version(next_version);
 ```
+
+Rust's `set_version_public()` remains as a deprecated compatibility alias.
 
 ### `stateEnteredAt()`
 

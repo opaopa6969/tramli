@@ -62,6 +62,20 @@ DB 永続化の FlowStore を作る場合のポイント:
 2. **`record_transition()` は DB INSERT** — FlowEngine が遷移ごとに呼び出す
 3. **`transition_log()` は `&[TransitionRecord]` を返す** — 全ログを Vec で保持するか、空スライスを返して別の query API を提供する
 
+### 楽観ロックの version 更新
+
+DB の version を更新した後は、キャッシュ内の `FlowInstance` も同じ version に進めます。
+`set_version()` は version だけを変更し、現在 state、context、sub-flow の状態を保持します。
+
+```rust
+let next_version = flow.version() + 1;
+// UPDATE flows SET version = next_version WHERE id = flow.id AND version = flow.version()
+flow.set_version(next_version);
+```
+
+旧名の `set_version_public()` は既存実装との互換性のため残っていますが、新規コードでは
+`set_version()` を使用してください。
+
 ## Async Store について
 
 tramli の FlowEngine は同期設計です。async DB クライアント (sqlx 等) を使う場合は `block_on` パターンを使ってください:
