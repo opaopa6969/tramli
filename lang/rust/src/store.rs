@@ -38,6 +38,15 @@ impl<S: FlowState> InMemoryFlowStore<S> {
         }
     }
 
+    /// Pre-allocate storage for `capacity` flows and transition log entries.
+    /// For pool/reuse patterns where the expected load is known upfront.
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            flows: HashMap::with_capacity(capacity),
+            transition_log: Vec::with_capacity(capacity),
+        }
+    }
+
     /// Clear all flows and transition log. For pool/reuse patterns.
     pub fn clear(&mut self) {
         self.flows.clear();
