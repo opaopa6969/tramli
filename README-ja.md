@@ -26,7 +26,7 @@
 
 ## 目次
 
-- [なぜ tramli が必要か](#なぜ-tramli-が必要か)
+- [なぜ tramli が必要か](#なぜ-tramli-が必要か) — 解決する痛み、他ライブラリとの違い、向いていないケース
 - [クイックスタート](#クイックスタート) — 状態定義、Processor、フロー、実行
 - [コアコンセプト](#コアコンセプト) — 8つの構成要素
   - [FlowState](#flowstate) — システムが取りうる状態
@@ -57,33 +57,130 @@
 
 ## なぜ tramli が必要か
 
+### 一言で言うと
+
+tramli は「注文 → 支払い待ち → 支払い確認 → 発送」のような**何段階かに分かれ、途中で外部からの応答を待つ処理**を書くためのライブラリです。普通のステートマシンライブラリと違うのは、**実行する前（`build()` を呼んだ時点）に、フロー全体の矛盾を見つけてくれる**点です。特に「この処理が必要とするデータは、ここに来るどの経路でも必ず用意されているか」を検査できるのが特徴です。
+
+### どんな痛みを解決するのか
+
+注文・決済・ログイン・承認・オンボーディングのような処理を書いたことがあれば、次のどれかに覚えがあるはずです。
+
+| 痛み | 具体的に起きること |
+|------|-------------------|
+| **状態がフラグと if 文に散らばる** | `isPaid`、`isShipped`、`status == "PENDING"` が複数ファイルに散在する。「今どの段階にいて、次に何が起こりうるか」が、コードのどこにも一か所にまとまっていない。 |
+| **データがあるかどうかは、実行するまでわからない** | 発送処理が `CustomerProfile` を使うのに、ある経路ではそれを誰も読み込んでいない。テストで通らなかった経路を本番のユーザーが踏んで、初めて `null` で落ちる。 |
+| **変更の影響範囲が読めない** | 1 つのハンドラが数百〜千行あり、400 行目でセットした値を 1200 行目が使っている。1 行直すために全体を読む必要がある。人間も AI コーディングエージェントも、読む量が増えるほど見落とす。 |
+| **ありえない遷移や無限ループが入り込む** | 「発送済み → 支払い待ち」のような逆戻りや、自動処理どうしが呼び合うループが、コードレビューでは見つからない。 |
+| **図と実装がずれる** | 設計書の状態遷移図は最初だけ正しく、実装が変わるたびに古くなっていく。 |
+
+### 他のやり方ではどう解決しているか
+
+この問題に対する既存の選択肢と、それぞれで残る痛みです。
+
+| アプローチ | 代表例 | 得意なこと | 残る痛み |
+|-----------|--------|-----------|---------|
+| 手書き（enum + switch / if） | — | 依存ゼロ、すぐ書ける | 上の痛みはすべて人間の注意力頼み。 |
+| 汎用ステートマシン / Statecharts | [XState](https://github.com/statelyai/xstate)（TS）、[Spring Statemachine](https://github.com/spring-projects/spring-statemachine)（Java） | 階層状態・並行状態など表現力が高い。ビジュアルエディタやフレームワーク統合などエコシステムが充実。 | 「どの状態でどのデータが揃っているか」は検証しない。XState の context は全状態で同じ型なので、`email?: string` のような optional と null チェックが残り、データ不足は実行時に発覚する。 |
+| 型で遷移を縛る（typestate） | [statig](https://github.com/mdeloof/statig)（Rust） | 不正な遷移をコンパイルエラーにできる（遷移の正しさについては tramli より強い保証）。 | データ依存（誰が何を作り、誰が使うか）は検証しない。単一言語。 |
+| 耐久ワークフロー基盤 | [Temporal](https://github.com/temporalio/temporal)、AWS Step Functions | 数日〜数年続く処理、分散実行、自動リトライ、障害からの再開。 | 専用サーバやクラウドサービスが必要で、アプリ内の小さなフローには重い。フロー構造の静的検証が主目的ではない。 |
+
+### tramli はどう違うのか
+
+tramli は**表現力をあえて絞り、その代わりに「実行前に検証できる範囲」を広げる**という選択をしています。
+
+| 観点 | XState | Spring SM | statig | **tramli** |
+|------|--------|-----------|--------|-----------|
+| 検証のタイミング | 実行時 | 実行時 | コンパイル時（型） | `build()` 時（実行前） |
+| データ依存の検証 | なし（context 全体に 1 つの型） | なし | なし | **requires / produces で全経路を検査** |
+| 遷移の安全性 | 開発者の責任 | 開発者の責任 | 型システムが保証 | enum + 8 項目の構造検査 |
+| 表現力 | 階層・並行・履歴状態 | 階層・並行状態 | 階層状態 | フラットな状態 + SubFlow |
+| 言語 | TypeScript | Java | Rust | Java / TypeScript / Rust |
+| 依存 | 単体ライブラリ | Spring | ゼロ | ゼロ |
+
+絞っているのは次の 3 点です。
+
+1. **状態はフラットな enum だけ**（階層状態・並行状態はない）
+2. **遷移は 3 種類だけ** — 自動で進む Auto、外部イベントを待つ External、条件で分かれる Branch
+3. **1 遷移 = 1 Processor**。各 Processor は「何を読むか（`requires`）」と「何を書くか（`produces`）」を宣言する
+
+こう絞ると、フローの全経路を機械的に列挙できます。だから `build()` の時点で、次のことを検査できます。
+
+- どの経路を通っても、各 Processor が必要とするデータが前の段階で作られているか
+- 到達できない状態、終われない経路、自動遷移の無限ループがないか
+- その他、合計 [8 項目の構造チェック](#8項目-build-検証)
+
+`build()` はアプリ起動時やユニットテストで呼ばれるので、問題は**本番ではなく CI で**見つかります。
+
+### 具体的にどう解決するのか
+
+先ほどの「発送処理に `CustomerProfile` がない」問題で比べます。
+
+**手続き型で書いた場合** — 状態チェックとデータ取得があちこちに散らばり、`profile` が null になりうるかは呼び出し経路を全部追わないとわからない。
+
+```java
+void onPaymentWebhook(String orderId, PaymentResult result) {
+    Order order = repo.find(orderId);
+    if (!"PAYMENT_PENDING".equals(order.status)) return;  // 状態チェックが各所に散在
+    order.status = "CONFIRMED";
+    ship(order);
+}
+
+void ship(Order order) {
+    CustomerProfile profile = order.profile;  // ← どの経路でセットされた？ null かも
+    shipping.send(profile.address(), order.items());
+}
 ```
-1800行の手続き的ハンドラ → 「callback 処理はどこから始まる？」
-  → 全部読む → コンテキスト窓が溢れる → ミスが起きる
 
-tramli の FlowDefinition (50行) → 「これを読んで、対象の Processor を1個読む」
-  → 合計100行で完了 → コンパイラが残りを守る
+**tramli で書いた場合** — フロー全体が 1 か所に宣言され、各処理は必要なデータを宣言する。
+
+```java
+var orderFlow = Tramli.define("order", OrderState.class)
+    .initiallyAvailable(OrderRequest.class)
+    .from(CREATED).auto(PAYMENT_PENDING, orderInit)            // produces PaymentIntent
+    .from(PAYMENT_PENDING).external(CONFIRMED, paymentGuard)   // produces PaymentResult
+    .from(CONFIRMED).auto(SHIPPED, shipProcessor)              // requires CustomerProfile
+    .onAnyError(CANCELLED)
+    .build();
 ```
 
-核心的な洞察: **「何を読まなくていいか」が「何を読むか」より重要。**
+`CustomerProfile` を作る Processor がどこにもないので、`build()` が**実行前に**失敗します。
 
-手続き的ハンドラでは、全ての行が暗黙のコンテキスト。400行目を変えると1200行目が壊れるかもしれない。全部読まないとわからない。
+```
+Flow 'order' has 1 validation error(s):
+  - Processor 'ShipProcessor' at CONFIRMED → SHIPPED requires CustomerProfile
+    but it may not be available
+```
 
-tramli では [StateProcessor](#stateprocessor) が閉じた単位。[requires()](#requires--produces-契約) が入力を宣言し、[produces()](#requires--produces-契約) が出力を宣言する。1つの Processor を変えても他には影響しない。
+他の痛みも同じ仕組みで解消されます。
 
-これは**人間**（限られたワーキングメモリ）にも **LLM**（限られたコンテキスト窓）にも等しく効く。
+| 痛み | tramli での解決 |
+|------|----------------|
+| 状態がフラグと if 文に散らばる | 状態は enum、遷移は [FlowDefinition](#flowdefinition) の 1 か所に宣言。上から読めばそれがフロー全体。 |
+| データがあるかどうかは実行するまでわからない | [requires / produces](#requires--produces-契約) を `build()` が全経路で検査。通れば `ctx.get()` は null を返さない。 |
+| 変更の影響範囲が読めない | [Processor](#stateprocessor) は入出力を宣言した閉じた単位。直すときに読むのは FlowDefinition と対象の Processor だけ。 |
+| ありえない遷移や無限ループ | 定義していない遷移は存在しない。Auto / Branch のループは `build()` の DAG チェックで拒否。 |
+| 図と実装がずれる | [Mermaid 図をコードから生成](#mermaid-図の自動生成)。図は常にコードと一致する。 |
 
-### なぜフラットな状態か？（DD-021）
+「読まなくていい範囲」がはっきりすることは、コンテキスト窓が限られる LLM にも効きます。詳しくは [なぜ tramli は効くのか — アテンション・バジェット](docs/why-tramli-works-attention-budget-ja.md) を参照してください。
 
-tramli は状態に flat enum を使う——階層状態も直交領域もない。これは**制限ではなく、データフロー検証のための正しい設計**。
+### 向いていないケース
 
-[DGE によって生成された会話劇](dge/sessions/dge-session-harel-carta.md)（AI が David Harel（Statecharts の発明者）や Pat Helland（分散システムの先駆者）の役を演じる架空の設計対話）の中で、両ペルソナが独立に同じ結論に到達:
+- **並行状態・履歴状態が本質的に必要**（複雑な UI の状態管理など）→ XState が向いています。
+- **数日〜数年続く分散ワークフローで、自動リトライや障害からの再開が必要** → Temporal などの耐久ワークフロー基盤が向いています。tramli は [FlowStore](#flowstore) で状態を保存できますが、実行基盤ではありません。
+- **2〜3 ステップの一直線の処理** → 普通の関数呼び出しで十分です（5 ステップ以上なら [Pipeline](#pipeline) が入口になります）。
+- **マイクロ秒単位の性能が要る処理**（HFT、ゲームループ）→ [パフォーマンス](#パフォーマンス)を参照。
 
-- **階層状態**はデータフロー検証を劣化させる（super-state を通る暗黙のパス）
-- **直交領域**はデータフロー検証を破壊する（指数的なパス組み合わせ）
-- **flat enum** は完全な検証を可能にする（全パス列挙可能）
+### なぜ状態をフラットにしたのか（DD-021）
 
-階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（ネストではなく合成）を使う。並行する関心事は[別フロー](docs/patterns/long-lived-flows-ja.md)にして `crossFlowMap()` でリンク。
+階層状態や並行状態がないのは、作り忘れではなく意図的な設計です。
+
+- **階層状態**があると、親状態を経由する暗黙の経路が生まれ、データ依存の検査が不完全になる
+- **並行状態**があると、経路の組み合わせが指数的に増え、全経路の検査が現実的でなくなる
+- **フラットな enum** なら全経路を列挙でき、検査が完全になる
+
+つまり「表現力」と「実行前の完全な検証」はトレードオフで、tramli は後者を選んでいます。この結論は、AI が David Harel（Statecharts の考案者）や Pat Helland（分散システムの先駆者）の役を演じる[架空の設計対話（DGE）](dge/sessions/dge-session-harel-carta.md)の中で導かれたものです。
+
+階層が必要なら [SubFlow](docs/example-oidc-auth-flow-ja.md)（入れ子ではなく合成）を、並行する関心事は[別のフロー](docs/patterns/long-lived-flows-ja.md)に分けて `crossFlowMap()` で関連付けます。
 
 ---
 
