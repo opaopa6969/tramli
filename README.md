@@ -27,7 +27,7 @@ State machines where **invalid transitions cannot exist** — enforced at build 
 
 ## Table of Contents
 
-- [Why tramli exists](#why-tramli-exists)
+- [Why tramli exists](#why-tramli-exists) — the pain it solves, how it differs from alternatives, when not to use it
 - [Quick Start](#quick-start) — define states, processors, flow, run
 - [Core Concepts](#core-concepts) — the 8 building blocks
   - [FlowState](#flowstate) — what states your system can be in
@@ -58,35 +58,130 @@ State machines where **invalid transitions cannot exist** — enforced at build 
 
 ## Why tramli exists
 
+### In one sentence
+
+tramli is a library for writing **processes that move through several stages and wait for outside responses along the way** — "order → awaiting payment → payment confirmed → shipped". Unlike ordinary state machine libraries, it **finds contradictions in the whole flow before anything runs** (when you call `build()`). In particular, it checks: "is the data each step needs guaranteed to exist on every path that reaches it?"
+
+### What pain does it solve?
+
+If you have written order, payment, login, approval, or onboarding logic, some of these will sound familiar.
+
+| Pain | What actually happens |
+|------|-----------------------|
+| **State is scattered across flags and if-statements** | `isPaid`, `isShipped`, `status == "PENDING"` live in several files. Nowhere in the code says, in one place, "which stage are we in, and what can happen next?" |
+| **You only learn whether data exists by running it** | Shipping uses `CustomerProfile`, but on one path nobody ever loads it. A real user walks the path your tests missed, and it crashes with `null` in production. |
+| **You cannot see the blast radius of a change** | One handler is hundreds or thousands of lines; a value set on line 400 is used on line 1200. To change one line you must read all of it. Humans and AI coding agents both miss more as there is more to read. |
+| **Impossible transitions and infinite loops creep in** | A backward move like "shipped → awaiting payment", or automatic steps that call each other in a loop, slip through code review. |
+| **Diagrams drift from the implementation** | The state diagram in the design doc is correct on day one and gets staler with every change. |
+
+### How do other tools solve it?
+
+The existing options, and the pain each one leaves behind:
+
+| Approach | Examples | Good at | Pain that remains |
+|----------|----------|---------|-------------------|
+| Hand-written (enum + switch / if) | — | Zero dependencies, quick to write | Every pain above depends on human attention. |
+| General state machines / Statecharts | [XState](https://github.com/statelyai/xstate) (TS), [Spring Statemachine](https://github.com/spring-projects/spring-statemachine) (Java) | High expressiveness: hierarchical and parallel states. Rich ecosystems (visual editors, framework integration). | They do not verify "which data is present in which state". XState's context has one type for every state, so optional fields like `email?: string` and null checks remain, and missing data is found at runtime. |
+| Typed transitions (typestate) | [statig](https://github.com/mdeloof/statig) (Rust) | Invalid transitions become compile errors — a stronger guarantee than tramli's for transition validity. | No verification of data dependencies (who produces what, who consumes it). Single language. |
+| Durable workflow platforms | [Temporal](https://github.com/temporalio/temporal), AWS Step Functions | Processes lasting days to years, distributed execution, automatic retries, recovery from failure. | Need a dedicated server or cloud service — heavy for small in-app flows. Static verification of flow structure is not their main goal. |
+
+### How is tramli different?
+
+tramli **deliberately narrows expressiveness and, in exchange, widens what can be verified before execution**.
+
+| Aspect | XState | Spring SM | statig | **tramli** |
+|--------|--------|-----------|--------|-----------|
+| When it validates | Runtime | Runtime | Compile time (types) | At `build()` (before execution) |
+| Data-dependency checks | None (one type for all context) | None | None | **requires / produces checked on every path** |
+| Transition safety | Developer's job | Developer's job | Enforced by the type system | enum + 8 structural checks |
+| Expressiveness | Hierarchical, parallel, history states | Hierarchical, parallel states | Hierarchical states | Flat states + SubFlow |
+| Languages | TypeScript | Java | Rust | Java / TypeScript / Rust |
+| Dependencies | Standalone library | Spring | Zero | Zero |
+
+It narrows three things:
+
+1. **States are flat enums only** (no hierarchical or parallel states)
+2. **Only three transition types** — Auto (advances on its own), External (waits for an outside event), Branch (chooses by condition)
+3. **One transition = one Processor**. Each Processor declares what it reads (`requires`) and what it writes (`produces`)
+
+With these limits, every path through the flow can be enumerated mechanically. So at `build()` time tramli can check:
+
+- On every path, is the data each Processor needs produced by an earlier step?
+- Are there unreachable states, paths that never finish, or infinite loops of automatic transitions?
+- And the rest of the [8 structural checks](#8-item-build-validation)
+
+`build()` runs at application startup or in unit tests, so problems surface **in CI, not in production**.
+
+### How does it solve the problem, concretely?
+
+Take the "shipping has no `CustomerProfile`" problem from above.
+
+**Procedural version** — state checks and data loading are scattered; whether `profile` can be null is only knowable by tracing every call path.
+
+```java
+void onPaymentWebhook(String orderId, PaymentResult result) {
+    Order order = repo.find(orderId);
+    if (!"PAYMENT_PENDING".equals(order.status)) return;  // state checks scattered everywhere
+    order.status = "CONFIRMED";
+    ship(order);
+}
+
+void ship(Order order) {
+    CustomerProfile profile = order.profile;  // ← set on which path? might be null
+    shipping.send(profile.address(), order.items());
+}
 ```
-1800-line procedural handler → "where does the callback logic start?"
-  → read everything → context window explodes → mistakes happen
 
-tramli FlowDefinition (50 lines) → "read this, then the 1 processor you need"
-  → done in 100 lines → compiler catches the rest
+**tramli version** — the whole flow is declared in one place, and each step declares the data it needs.
+
+```java
+var orderFlow = Tramli.define("order", OrderState.class)
+    .initiallyAvailable(OrderRequest.class)
+    .from(CREATED).auto(PAYMENT_PENDING, orderInit)            // produces PaymentIntent
+    .from(PAYMENT_PENDING).external(CONFIRMED, paymentGuard)   // produces PaymentResult
+    .from(CONFIRMED).auto(SHIPPED, shipProcessor)              // requires CustomerProfile
+    .onAnyError(CANCELLED)
+    .build();
 ```
 
-The core insight: **"what you don't need to read" matters more than "what you do."**
+No Processor produces `CustomerProfile`, so `build()` fails **before execution**:
 
-In a procedural handler, every line is implicit context. Changing line 400 might break line 1200. You can't know without reading everything.
+```
+Flow 'order' has 1 validation error(s):
+  - Processor 'ShipProcessor' at CONFIRMED → SHIPPED requires CustomerProfile
+    but it may not be available
+```
 
-In tramli, a [StateProcessor](#stateprocessor) is a closed unit. Its [requires()](#requires--produces-contract) declares inputs; its [produces()](#requires--produces-contract) declares outputs. Change one processor, and nothing else is affected.
+The other pains go away through the same mechanism:
 
-This helps **humans** (limited working memory) and **LLMs** (limited context window) equally.
+| Pain | How tramli resolves it |
+|------|------------------------|
+| State scattered across flags and if-statements | States are an enum; transitions are declared in one [FlowDefinition](#flowdefinition). Read it top to bottom and that is the whole flow. |
+| Data existence only known at runtime | `build()` checks [requires / produces](#requires--produces-contract) on every path. If it passes, `ctx.get()` does not return null. |
+| Blast radius of a change is unclear | A [Processor](#stateprocessor) is a closed unit with declared inputs and outputs. To change it, read the FlowDefinition and that one Processor. |
+| Impossible transitions and infinite loops | Undefined transitions do not exist. Auto/Branch loops are rejected by the DAG check in `build()`. |
+| Diagrams drift from the implementation | [Mermaid diagrams are generated from code](#mermaid-diagram-generation), so they always match. |
+
+Making "what you don't need to read" explicit also helps LLMs with limited context windows. See [Why tramli Works — The Attention Budget](docs/why-tramli-works.md).
+
+### When tramli is not the right fit
+
+- **You genuinely need parallel or history states** (e.g. complex UI state) → XState is a better fit.
+- **Distributed workflows lasting days to years that need automatic retries and crash recovery** → use a durable workflow platform such as Temporal. tramli can persist state via [FlowStore](#flowstore), but it is not an execution platform.
+- **A straight line of 2–3 steps** → plain function calls are enough (for 5+ steps, [Pipeline](#pipeline) is the entry point).
+- **Microsecond-level performance** (HFT, game loops) → see [Performance](#performance).
 
 ### Why flat states? (DD-021)
 
-tramli uses flat enums for states — no hierarchical states, no orthogonal regions. This is **not a limitation**. It's the correct design for data-flow verification.
+The absence of hierarchical and parallel states is a deliberate design choice, not an omission.
 
-In [fictional dialogues generated by DGE](dge/sessions/dge-session-harel-carta.md) — where an AI plays the role of David Harel (Statecharts inventor) and Pat Helland (distributed systems pioneer) — both personas independently arrived at the same conclusion:
+- **Hierarchical states** create implicit paths through parent states, making data-dependency checks incomplete
+- **Parallel states** multiply path combinations exponentially, making all-path checking impractical
+- **Flat enums** let every path be enumerated, so the checks are complete
 
-- **Hierarchical states** degrade data-flow verification (implicit paths through super-states)
-- **Orthogonal regions** break data-flow verification (exponential path combinations)
-- **Flat enums** enable complete verification (every path enumerable)
+In other words, expressiveness and complete pre-execution verification trade off against each other, and tramli chooses the latter. This conclusion came out of [fictional design dialogues generated by DGE](dge/sessions/dge-session-harel-carta.md), where an AI plays David Harel (inventor of Statecharts) and Pat Helland (distributed-systems pioneer).
 
-Data-flow verification is **paradigm-agnostic** — it works on mutable context, event logs, or Statecharts. But only flat models preserve **complete** verification. tramli trades expressiveness for this guarantee.
-
-If you need hierarchy, use [SubFlow](docs/example-oidc-auth-flow.md) (composition, not nesting). If you need concurrent concerns, use [separate flows](docs/patterns/long-lived-flows.md) linked by `crossFlowMap()`.
+If you need hierarchy, use [SubFlow](docs/example-oidc-auth-flow.md) (composition, not nesting). For concurrent concerns, split them into [separate flows](docs/patterns/long-lived-flows.md) linked by `crossFlowMap()`.
 
 ---
 
