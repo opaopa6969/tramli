@@ -1,12 +1,33 @@
 # Real-World Example: OIDC Authentication Flow
 
-> From [volta-auth-proxy](https://github.com/opaopa6969/volta-auth-proxy) — a multi-tenant identity gateway managing 4 authentication flows with tramli.
+This guide is for engineers who are new to tramli and want to organize a login flow that spans several HTTP requests.
+It follows an OIDC login from redirect to session issuance, showing how states, transitions, and declared data dependencies make the flow easier to inspect.
+The examples explain the flow structure; application services and parts of the OIDC protocol handling are omitted.
 
-This example shows a production OIDC login flow with 9 states, 5 processors, 1 guard, and 1 branch. It demonstrates how tramli handles real-world complexity while keeping each piece readable.
+[日本語版](example-oidc-auth-flow-ja.md)
 
----
+## What an OIDC login does
+
+OpenID Connect (OIDC) lets an application identify a user through an identity provider (IdP), such as Google. In the authorization code flow, the application redirects the browser to the IdP, the IdP authenticates the user, and the browser returns to the application's callback URL with a `code`. The application exchanges that code for tokens and validates the ID token before using its user information. It can then find or create a local user and issue an application session. This example also includes a risk check and a decision about multi-factor authentication (MFA). See the [OIDC authorization code flow](https://openid.net/specs/openid-connect-core-1_0.html#CodeFlowAuth) for the protocol steps.
+
+## Why this becomes hard to follow in handlers
+
+The redirect and callback run in separate HTTP requests. A login handler can prepare the request, a callback handler can exchange the code, and service methods can resolve the user and issue a session. Splitting these functions helps, but the following questions still require tracing calls and shared data:
+
+| Problem | Concrete question in this login flow |
+|---------|-------------------------------------|
+| The sequence is spread across handlers | Can session issuance run before the user has been resolved and the risk check has completed? |
+| Data is created in one request and consumed in another | Where was the original `state` saved, and which callback is compared with it? Does `returnTo` survive until session issuance? |
+| Failure handling is spread across catch blocks | If token exchange fails, do we restart login, return an error, or leave a callback waiting? What happens when it arrives after the login expires? |
+| Callback delivery can repeat | Does a browser refresh mean a new login attempt, a rejected callback, or an already completed login? |
+
+An enum and helper functions can make a hand-written implementation clearer. They still leave the developer responsible for checking that every path supplies the data each helper needs. tramli puts the sequence in a `FlowDefinition` and gives each step a declared input/output contract. The handler starts or resumes that definition; the engine follows its transitions.
+
+The code below uses 11 states, including two error states, and five main processing steps. `retryProcessor` is a separate application-supplied processor whose implementation is omitted. There is one callback guard and one branch decision. The main example is Java; the [plugin tutorial](tutorial-plugins.md) explains plugin integration with TypeScript examples.
 
 ## 1. Define States
+
+A state records how far this login attempt has progressed. `INIT` is the initial state; `REDIRECTED` means that the application has prepared the redirect and is waiting for the callback. Terminal states end this flow. In particular, `COMPLETE_MFA` ends the OIDC flow with MFA still pending; it does not mean that the additional authentication has finished.
 
 ```java
 enum OidcState implements FlowState {
@@ -30,9 +51,11 @@ enum OidcState implements FlowState {
 }
 ```
 
-11 states. Each is a single word that tells you where the user is in the login process.
+The states are a flat enum. The next step is determined by the transitions we will declare, rather than by a hierarchy of nested states or flags in HTTP handlers.
 
 ## 2. Define Context Data
+
+`FlowContext` holds data for one flow instance, keyed by type in Java. Use separate types for the login request, callback, tokens, and session so that each step can declare exactly what it reads and writes.
 
 ```java
 record OidcRequest(String provider, String returnTo) {}
@@ -44,9 +67,23 @@ record RiskCheckResult(String level, boolean blocked) {}
 record IssuedSession(String sessionId, String redirectTo) {}
 ```
 
-7 data types. Each flows from one processor to the next — tramli verifies this chain at `build()`.
+These seven types make the handoffs visible. The caller supplies `OidcRequest` at the start. `OidcInitProcessor` creates `OidcRedirect`, and token exchange later reads its saved `state` alongside `OidcCallback`. Session issuance reads the original `OidcRequest.returnTo` to produce `IssuedSession.redirectTo`.
+
+`state` associates a callback with the login request; `nonce` associates an ID token with that authentication request. The record includes `nonce`, but the abbreviated code below does not show sending or checking it. It also omits ID-token validation and PKCE, so it is not a complete OIDC client implementation. Those protocol checks belong in the application's OIDC integration; `build()` checks declared data dependencies, not token validity.
 
 ## 3. Write Processors (1 transition = 1 processor)
+
+A `StateProcessor` performs the work for one transition. `requires()` declares the data that must already be available; `produces()` declares the data the processor will add. The engine calls `process()` when that transition runs.
+
+| Processor | `requires` | `produces` | Work performed |
+|-----------|------------|------------|----------------|
+| `OidcInitProcessor` | `OidcRequest` | `OidcRedirect` | Prepare the authorization URL and request data |
+| `OidcTokenExchangeProcessor` | `OidcCallback`, `OidcRedirect` | `OidcTokens` | Compare `state` and exchange the code |
+| `UserResolveProcessor` | `OidcTokens` | `ResolvedUser` | Find or create the local user |
+| `RiskCheckProcessor` | `ResolvedUser`, `OidcRequest` | `RiskCheckResult` | Assess login risk |
+| `SessionIssueProcessor` | `ResolvedUser`, `OidcRequest` | `IssuedSession` | Create the session and carry forward the redirect destination |
+
+For example, changing session issuance means inspecting its two inputs and the transitions that invoke it. The token-exchange implementation stays in its own processor. Helper functions and service objects in these snippets are supplied by the application, not by tramli.
 
 ```java
 // Step 1: Generate OAuth redirect URL
@@ -115,9 +152,21 @@ StateProcessor sessionIssue = new StateProcessor() {
 };
 ```
 
-Each processor is **self-contained**: you can read, test, and modify it without touching the others.
+The five processors share the same pattern: read declared inputs, perform one step, and store declared outputs. The service implementations still need their own tests, including validation of the ID token before its claims are trusted.
 
 ## 4. Write the Guard and Branch
+
+The three transition types describe when the next step runs:
+
+| Type | Meaning | Use in this example |
+|------|---------|---------------------|
+| **Auto** | Advance without another external event | Prepare the redirect; exchange tokens; resolve the user; assess risk |
+| **External** | Stop until the application resumes the flow with an outside event | Wait in `REDIRECTED` for the callback |
+| **Branch** | Choose a declared destination from a label returned by a decision | Select `complete`, `mfa`, or `blocked` after risk assessment |
+
+A `TransitionGuard` checks an External event. It declares its inputs and accepted outputs, then returns a result without modifying the context itself. The engine merges data from `GuardOutput.Accepted` into the context. Here the guard requires `OidcRedirect` and produces `OidcCallback`.
+
+A `BranchProcessor` reads data and returns a route label. `RiskAndMfaBranch` requires `ResolvedUser` and `RiskCheckResult`; the flow definition maps its labels to destination states and any processor to run on that route.
 
 ```java
 // Guard: validates the OAuth callback (External transition)
@@ -146,7 +195,11 @@ BranchProcessor riskBranch = new BranchProcessor() {
 };
 ```
 
+The guard above is a placeholder: it always accepts fixed callback values. A real guard must validate the received callback instead. In particular, its fixed `state` does not match the random value generated by `oidcInit`, so combining these snippets unchanged will not demonstrate a successful login. The execution example below describes the path after a real callback has been accepted.
+
 ## 5. Define the Flow
+
+The definition connects the states and processing contracts in one place. `initiallyAvailable(OidcRequest.class)` declares what the caller will supply at startup. After the External callback transition, the engine can run token exchange, user resolution, risk assessment, and the selected branch without another HTTP request.
 
 ```java
 var oidcFlow = Tramli.define("oidc", OidcState.class)
@@ -166,17 +219,49 @@ var oidcFlow = Tramli.define("oidc", OidcState.class)
         .to(BLOCKED, "blocked")
         .endBranch()
     // Error handling
+    .onAnyError(TERMINAL_ERROR)
     .onError(CALLBACK_RECEIVED, RETRIABLE_ERROR)
     .onError(TOKEN_EXCHANGED, RETRIABLE_ERROR)
-    .onAnyError(TERMINAL_ERROR)
     // Retry
     .from(RETRIABLE_ERROR).auto(INIT, retryProcessor)
-    .build();  // ← 8-item validation + data-flow verification
+    .build();  // ← 8-item validation, including data-flow verification
 ```
 
-Read this top-to-bottom — **this IS the flow**. No other file needed.
+Both the `complete` and `mfa` routes run `sessionIssue`; the `blocked` route ends without issuing a session. Reading this definition tells you which work can follow each state. The processors contain the details of that work.
+
+The error and expiry settings have distinct roles:
+
+- `onAnyError(TERMINAL_ERROR)` sets the default error destination. It must come **before** the two `onError(...)` calls, which override it for token exchange and user resolution. Calling it last would overwrite those routes and leave `RETRIABLE_ERROR` unreachable.
+- `RETRIABLE_ERROR → INIT` declares a restart route with an application-supplied `retryProcessor`. It does not provide a retry scheduler or backoff policy. The current Java engine stops the automatic chain after routing a processor exception; declaring this edge alone does not immediately retry the failed login.
+- `maxGuardRetries(1)` routes the first guard rejection to the configured error destination. The Java engine uses this flow-level setting, not the guard's `maxRetries()` method.
+- `ttl(Duration.ofMinutes(10))` gives the flow a ten-minute lifetime. On resume, the engine checks expiry and completes an expired flow as `EXPIRED`; this is separate from a processor exception routed to `TERMINAL_ERROR`.
+
+## What build() Catches
+
+`build()` validates the definition before the engine runs a login. The core's eight structural checks cover reachable non-terminal states, a path from the initial state to a terminal state, absence of Auto/Branch cycles, unambiguous External routing, valid declared branch targets, data dependencies, no outgoing transitions from terminal states, and the presence of an initial state. See [8-item build validation](../README.md#8-item-build-validation).
+
+For this example, the data-dependency check connects the contracts in section 3: token exchange needs both the redirect data and the callback; session issuance needs both the resolved user and the original request. A required type must be supplied earlier on every path the validator analyzes, rather than merely appearing somewhere in the definition.
+
+If a new processor requires `FraudScore` but nothing produces it, the diagnostic identifies the missing dependency:
+
+```
+Flow 'oidc' has 1 validation error(s):
+  - Processor 'FraudCheckProcessor' at RISK_CHECKED → COMPLETE
+    requires FraudScore but it may not be available
+```
+
+An Auto/Branch cycle is also rejected:
+
+```
+Flow 'oidc' has 1 validation error(s):
+  - Auto/Branch transitions contain a cycle involving TOKEN_EXCHANGED
+```
+
+These checks validate the declared graph and contracts. They do not inspect service implementations, prove that a processor actually writes everything it declares, verify an ID token, or guarantee that an IdP will respond. Likewise, the branch check validates declared targets; a `decide()` implementation that returns an undeclared label fails at runtime. Keep tests for those behaviors in the application.
 
 ## 6. Run It
+
+The HTTP integration has two entry points. The login handler calls `startFlow()` with the initial request data, then redirects the browser to `OidcRedirect.authUrl`. The callback handler identifies the saved flow and calls `resumeAndExecute()` with the callback data. The store passed to the engine holds the flow between requests.
 
 ```java
 var engine = Tramli.engine(store);
@@ -201,15 +286,21 @@ IssuedSession session = flow.context().get(IssuedSession.class);
 // → set session cookie, redirect to session.redirectTo()
 ```
 
-**One HTTP callback → 5 transitions fire automatically.** Each processor runs in microseconds. The engine handles the chaining.
+On the successful `complete` path, one callback advances five transitions: the External transition, three Auto transitions, and the final Branch transition. Their duration includes the work performed by the application services.
+
+The snippet shows the success path after replacing the placeholder guard. A handler must check the outcome before reading `IssuedSession`: `BLOCKED`, an error, or expiry does not produce that value, and `COMPLETE_MFA` still requires the application's MFA handling. Section 8 describes plugins that make these outcomes and repeated callbacks easier to handle.
 
 ## 7. Generated Diagrams
+
+The same `FlowDefinition` can generate a state diagram and a data-flow diagram. Use the state diagram to inspect order and waiting points; use the data-flow diagram to inspect producers and consumers. Regenerate diagrams after changing the definition so that saved documentation follows the code.
 
 ### State Transition Diagram
 
 ```java
 String mermaid = MermaidGenerator.generate(oidcFlow);
 ```
+
+This view shows the main routes and the two specific error routes; the default error edges from `onAnyError` are omitted for readability.
 
 ```mermaid
 stateDiagram-v2
@@ -237,6 +328,8 @@ stateDiagram-v2
 String dataFlow = MermaidGenerator.generateDataFlow(oidcFlow);
 ```
 
+The data-flow view shows why token exchange requires both callback and redirect data, and why the original request must remain available until session issuance.
+
 ```mermaid
 flowchart LR
     initial -->|produces| OidcRequest
@@ -259,394 +352,51 @@ flowchart LR
     SessionIssueProcessor -->|produces| IssuedSession
 ```
 
-Both diagrams are **generated from the same FlowDefinition** that the engine executes. They can never be out of date.
-
-## What build() Catches
-
-If you add a new processor that requires `FraudScore` but nothing produces it:
-
-```
-Flow 'oidc' has 1 validation error(s):
-  - Processor 'FraudCheckProcessor' at RISK_CHECKED → COMPLETE
-    requires FraudScore but it may not be available
-```
-
-If you create a cycle in auto transitions:
-
-```
-Flow 'oidc' has 1 validation error(s):
-  - Auto/Branch transitions contain a cycle involving TOKEN_EXCHANGED
-```
-
-**These errors appear before any code runs.** No deployment. No 3am page.
-
----
-
 ## 8. Extending with Plugins
 
-The flow definition above stays **exactly the same**. Plugins layer on top — zero changes to processors or the flow graph.
-
-> Code examples below are shown in all 3 languages. Pick your language.
+Once the core flow is clear, plugins can add diagnostics and runtime support around the definition. Choose them according to the problem you need to solve. The [plugin tutorial](tutorial-plugins.md) contains TypeScript integration examples; this section relates those capabilities to the login flow.
 
 ### 8.1 Plugin Registration
 
-<details open><summary><b>Java</b></summary>
-
-```java
-var sink = new InMemoryTelemetrySink();
-var registry = new PluginRegistry<OidcState>();
-registry
-    .register(PolicyLintPlugin.defaults())
-    .register(new AuditStorePlugin())
-    .register(new EventLogStorePlugin())
-    .register(new ObservabilityEnginePlugin(sink))
-    .register(new RichResumeRuntimePlugin())
-    .register(new IdempotencyRuntimePlugin(new InMemoryIdempotencyRegistry()));
-
-var report = registry.analyzeAll(oidcFlow);
-var wrappedStore = registry.applyStorePlugins(new InMemoryFlowStore());
-var engine = Tramli.engine(wrappedStore);
-registry.installEnginePlugins(engine);
-var adapters = registry.bindRuntimeAdapters(engine);
-```
-</details>
-
-<details><summary><b>TypeScript</b></summary>
-
-```typescript
-const sink = new InMemoryTelemetrySink();
-const registry = new PluginRegistry<OidcState>();
-registry
-  .register(PolicyLintPlugin.defaults())
-  .register(new AuditStorePlugin())
-  .register(new EventLogStorePlugin())
-  .register(new ObservabilityEnginePlugin(sink))
-  .register(new RichResumeRuntimePlugin())
-  .register(new IdempotencyRuntimePlugin(new InMemoryIdempotencyRegistry()));
-
-const report = registry.analyzeAll(oidcFlow);
-const wrappedStore = registry.applyStorePlugins(new InMemoryFlowStore());
-const engine = Tramli.engine(wrappedStore);
-registry.installEnginePlugins(engine);
-const adapters = registry.bindRuntimeAdapters(engine);
-```
-</details>
-
-<details><summary><b>Rust</b></summary>
-
-```rust
-let sink = Arc::new(InMemoryTelemetrySink::new());
-let observability = ObservabilityPlugin::new(sink.clone());
-
-let linter = PolicyLintPlugin::<OidcState>::defaults();
-let mut report = PluginReport::new();
-linter.analyze(&oidc_flow, &mut report);
-
-let mut engine = FlowEngine::new(InMemoryFlowStore::new());
-observability.install(&mut engine);
-
-let idempotency = InMemoryIdempotencyRegistry::new();
-```
-</details>
+Registration connects analysis plugins, store wrappers, engine hooks, and runtime adapters to the application. For example, `PolicyLintPlugin` analyzes the definition, `AuditStorePlugin` wraps storage, and `RichResumeRuntimePlugin` supplies a resume adapter. These roles let the application add diagnostics without putting logging or callback-status classification inside each processor. The registration APIs differ by language.
 
 ### 8.2 Lint — Design-Time Policy Check
 
-Run lint in CI to catch design smells before they ship.
-
-<details open><summary><b>Java</b></summary>
-
-```java
-var report = registry.analyzeAll(oidcFlow);
-for (var finding : report.findings()) {
-    System.out.println("[" + finding.severity() + "] " + finding.pluginId() + ": " + finding.message());
-}
-// → [WARN] policy/dead-data: produced but never consumed: IssuedSession
-```
-</details>
-
-<details><summary><b>TypeScript</b></summary>
-
-```typescript
-const report = registry.analyzeAll(oidcFlow);
-for (const finding of report.findings()) {
-  console.warn(`[${finding.severity}] ${finding.pluginId}: ${finding.message}`);
-}
-```
-</details>
-
-<details><summary><b>Rust</b></summary>
-
-```rust
-let linter = PolicyLintPlugin::<OidcState>::defaults();
-let mut report = PluginReport::new();
-linter.analyze(&oidc_flow, &mut report);
-println!("{}", report.as_text());
-```
-</details>
-
-4 default policies: **terminal-outgoing**, **external-count** (>3), **dead-data**, **overwide-processor** (>3 produces). Custom policies are just functions.
+`PolicyLintPlugin` adds design-policy findings in CI. Its four default policies are **terminal-outgoing**, **external-count** (>3), **dead-data**, and **overwide-processor** (>3 produces). For example, it can flag `IssuedSession` as produced but not consumed by another step. In this flow the HTTP handler consumes it, so the finding needs interpretation rather than automatic removal of the output. Custom policies can express application-specific rules.
 
 ### 8.3 Audit — "What happened during this login?"
 
-Every transition is recorded with a snapshot of produced data.
-
-<details open><summary><b>Java</b></summary>
-
-```java
-var auditStore = (AuditingFlowStore) wrappedStore;
-for (var record : auditStore.auditedTransitions()) {
-    log.info("{} → {} at {}", record.from(), record.to(), record.timestamp());
-    log.info("  produced: {}", record.producedDataSnapshot());
-}
-// → INIT → REDIRECTED at 2026-04-09T10:00:01 produced: {OidcRedirect=...}
-// → REDIRECTED → CALLBACK_RECEIVED at ... produced: {OidcCallback=...}
-// → CALLBACK_RECEIVED → TOKEN_EXCHANGED at ... produced: {OidcTokens=...}
-```
-</details>
-
-<details><summary><b>TypeScript</b></summary>
-
-```typescript
-const auditStore = wrappedStore as AuditingFlowStore;
-for (const record of auditStore.auditedTransitions) {
-  console.log(`${record.from} → ${record.to} at ${record.timestamp}`);
-  console.log('  produced:', record.producedDataSnapshot);
-}
-```
-</details>
-
-<details><summary><b>Rust</b></summary>
-
-```rust
-for record in audit_store.audited_transitions() {
-    println!("{} → {} at {:?}", record.from, record.to, record.timestamp);
-}
-```
-</details>
+`AuditStorePlugin` records transitions with snapshots of newly produced context data. This helps answer whether a particular login reached token exchange or user resolution, rather than inferring progress from separate handler logs. The application queries the auditing store it configured.
 
 ### 8.4 Event Store — Replay and Compensation
 
-Versioned event log enables state reconstruction and saga compensation.
-
-<details open><summary><b>Java</b></summary>
-
-```java
-// Replay: "What state was the user in at version 3?"
-var replay = new ReplayService();
-var stateAtV3 = replay.stateAtVersion(eventStore.events(), flowId, 3);
-// → "TOKEN_EXCHANGED"
-
-// Projection: count transitions per flow
-var projection = new ProjectionReplayService();
-int count = projection.stateAtVersion(eventStore.events(), flowId, 999,
-    new ProjectionReducer<Integer>() {
-        public Integer initialState() { return 0; }
-        public Integer apply(Integer state, VersionedTransitionEvent e) { return state + 1; }
-    });
-
-// Compensation: rollback on token exchange failure
-var compensation = new CompensationService(
-    (event, cause) -> event.trigger().equals("OidcTokenExchangeProcessor")
-        ? new CompensationPlan("REVOKE_PARTIAL_SESSION", Map.of("reason", cause.getMessage()))
-        : null,
-    eventStore);
-```
-</details>
-
-<details><summary><b>TypeScript</b></summary>
-
-```typescript
-// Replay
-const replay = new ReplayService();
-const stateAtV3 = replay.stateAtVersion(eventStore.events(), flowId, 3);
-
-// Projection
-const projection = new ProjectionReplayService();
-const count = projection.stateAtVersion(eventStore.events(), flowId, 999,
-  { initialState: () => 0, apply: (n, _event) => n + 1 });
-
-// Compensation
-const compensation = new CompensationService(
-  (event, cause) => event.trigger === 'OidcTokenExchangeProcessor'
-    ? { action: 'REVOKE_PARTIAL_SESSION', metadata: { reason: cause.message } }
-    : null,
-  eventStore);
-```
-</details>
-
-<details><summary><b>Rust</b></summary>
-
-```rust
-// Replay
-let state_at_v3 = ReplayService::state_at_version(event_store.events(), &flow_id, 3);
-
-// Projection
-struct CountReducer;
-impl ProjectionReducer<usize> for CountReducer {
-    fn initial_state(&self) -> usize { 0 }
-    fn apply(&self, state: usize, _event: &VersionedTransitionEvent) -> usize { state + 1 }
-}
-let count = ProjectionReplayService::state_at_version(
-    event_store.events(), &flow_id, 999, &CountReducer);
-
-// Compensation
-let compensation = CompensationService::new(Box::new(|event, cause| {
-    if event.trigger == "OidcTokenExchangeProcessor" {
-        Some(CompensationPlan { action: "REVOKE_PARTIAL_SESSION".into(), metadata: cause.into() })
-    } else { None }
-}));
-```
-</details>
+A versioned event log supports inspecting earlier flow states with `ReplayService` and deriving values, such as transition counts, with `ProjectionReplayService`. `CompensationService` uses an application-defined plan to record compensating actions. Compensation means arranging an action to undo a prior effect; recording a plan does not itself revoke a session or roll back an IdP request.
 
 ### 8.5 Rich Resume — Status Classification
 
-Know exactly what happened when a callback arrives.
-
-<details open><summary><b>Java</b></summary>
-
-```java
-var resume = (RichResumeExecutor) adapters.get("rich-resume");
-var result = resume.resume(flowId, oidcFlow, externalData, OidcState.REDIRECTED);
-
-switch (result.status()) {
-    case TRANSITIONED          -> handleSuccess(result.flow());
-    case ALREADY_COMPLETED     -> respond(200, "already logged in");
-    case REJECTED              -> respond(400, "callback invalid");
-    case NO_APPLICABLE_TRANSITION -> respond(404, "no pending login");
-    case EXCEPTION_ROUTED      -> handleError(result.error());
-}
-```
-</details>
-
-<details><summary><b>TypeScript</b></summary>
-
-```typescript
-const executor = new RichResumeExecutor(engine);
-const result = await executor.resume(flowId, oidcFlow, externalData, 'REDIRECTED');
-
-switch (result.status) {
-  case 'TRANSITIONED':          return handleSuccess(result.flow!);
-  case 'ALREADY_COMPLETE':      return res.json({ msg: 'already logged in' });
-  case 'REJECTED':              return res.status(400).json({ msg: 'callback invalid' });
-  case 'NO_APPLICABLE_TRANSITION': return res.status(404).json({ msg: 'no pending login' });
-  case 'EXCEPTION_ROUTED':      return handleError(result.error!);
-}
-```
-</details>
-
-<details><summary><b>Rust</b></summary>
-
-```rust
-let result = RichResumeExecutor::resume(&mut engine, &flow_id, external_data, OidcState::Redirected);
-
-match result.status {
-    RichResumeStatus::Transitioned      => handle_success(&flow_id),
-    RichResumeStatus::AlreadyComplete   => respond(200, "already logged in"),
-    RichResumeStatus::Rejected          => respond(400, "callback invalid"),
-    RichResumeStatus::NoApplicableTransition => respond(404, "no pending login"),
-    RichResumeStatus::ExceptionRouted   => handle_error(result.error),
-}
-```
-</details>
+A callback handler needs to distinguish five outcomes: a transition occurred, the flow had already completed, the callback was rejected, no transition applied, or an exception was routed. `RichResumeExecutor` returns these as `RichResumeStatus` values, so the handler can select its response without reconstructing the outcome from state comparisons. Status spelling differs between language implementations.
 
 ### 8.6 Idempotency — Double Callback Protection
 
-OAuth callbacks can arrive twice (user refreshes, network retry). Use the `state` parameter as `commandId`.
-
-<details open><summary><b>Java</b></summary>
-
-```java
-var idempotent = (IdempotentRichResumeExecutor) adapters.get("idempotency");
-var result = idempotent.resume(flowId, oidcFlow,
-    new CommandEnvelope("callback-" + oauthState, externalData),
-    OidcState.REDIRECTED);
-
-if (result.status() == ALREADY_COMPLETED) {
-    // Second callback — safe no-op
-    return "login already processed";
-}
-```
-</details>
-
-<details><summary><b>TypeScript</b></summary>
-
-```typescript
-const idempotent = new IdempotentRichResumeExecutor(engine, new InMemoryIdempotencyRegistry());
-const result = await idempotent.resume(flowId, oidcFlow,
-  { commandId: `callback-${oauthState}`, externalData },
-  'REDIRECTED');
-
-if (result.status === 'ALREADY_COMPLETE') {
-  return 'login already processed';
-}
-```
-</details>
-
-<details><summary><b>Rust</b></summary>
-
-```rust
-let registry = InMemoryIdempotencyRegistry::new();
-let result = IdempotentRichResumeExecutor::resume(
-    &mut engine, &registry, &flow_id,
-    CommandEnvelope { command_id: format!("callback-{}", oauth_state), external_data },
-    OidcState::Redirected);
-
-if result.status == RichResumeStatus::AlreadyComplete {
-    return "login already processed";
-}
-```
-</details>
+A browser refresh or network retry can deliver the same callback again. `IdempotentRichResumeExecutor` uses a `commandId` and a registry to recognize an already processed command; this example's command identifier is based on the callback's `state`. This adds explicit command deduplication to the core's completed-flow handling. It does not replace callback validation.
 
 ### 8.7 Diagram and Documentation Generation
 
-<details open><summary><b>Java</b></summary>
-
-```java
-// All-in-one diagram bundle
-var bundle = new DiagramPlugin().generate(oidcFlow);
-writeFile("oidc-state.mmd", bundle.mermaid());
-writeFile("oidc-dataflow.json", bundle.dataFlowJson());
-
-// Markdown catalog
-var docs = new DocumentationPlugin().toMarkdown(oidcFlow);
-
-// BDD test scenarios (1 per transition)
-var plan = new ScenarioTestPlugin().generate(oidcFlow);
-// → 11 scenarios generated automatically
-```
-</details>
-
-<details><summary><b>TypeScript</b></summary>
-
-```typescript
-const bundle = new DiagramPlugin().generate(oidcFlow);
-const docs = new DocumentationPlugin().toMarkdown(oidcFlow);
-const plan = new ScenarioTestPlugin().generate(oidcFlow);
-```
-</details>
-
-<details><summary><b>Rust</b></summary>
-
-```rust
-let bundle = DiagramPlugin::generate(&oidc_flow);
-let docs = DocumentationPlugin::to_markdown(&oidc_flow);
-let plan = ScenarioTestPlugin::generate(&oidc_flow);
-```
-</details>
+`DiagramPlugin` groups generated diagrams, `DocumentationPlugin` creates a Markdown catalog, and `ScenarioTestPlugin` creates test-scenario descriptions from the definition. These make the flow available to reviewers who do not need to read each processor. Generated scenario descriptions provide a starting point for tests; they do not test the OIDC service implementations.
 
 ### What Plugins Add to this Flow
 
-| Concern | Without plugins | With plugins |
-|---------|----------------|--------------|
-| Double OAuth callback | Runs twice, double session | `IdempotencyRuntimePlugin` deduplicates by `state` param |
-| "What happened during login X?" | `transitionLog` only | `AuditStorePlugin` records data snapshots per transition |
-| State reconstruction after crash | Latest state only | `ReplayService` rebuilds any version |
-| "Did the callback transition or was it rejected?" | Compare states manually | `RichResumeStatus` in 5 classifications |
-| Design mistakes in CI | `build()` 8-item check | `PolicyLintPlugin` adds dead-data / overwide-processor detection |
-| Docs for non-engineers | Mermaid only | `DiagramBundle` + markdown catalog + BDD scenarios |
+| Question | Relevant plugin capability |
+|----------|----------------------------|
+| Was this callback already processed? | Idempotency with a command registry |
+| Which steps ran, and what data did they add? | Audit records |
+| What was the state at an earlier version? | Event-log replay |
+| Did resume advance, reject, or route an error? | Rich Resume status classification |
+| Is a declared output unused within the flow? | Policy lint |
+| How can reviewers inspect the definition? | Diagrams, a documentation catalog, and scenario descriptions |
 
-**Core flow definition: unchanged. Processors: unchanged. Plugins: layered on top.**
+The core definition keeps the order, waiting points, branches, and data contracts visible. Plugins add the operational views needed around that definition.
 
 ---
 
-*This is the same flow that powers volta-auth-proxy in production, handling OIDC, Passkey, MFA, and invitation flows.*
+Example origin: [volta-auth-proxy](https://github.com/opaopa6969/volta-auth-proxy), an identity gateway that uses tramli for OIDC, Passkey, MFA, and invitation flows. Knowledge of that project is not needed to follow this example.
