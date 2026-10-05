@@ -1,276 +1,105 @@
 [日本語版](tutorial-plugins-ja.md)
 
-# Plugin Tutorial — A Conversation
+<a id="plugin-tutorial--a-conversation"></a>
 
-*A newcomer (N) sits down with the author (A) to learn tramli's plugin system from scratch.*
+# Plugin Tutorial
 
----
+This tutorial is for engineers trying tramli plugins for the first time. You will run a small flow, inspect its history, and send the same external command twice.
+For plugin selection, API details, and limits, use the [Plugin Guide](plugin-guide.md).
+Steps 1–8 form one TypeScript example; steps 9–11 show optional extensions and an alternative way to assemble plugins.
 
-## Act 1: Why Plugins?
+<a id="act-1-why-plugins"></a>
 
-**N:** I just read the README. The core engine has 8 building blocks and a frozen verification kernel. So where do things like auditing and observability go?
+## 1. Prepare a Flow That Waits for an Event
 
-**A:** That's exactly what the plugin system solves. The core — FlowState, StateProcessor, TransitionGuard, BranchProcessor, FlowContext, FlowDefinition, FlowEngine, FlowStore — never changes. Plugins layer on top using 6 SPI types.
+Suppose you can see a request's current state but cannot tell how it got there. You also need to handle redelivery of the event that lets it proceed. We will add logging and duplicate suppression around the engine, leaving the Processors responsible for their own transitions.
 
-**N:** SPI?
+Use a TypeScript project with Node.js 20 or later, TypeScript, `@unlaxer/tramli`, and `@unlaxer/tramli-plugins` installed. These examples follow the repository's `main`; check that your installed versions expose the APIs used here.
 
-**A:** Service Provider Interface. Each SPI defines one hook point. You implement the interface, register it, done.
-
----
-
-## Act 2: The 6 SPI Types
-
-**N:** What are the 6?
-
-**A:** Let's go through them:
-
-1. **AnalysisPlugin** — Runs static analysis against a `FlowDefinition`. Think of it as lint for your state machine.
-2. **StorePlugin** — Wraps a `FlowStore` with a decorator. The Audit and EventLog plugins use this.
-3. **EnginePlugin** — Installs hooks on `FlowEngine` (e.g., loggers for observability).
-4. **RuntimeAdapterPlugin** — Binds an engine to a richer API. RichResume and Idempotency use this.
-5. **GenerationPlugin** — Takes input, produces output. Diagram, Hierarchy, and Scenario plugins use this.
-6. **DocumentationPlugin** — A specialization of GenerationPlugin that returns a string.
-
-**N:** And PluginRegistry ties them all together?
-
-**A:** Yes. You register plugins, then call lifecycle methods in order:
+Create `plugins.mts`. Copy the TypeScript blocks in steps 1–8 into that file in order. The flow below comes from the existing [plugin integration tests](../lang/ts-plugins/tests/plugin-integration.test.ts): `CREATED → PENDING` runs automatically, `PENDING → CONFIRMED` waits for an external call, and `CONFIRMED → DONE` runs automatically. `ERROR` is the error destination. The guard accepts in this exercise so we can focus on the plugins.
 
 ```typescript
-import { PluginRegistry, PolicyLintPlugin, AuditStorePlugin,
-  EventLogStorePlugin, ObservabilityEnginePlugin, InMemoryTelemetrySink
-} from '@unlaxer/tramli-plugins';
+import { Tramli, InMemoryFlowStore, flowKey } from '@unlaxer/tramli';
+import type { StateConfig, StateProcessor, TransitionGuard, GuardOutput, FlowContext } from '@unlaxer/tramli';
 
-const registry = new PluginRegistry<OrderState>();
-const sink = new InMemoryTelemetrySink();
+type S = 'CREATED' | 'PENDING' | 'CONFIRMED' | 'DONE' | 'ERROR';
 
-registry
-  .register(PolicyLintPlugin.defaults())           // Analysis
-  .register(new AuditStorePlugin())                // Store
-  .register(new EventLogStorePlugin())             // Store
-  .register(new ObservabilityEnginePlugin(sink));   // Engine
+const config: Record<S, StateConfig> = {
+  CREATED:   { terminal: false, initial: true },
+  PENDING:   { terminal: false },
+  CONFIRMED: { terminal: false },
+  DONE:      { terminal: true },
+  ERROR:     { terminal: true },
+};
 
-// 1. Lint your definition
-const report = registry.analyzeAll(definition);
-console.log(report.asText());
+interface Input { value: string }
+interface Middle { processed: boolean }
+interface Output { result: string }
 
-// 2. Wrap the store
-const store = new InMemoryFlowStore();
-const wrappedStore = registry.applyStorePlugins(store);
+const InputKey = flowKey<Input>('Input');
+const MiddleKey = flowKey<Middle>('Middle');
+const OutputKey = flowKey<Output>('Output');
 
-// 3. Create engine with wrapped store, install hooks
-const engine = Tramli.engine(wrappedStore);
-registry.installEnginePlugins(engine);
+const proc1: StateProcessor<S> = {
+  name: 'Proc1',
+  requires: [InputKey],
+  produces: [MiddleKey],
+  process(ctx: FlowContext) {
+    const input = ctx.get(InputKey);
+    ctx.put(MiddleKey, { processed: true });
+  },
+};
 
-// 4. Bind runtime adapters
-const adapters = registry.bindRuntimeAdapters(engine);
-```
+const proc2: StateProcessor<S> = {
+  name: 'Proc2',
+  requires: [MiddleKey],
+  produces: [OutputKey],
+  process(ctx: FlowContext) {
+    ctx.put(OutputKey, { result: 'done' });
+  },
+};
 
----
-
-## Act 3: Audit — "What happened?"
-
-**N:** Let's start with something concrete. How does auditing work?
-
-**A:** `AuditStorePlugin` wraps your FlowStore. Every time `recordTransition` is called, the wrapper captures a snapshot of the produced data alongside the transition metadata.
-
-```typescript
-import { AuditStorePlugin, AuditingFlowStore } from '@unlaxer/tramli-plugins';
-
-const rawStore = new InMemoryFlowStore();
-const auditStore = new AuditStorePlugin().wrapStore(rawStore);
-const engine = Tramli.engine(auditStore);
-
-// Run your flow...
-const flow = await engine.startFlow(def, 'session-1', initialData);
-
-// Inspect audit log
-for (const record of auditStore.auditedTransitions) {
-  console.log(`${record.from} → ${record.to} at ${record.timestamp}`);
-  console.log('  produced:', record.producedDataSnapshot);
+function testGuard(accept: boolean): TransitionGuard<S> {
+  return {
+    name: 'TestGuard',
+    requires: [MiddleKey],
+    produces: [],
+    maxRetries: 3,
+    validate(_ctx: FlowContext): GuardOutput {
+      return accept
+        ? { type: 'accepted' }
+        : { type: 'rejected', reason: 'declined' };
+    },
+  };
 }
-```
 
-**N:** So it's non-invasive? My processors don't know about auditing?
-
-**A:** Exactly. Decorator pattern. Zero coupling.
-
----
-
-## Act 4: Event Store — Replay and Compensation
-
-**N:** What about event sourcing?
-
-**A:** We have "Tenure-lite" — intentionally lighter than full event sourcing. `EventLogStorePlugin` wraps the store and appends versioned events.
-
-```typescript
-import { EventLogStorePlugin, EventLogStoreDecorator,
-  ReplayService, ProjectionReplayService, CompensationService
-} from '@unlaxer/tramli-plugins';
-
-const eventStore = new EventLogStorePlugin().wrapStore(rawStore);
-const engine = Tramli.engine(eventStore);
-
-// After running flows, query the event log:
-const events = eventStore.eventsForFlow(flowId);
-```
-
-**N:** And replay?
-
-**A:** `ReplayService` reconstructs the state at any version:
-
-```typescript
-const replay = new ReplayService();
-const stateAtV3 = replay.stateAtVersion(eventStore.events(), flowId, 3);
-// → 'CONFIRMED'
-```
-
-For custom aggregations, use `ProjectionReplayService` with a reducer:
-
-```typescript
-const projection = new ProjectionReplayService();
-const transitionCount = projection.stateAtVersion(
-  eventStore.events(), flowId, 999,
-  { initialState: () => 0, apply: (count, event) => count + 1 }
-);
-```
-
-**N:** What about compensation — saga patterns?
-
-**A:** `CompensationService` takes a resolver function and records compensation events:
-
-```typescript
-const compensation = new CompensationService(
-  (event, cause) => ({
-    action: 'REFUND',
-    metadata: { reason: cause.message, originalTransition: event.trigger }
-  }),
-  eventStore
-);
-
-// When a transition fails:
-compensation.compensate(failedEvent, error);
-// → appends a COMPENSATION event to the log
-```
-
----
-
-## Act 5: Rich Resume and Idempotency
-
-**N:** The core `resumeAndExecute` just returns a flow. How do I tell if it actually transitioned?
-
-**A:** That's what `RichResumeExecutor` does. It classifies the outcome:
-
-```typescript
-import { RichResumeExecutor } from '@unlaxer/tramli-plugins';
-
-const executor = new RichResumeExecutor(engine);
-const result = await executor.resume(flowId, definition, externalData, previousState);
-
-switch (result.status) {
-  case 'TRANSITIONED':        // moved to a new state
-  case 'ALREADY_COMPLETE':    // flow was already done
-  case 'REJECTED':            // guard rejected, no transition
-  case 'NO_APPLICABLE_TRANSITION': // no matching transition found
-  case 'EXCEPTION_ROUTED':    // error routed to error state
+function buildDef(accept = true) {
+  return Tramli.define<S>('test', config)
+    .setTtl(5 * 60 * 1000)
+    .initiallyAvailable(InputKey)
+    .from('CREATED').auto('PENDING', proc1)
+    .from('PENDING').external('CONFIRMED', testGuard(accept))
+    .from('CONFIRMED').auto('DONE', proc2)
+    .onAnyError('ERROR')
+    .build();
 }
+
+const def = buildDef(true);
 ```
 
-**N:** And idempotency?
+<a id="act-7-lint-policies"></a>
 
-**A:** `IdempotentRichResumeExecutor` wraps RichResume with a command registry:
+## 2. Check the Definition with Lint
 
-```typescript
-import { InMemoryIdempotencyRegistry, IdempotentRichResumeExecutor } from '@unlaxer/tramli-plugins';
-
-const registry = new InMemoryIdempotencyRegistry();
-const executor = new IdempotentRichResumeExecutor(engine, registry);
-
-// First call processes normally
-const r1 = await executor.resume(flowId, definition,
-  { commandId: 'cmd-abc', externalData: new Map() }, previousState);
-// r1.status === 'TRANSITIONED'
-
-// Duplicate call is suppressed
-const r2 = await executor.resume(flowId, definition,
-  { commandId: 'cmd-abc', externalData: new Map() }, previousState);
-// r2.status === 'ALREADY_COMPLETE'
-```
-
-**N:** So I just need a unique commandId per user action?
-
-**A:** That's it. The `InMemoryIdempotencyRegistry` is for testing. In production, back it with Redis or a database.
-
----
-
-## Act 6: Observability
-
-**N:** How do I monitor flows in production?
-
-**A:** `ObservabilityEnginePlugin` installs logger hooks on the engine. Events flow into a `TelemetrySink`:
-
-```typescript
-import { ObservabilityEnginePlugin, InMemoryTelemetrySink } from '@unlaxer/tramli-plugins';
-
-const sink = new InMemoryTelemetrySink();
-const plugin = new ObservabilityEnginePlugin(sink);
-plugin.install(engine);
-
-// After flow execution:
-for (const event of sink.events()) {
-  console.log(`[${event.type}] ${event.flowId}: ${JSON.stringify(event.data)}`);
-}
-```
-
-**N:** Can I pipe events to Prometheus or Datadog?
-
-**A:** Implement the `TelemetrySink` interface and emit metrics from `emit()`. The `InMemoryTelemetrySink` is just for testing.
-
-**N:** Won't `emit()` block under high load?
-
-**A:** `emit()` is intentionally sync (DD-012/DD-013). For HTTP/gRPC sinks, use the channel pattern — send to a channel inside `emit()`, drain on a separate thread. It's 5 lines of code. See [`docs/patterns/non-blocking-sink.md`](patterns/non-blocking-sink.md).
-
-**N:** I heard v3.3.0 added `durationMicros`?
-
-**A:** Yes. `TransitionLogEntry`, `ErrorLogEntry`, and `GuardLogEntry` now include `durationMicros` (integer microseconds). Great for spotting bottlenecks:
-
-```typescript
-engine.setTransitionLogger(entry => {
-  if (entry.durationMicros > 1000) { // over 1ms
-    console.warn(`Slow transition: ${entry.from} → ${entry.to} (${entry.durationMicros}μs)`);
-  }
-});
-```
-
----
-
-## Act 7: Lint Policies
-
-**N:** You mentioned lint earlier. What does it check?
-
-**A:** `PolicyLintPlugin` runs 4 default policies:
-
-1. **terminal-outgoing** — Terminal states shouldn't have outgoing transitions
-2. **external-count** — Warns if a state has more than 3 external transitions
-3. **dead-data** — Types that are produced but never consumed
-4. **overwide-processor** — Processors that produce more than 3 types
+A structurally valid flow can still contain unused data or a Processor with too many outputs. Run `PolicyLintPlugin` after `build()` to find those review points.
 
 ```typescript
 import { PolicyLintPlugin, PluginReport } from '@unlaxer/tramli-plugins';
 
-const lint = PolicyLintPlugin.defaults();
+const lint = PolicyLintPlugin.defaults<S>();
 const report = new PluginReport();
-lint.analyze(definition, report);
-
-for (const finding of report.findings()) {
-  console.warn(`[${finding.severity}] ${finding.pluginId}: ${finding.message}`);
-}
-```
-
-**N:** v3.3.0 added `location` to Finding. How does that work?
-
-**A:** `FindingLocation` is a discriminated union with 4 variants: `Transition(from, to)`, `State(state)`, `Data(dataKey)`, `Flow`. Lint results now tell you exactly where the issue is:
-
-```typescript
+lint.analyze(def, report);
+console.log(report.asText());
 for (const finding of report.findings()) {
   if (finding.location?.type === 'transition') {
     console.warn(`${finding.message} @ ${finding.location.fromState} → ${finding.location.toState}`);
@@ -278,52 +107,171 @@ for (const finding of report.findings()) {
 }
 ```
 
-Custom policies can use `warnAt()` to attach location:
+Expect a `policy/dead-data` warning for `Output`: `Proc2` produces it, but no later step reads it. That is a review prompt, not a build failure. The [guide](plugin-guide.md#lint--policy) lists all four default policies, their thresholds, and how to add a custom policy or a finding location.
+
+<a id="act-3-audit--what-happened"></a>
+
+## 3. Add Audit and Event Logs to the Store
+
+To inspect data at each transition, use `AuditStorePlugin`. To query the sequence of transitions by version, add `EventLogStorePlugin`. Wrap the store before creating the engine, and keep references to both wrappers so you can read their logs later.
 
 ```typescript
-report.warnAt('my-policy', 'Too many transitions', { type: 'state', state: 'PENDING' });
+import { AuditStorePlugin, EventLogStorePlugin } from '@unlaxer/tramli-plugins';
+
+const rawStore = new InMemoryFlowStore();
+const auditStore = new AuditStorePlugin().wrapStore(rawStore);
+const eventStore = new EventLogStorePlugin().wrapStore(auditStore);
+const engine = Tramli.engine(eventStore as any);
 ```
 
-**N:** Can I add custom policies?
+The cast follows the integration tests: the current TypeScript `Tramli.engine()` parameter is the concrete `InMemoryFlowStore` type. Both wrappers provide the methods used by the engine. Their logs are in memory; wrapping a persistent store would not itself persist these logs.
 
-**A:** Yes. A policy is just a function `(definition, report) => void`:
+<a id="act-6-observability"></a>
+
+## 4. Collect Execution Telemetry
+
+To see which guard ran or which transition was slow, install `ObservabilityEnginePlugin` before execution. This example also retains a direct logger that warns on transitions over 1000 microseconds (1 ms).
 
 ```typescript
-const customPolicies = [
-  ...allDefaultPolicies(),
-  (def, report) => {
-    if (def.allStates().length > 20) {
-      report.warn('my-policy/too-many-states', 'Consider splitting this flow');
-    }
+import { ObservabilityEnginePlugin, InMemoryTelemetrySink } from '@unlaxer/tramli-plugins';
+
+engine.setTransitionLogger(entry => {
+  if (entry.durationMicros > 1000) {
+    console.warn(`Slow transition: ${entry.from} → ${entry.to} (${entry.durationMicros}μs)`);
   }
-];
-const lint = new PolicyLintPlugin(customPolicies);
+});
+const sink = new InMemoryTelemetrySink();
+const plugin = new ObservabilityEnginePlugin(sink);
+plugin.install(engine, { append: true });
 ```
 
----
+`append: true` preserves the existing logger; default installation replaces it. Transition, error, and guard log entries expose integer `durationMicros` values. For remote output, implement `TelemetrySink` and keep its synchronous `emit()` short by queueing work; see the [non-blocking sink pattern](patterns/non-blocking-sink.md).
 
-## Act 8: Generation Plugins
+## 5. Start the Flow and Inspect the First Transition
+
+Start with the input required by `Proc1`. The engine runs that Processor and stops at `PENDING`, waiting for an external call. Inspect the audit record to see the context at that point.
+
+```typescript
+const flow = await engine.startFlow(def, 's1',
+  new Map([[InputKey as string, { value: 'test' }]]));
+console.log(flow.currentState);
+for (const record of auditStore.auditedTransitions) {
+  console.log(`${record.from} → ${record.to} at ${record.timestamp}`);
+  console.log('produced:', record.producedDataSnapshot);
+}
+```
+
+Expect `PENDING` and a `CREATED → PENDING` audit entry. Despite its field name, `producedDataSnapshot` contains all context map entries at recording time, including `Input` and `Middle`; it is not just the data produced by that transition.
+
+<a id="act-5-rich-resume-and-idempotency"></a>
+
+## 6. Resume with Duplicate Suppression
+
+An event sender can retry after losing a response. Use the same command ID for redelivery so the second attempt does not execute the flow again. `IdempotentRichResumeExecutor` uses Rich Resume's result classification and adds command tracking.
+
+```typescript
+import { InMemoryIdempotencyRegistry, IdempotentRichResumeExecutor } from '@unlaxer/tramli-plugins';
+
+const commandRegistry = new InMemoryIdempotencyRegistry();
+const executor = new IdempotentRichResumeExecutor(engine, commandRegistry);
+const previousState = flow.currentState;
+const r1 = await executor.resume(flow.id, def,
+  { commandId: 'cmd-1', externalData: new Map() }, previousState);
+console.log(r1.status, r1.flow?.currentState);
+const r2 = await executor.resume(flow.id, def,
+  { commandId: 'cmd-1', externalData: new Map() }, previousState);
+console.log(r2.status, r2.error?.message);
+```
+
+Expect `TRANSITIONED DONE`, followed by `ALREADY_COMPLETE` and `duplicate commandId cmd-1`. The empty external-data map is sufficient here because the exercise guard reads `Middle` from the existing context. In an application, supply the data your external transition needs.
+
+Without duplicate suppression, use `new RichResumeExecutor(engine).resume(flowId, definition, externalData, previousState)`. The [guide's status table](plugin-guide.md#rich-resume) explains all five results. Here, `ALREADY_COMPLETE` means the command was already seen. The ID is recorded before execution, even if the attempt is rejected or fails; this is not proof that the business operation succeeded. The in-memory registry also loses its records on restart.
+
+<a id="act-4-event-store--replay-and-compensation"></a>
+
+## 7. Read the History and Telemetry
+
+To check where the flow was at a particular version, query the event log after execution. `ReplayService` returns a state name. For your own aggregations, pass a reducer to `ProjectionReplayService`.
+
+```typescript
+import { ReplayService, ProjectionReplayService } from '@unlaxer/tramli-plugins';
+
+const events = eventStore.eventsForFlow(flow.id);
+console.log(events.map(event => [event.version, event.from, event.to]));
+const stateAtV3 = new ReplayService().stateAtVersion(eventStore.events(), flow.id, 3);
+console.log(stateAtV3);
+const eventCount = new ProjectionReplayService().stateAtVersion(
+  eventStore.events(), flow.id, 999,
+  { initialState: () => 0, apply: (count, event) => count + 1 }
+);
+console.log(eventCount);
+for (const event of sink.events()) {
+  console.log(`[${event.type}] ${event.flowId}: ${JSON.stringify(event.data)}`);
+}
+```
+
+Expect three transition events: version 1 to `PENDING`, version 2 to `CONFIRMED`, and version 3 to `DONE`. `stateAtV3` is `DONE` and the event count is 3. Duplicate suppression adds no transition. The telemetry sink includes transition events and the guard result.
+
+Replay does not rerun Processors or restore their data. If you need to record an action such as a refund after a failure, [CompensationService](plugin-guide.md#event-log-and-replay) appends a compensation event using your resolver. It does not perform the refund. The reducer above counts those events too if they are present.
+
+<a id="act-8-generation-plugins"></a>
+
+## 8. Generate Diagrams, Documentation, and Test Plans
 
 ### Diagrams
 
-**N:** I know tramli generates Mermaid diagrams. What does the plugin add?
-
-**A:** `DiagramGenerationPlugin` bundles three outputs at once:
+To keep a diagram aligned with the flow definition, generate it with `DiagramPlugin`. The bundle also includes a data-flow graph as JSON and a Markdown summary.
 
 ```typescript
 import { DiagramPlugin } from '@unlaxer/tramli-plugins';
 
-const bundle = new DiagramPlugin().generate(definition);
-// bundle.mermaid         → Mermaid stateDiagram-v2
-// bundle.dataFlowJson    → JSON data-flow graph
-// bundle.markdownSummary → Quick stats
+const bundle = new DiagramPlugin().generate(def);
+console.log(bundle.mermaid);
+console.log(bundle.dataFlowJson);
+console.log(bundle.markdownSummary);
 ```
 
-### Hierarchy
+<a id="act-9-documentation"></a>
 
-**N:** What's the Hierarchy plugin for?
+### Documentation
 
-**A:** It lets you author state hierarchies (parent/child) and flatten them into tramli's flat enum model:
+To share a readable list of states and transitions, use `DocumentationPlugin`. For this flow the Markdown starts with `# Flow Catalog: test` and lists the states and transitions defined in step 1.
+
+```typescript
+import { DocumentationPlugin } from '@unlaxer/tramli-plugins';
+
+const md = new DocumentationPlugin().toMarkdown(def);
+console.log(md);
+```
+
+### Test Scenarios
+
+To review which cases need tests, generate a plan with `ScenarioTestPlugin`. Each scenario describes its starting state, trigger, and expected destination. Its `kind` is `happy`, `error`, `guard_rejection`, or `timeout`, depending on the definition.
+
+```typescript
+import { ScenarioTestPlugin } from '@unlaxer/tramli-plugins';
+
+const plan = new ScenarioTestPlugin().generate(def);
+for (const scenario of plan.scenarios) {
+  console.log(`[${scenario.kind}] ${scenario.name}`);
+  scenario.steps.forEach(s => console.log(`  ${s}`));
+}
+```
+
+Expect happy-path, error, and guard-rejection scenarios. This definition has a flow TTL but no per-transition timeout, so it produces no `timeout` scenario. `generate()` returns descriptions; you still need tests of Processor behavior.
+
+Run the completed file from your project:
+
+```bash
+npx tsc plugins.mts --target ES2022 --module NodeNext --strict --skipLibCheck
+node plugins.mjs
+```
+
+<a id="hierarchy"></a>
+
+## 9. Optional: Generate a Flat Definition from a Hierarchy
+
+When related states are easier to describe as a parent and its children, use the hierarchy helpers. This independent example describes `PROCESSING` with `VALIDATING` and `CONFIRMING` children, then prints source text.
 
 ```typescript
 import { flowSpec, stateSpec, transitionSpec,
@@ -338,143 +286,77 @@ spec.rootStates.push(processing);
 spec.rootStates.push(stateSpec('DONE', { terminal: true }));
 spec.transitions.push(transitionSpec('PROCESSING', 'DONE', 'complete'));
 
-// Synthesize entry/exit transitions
 const entryExit = new EntryExitCompiler().synthesize(spec);
-
-// Generate TypeScript source
+console.log(entryExit);
 const gen = new HierarchyCodeGenerator();
 console.log(gen.generateStateConfig(spec));
 console.log(gen.generateBuilderSkeleton(spec));
 ```
 
-### Test Scenarios
+The state configuration is flat. The builder contains comments for the transitions; fill in the actual transition declarations and Processors, then call `build()` to validate them. The entry/exit specifications are a separate output, not automatically inserted into the generated builder. This does not add hierarchical runtime states.
 
-**N:** BDD from a flow definition?
+<a id="act-10-subflow-validation"></a>
 
-**A:** `ScenarioTestPlugin` generates scenarios from your flow definition. Since v3.3.0 it also generates error paths, guard rejections, and timeout scenarios. Each scenario has a `kind` field (`happy`, `error`, `guard_rejection`, `timeout`):
+## 10. Optional: Check a Child Flow's Inputs
 
-```typescript
-import { ScenarioTestPlugin } from '@unlaxer/tramli-plugins';
-
-const plan = new ScenarioTestPlugin().generate(definition);
-for (const scenario of plan.scenarios) {
-  console.log(`Scenario: ${scenario.name}`);
-  scenario.steps.forEach(s => console.log(`  ${s}`));
-}
-// Output:
-//   Scenario: CREATED_to_PENDING
-//     given flow in CREATED
-//     when auto processor OrderInit runs
-//     then flow reaches PENDING
-```
-
----
-
-## Act 9: Documentation
-
-**N:** And documentation generation?
-
-**A:** `DocumentationPlugin` generates a markdown flow catalog:
-
-```typescript
-import { DocumentationPlugin } from '@unlaxer/tramli-plugins';
-
-const md = new DocumentationPlugin().toMarkdown(definition);
-console.log(md);
-// # Flow Catalog: order
-//
-// ## States
-// - `CREATED` (initial)
-// - `PAYMENT_PENDING`
-// - `PAYMENT_CONFIRMED`
-// - `SHIPPED` (terminal)
-// - `CANCELLED` (terminal)
-//
-// ## Transitions
-// - `CREATED -> PAYMENT_PENDING` via `OrderInit`
-// ...
-```
-
----
-
-## Act 10: SubFlow Validation
-
-**N:** One last thing — I'm using subflows. How do I make sure the child flow gets the data it needs?
-
-**A:** `GuaranteedSubflowValidator` checks at design time:
+When a parent starts a child flow, check that the child can receive the data it declares at entry. `GuaranteedSubflowValidator` compares the two definitions. This example from the integration tests uses a child with no input requirements, so validation passes. You can append it to the exercise file.
 
 ```typescript
 import { GuaranteedSubflowValidator } from '@unlaxer/tramli-plugins';
 
+const parentDef = buildDef(true);
+const subConfig: Record<'SUB_A' | 'SUB_B', StateConfig> = {
+  SUB_A: { terminal: false, initial: true },
+  SUB_B: { terminal: true },
+};
+const subDef = Tramli.define<'SUB_A' | 'SUB_B'>('sub', subConfig)
+  .from('SUB_A').auto('SUB_B', {
+    name: 'SubProc', requires: [], produces: [],
+    process() {},
+  })
+  .build();
 const validator = new GuaranteedSubflowValidator();
-validator.validate(parentDef, 'PAYMENT_PENDING', childDef, new Set());
-// Throws if childDef's entry requires types not available at PAYMENT_PENDING
+validator.validate(parentDef, 'PENDING', subDef, new Set());
 ```
 
-You can pass `guaranteedTypes` for data the parent will inject at runtime.
+With real child inputs, missing keys cause an exception. The fourth argument, `guaranteedTypes`, can declare extra keys the application will inject at runtime. This call verifies the declaration; it does not inject data or launch the child.
 
----
+<a id="act-2-the-6-spi-types"></a>
 
-## Act 11: Putting It All Together
+<a id="act-11-putting-it-all-together"></a>
 
-**N:** OK, let me write it all in one flow.
+## 11. Alternative: Assemble Plugins with a Registry
 
-**A:** Here's the full integration pattern:
+As the plugin list grows, `PluginRegistry` gives you one place to configure it. It calls plugins through SPI interfaces, each defining where a plugin attaches; the [guide](plugin-guide.md#plugin-types-spi) lists the six interfaces.
+
+The following is an alternative to the manual wiring in steps 2–4 and 6. Use it with the definition from step 1 in a separate file, rather than appending it to the already configured engine.
 
 ```typescript
-import { Tramli, InMemoryFlowStore, flowKey } from '@unlaxer/tramli';
 import {
-  PluginRegistry, PolicyLintPlugin,
-  AuditStorePlugin, EventLogStorePlugin,
-  ObservabilityEnginePlugin, InMemoryTelemetrySink,
+  PluginRegistry, PolicyLintPlugin, AuditStorePlugin,
+  EventLogStorePlugin, ObservabilityEnginePlugin, InMemoryTelemetrySink,
   RichResumeRuntimePlugin, IdempotencyRuntimePlugin,
   InMemoryIdempotencyRegistry,
-  DiagramPlugin, DocumentationPlugin, ScenarioTestPlugin,
 } from '@unlaxer/tramli-plugins';
 
-// 1. Define your flow (core tramli)
-const def = Tramli.define<OrderState>('order', stateConfig)
-  .initiallyAvailable(OrderRequest)
-  .from('CREATED').auto('PAYMENT_PENDING', orderInit)
-  .from('PAYMENT_PENDING').external('PAYMENT_CONFIRMED', paymentGuard)
-  .from('PAYMENT_CONFIRMED').auto('SHIPPED', ship)
-  .onAnyError('CANCELLED')
-  .build();
-
-// 2. Register plugins
+const registry = new PluginRegistry<S>();
 const sink = new InMemoryTelemetrySink();
-const registry = new PluginRegistry<OrderState>();
 registry
-  .register(PolicyLintPlugin.defaults())
+  .register(PolicyLintPlugin.defaults<S>())
   .register(new AuditStorePlugin())
   .register(new EventLogStorePlugin())
   .register(new ObservabilityEnginePlugin(sink))
   .register(new RichResumeRuntimePlugin())
   .register(new IdempotencyRuntimePlugin(new InMemoryIdempotencyRegistry()));
 
-// 3. Lint
 const report = registry.analyzeAll(def);
-if (report.findings().length > 0) console.warn(report.asText());
-
-// 4. Build engine with wrapped store
-const wrappedStore = registry.applyStorePlugins(new InMemoryFlowStore());
-const engine = Tramli.engine(wrappedStore);
+console.log(report.asText());
+const store = registry.applyStorePlugins(new InMemoryFlowStore());
+const engine = Tramli.engine(store);
 registry.installEnginePlugins(engine);
-
-// 5. Get rich APIs
 const adapters = registry.bindRuntimeAdapters(engine);
 const resume = adapters.get('rich-resume');
 const idempotent = adapters.get('idempotency');
-
-// 6. Generate docs
-console.log(new DiagramPlugin().generate(def).mermaid);
-console.log(new DocumentationPlugin().toMarkdown(def));
-console.log(new ScenarioTestPlugin().generate(def).scenarios);
-
-// 7. Run!
-const flow = await engine.startFlow(def, 'session-1', initialData);
 ```
 
-**N:** That's... incredibly clean. The core is 50 lines, the plugins are optional layers, and the flow definition is still the single source of truth.
-
-**A:** That's the idea. tramli = rails. Plugins = stations along the track.
+Inspect `report`, then start a flow with `engine` as in step 5. The runtime-adapter map stores values as `unknown`; the [guide](plugin-guide.md#plugin-registry) shows how to bind typed adapters directly. Generate diagrams and documentation by calling the helpers from step 8. Registration alone does not run analysis, install hooks, or generate output.
