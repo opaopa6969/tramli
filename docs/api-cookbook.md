@@ -1,18 +1,67 @@
 # tramli API Cookbook
 
-Practical examples for every tramli API. Each recipe shows **when to use it** and **how**.
+This cookbook is for engineers implementing or debugging a tramli flow, including those using tramli for the first time.
+It explains which API to use for a task, when it helps, and how to call it in Java, TypeScript, or Rust.
 
-> Examples are shown in **Java**, **TypeScript**, and **Rust**.
-> Key TS differences: string-based `flowKey<T>()` instead of `Class<?>`, `async/await` for engine methods, milliseconds instead of `Duration`.
-> Key Rust differences: `TypeId`-based context (`ctx.get::<T>()` instead of `ctx.get(T.class)`), `requires![]` macro for type lists, closures for callbacks, `Arc<FlowDefinition<S>>` for thread-safe sharing.
+[日本語版（主要 API の使用例）](api-cookbook-ja.md)
+
+## How to use this cookbook
+
+Use the task table below to look up a recipe. Each recipe starts with its purpose, followed by language-specific examples; the snippets assume application types and processors such as `OrderRequest` and `orderInit` have already been defined.
+
+For a first reading:
+
+1. Follow the [README Quick Start](../README.md#quick-start) for a complete flow, then read [FlowDefinition Builder](#flowdefinition-builder) and [FlowContext](#flowcontext) to define transitions and their data.
+2. Read [FlowEngine](#flowengine) and [FlowInstance](#flowinstance) to start a flow, resume it when an event arrives, and inspect its progress.
+3. Read [DataFlowGraph](#dataflowgraph) and [Logging](#logging) when checking dependencies or diagnosing failures. For a sequence with no external waits, start with [Pipeline](#pipeline).
+
+Rust users can start with [the trait implementation examples](#rust-implementing-processors-guards-and-branches) before wiring those components into the builder.
+
+## Find a recipe
+
+| What you want to do | Read |
+|--------------------|------|
+| Implement a processor, event check, or branch in Rust | [Rust implementations](#rust-implementing-processors-guards-and-branches) |
+| Run a step automatically, wait for an event, or choose a route | [FlowDefinition Builder](#flowdefinition-builder) |
+| Reuse a child flow within a larger process | [SubFlow](#fromstatesubflowdefonexitx-sendsubflow) |
+| Choose where failed processing goes | [State-specific error routing](#onerrorfrom-to), [error classification](#flowerrortype) |
+| Declare initial data, set deadlines, and validate the definition | [Initial data and builder settings](#initiallyavailabletypes) |
+| Start a new flow or deliver an external response | [FlowEngine](#flowengine) |
+| Show progress, inspect failures, or find missing input | [FlowInstance](#flowinstance) |
+| Pass typed data between steps or prepare it for storage | [FlowContext](#flowcontext) |
+| Find data producers, consumers, unused outputs, or change impact | [DataFlowGraph](#dataflowgraph) |
+| Plan a language migration or compare flow versions | [Migration helpers](#migrationorder), [version compatibility](#versioncompatibilityv1-v2) |
+| Customize a state diagram or insert a plugin flow | [FlowDefinition](#flowdefinition) |
+| Record transitions, event rejection, data writes, or errors | [Logging](#logging) |
+| Run and validate a straight sequence of steps | [Pipeline](#pipeline) |
+| Generate diagrams or processor implementation templates | [Code Generation](#code-generation) |
+
+## Terms used in the examples
+
+- A **state** is a stage such as `PAYMENT_PENDING`; a **transition** moves the flow from one state to another. A **terminal state** ends the flow.
+- A **Processor** performs the work for a transition. A **Guard** accepts or rejects an external event, such as a payment service's HTTP notification (webhook). A **Branch** chooses a route from the current data.
+- **FlowContext** holds data shared by steps. **requires / produces** declare the data a component needs and the data it makes available; these declarations let `build()` check dependencies before execution.
+- A **FlowDefinition** describes the process. A **FlowInstance** is one execution of it, such as one order; a **FlowStore** saves and loads those instances.
+- An **auto-chain** is the sequence of automatic transitions that runs until the flow needs external input or finishes. A **SubFlow** is a child flow whose exit is mapped to a parent state; each flow still uses flat states.
+- The login examples use **OIDC** (OpenID Connect), a login protocol built on OAuth 2.0. A callback carries the response from the identity provider; **MFA** means multi-factor authentication, an additional identity check.
+
+## Language conventions
+
+- **Java:** context data is identified by its class, such as `OrderRequest.class`; durations use `Duration`.
+- **TypeScript (TS):** `flowKey<T>()` creates a string-based key associated with a data type. Engine methods use `async/await`, and durations are in milliseconds.
+- **Rust:** `TypeId` identifies a type in the context, so reads use `ctx.get::<T>()`. The `requires![]` macro makes type lists, traits define component behavior, and closures provide callbacks; `Arc<FlowDefinition<S>>` shares a definition safely across threads using reference counting.
+
+Read the example for your language: method names, return values, and available helpers differ. Language-specific limits are noted beside the recipes.
 
 ---
 
 ## Rust: Implementing Processors, Guards, and Branches
 
-In Rust, processors, guards, and branches are **traits** implemented on structs — not interface objects or plain closures.
+Use these examples when implementing the components that a Rust flow will call. A **trait** defines the methods a component must provide; implement it on a struct, then pass that component to the builder.
 
 ### `StateProcessor<S>` (Auto transitions)
+
+**When to use:** An automatic step needs to read input and write its result, such as creating a payment intent from an order. Implement `process` and declare the input and output types with `requires` and `produces`.
 
 ```rust
 struct OrderInit;
@@ -31,6 +80,8 @@ impl StateProcessor<OrderState> for OrderInit {
 ```
 
 ### `TransitionGuard<S>` (External transitions)
+
+**When to use:** An external response must be checked before the flow advances, such as accepting only a successful payment callback. Implement `validate` to return acceptance with output data or rejection with a reason.
 
 ```rust
 struct PaymentGuard;
@@ -56,6 +107,8 @@ impl TransitionGuard<OrderState> for PaymentGuard {
 
 ### `BranchProcessor<S>` (Branch transitions)
 
+**When to use:** The flow needs to choose a route from data already in the context. Implement `decide` to return the label that the builder maps to a destination.
+
 ```rust
 struct RiskBranch;
 
@@ -73,6 +126,8 @@ impl BranchProcessor<OrderState> for RiskBranch {
 ```
 
 ### `SubFlowRunner` (custom sub-flow, v1.8.0+)
+
+**When to use:** A child process needs a custom runner instead of being supplied directly as a FlowDefinition. Usually `SubFlowAdapter` handles this integration; a custom `SubFlowRunner` provides the child instance and its terminal-state names.
 
 ```rust
 // For most cases, SubFlowAdapter wraps a FlowDefinition automatically:
@@ -96,9 +151,11 @@ impl SubFlowRunner for MySubFlowRunner {
 
 ## FlowDefinition Builder
 
+Use the builder to declare the allowed transitions, initial data, and failure routes in one place. Calling `build()` checks that definition before the engine uses it.
+
 ### `from(state).auto(to, processor)`
 
-When: Internal processing that runs immediately after the previous step.
+**When to use:** A step such as creating a payment request should run as soon as the flow reaches its source state. An Auto transition runs its Processor without waiting for an outside event.
 
 ```java
 .from(CREATED).auto(PAYMENT_PENDING, orderInit)
@@ -117,7 +174,7 @@ When: Internal processing that runs immediately after the previous step.
 
 ### `from(state).external(to, guard)`
 
-When: Waiting for an outside event (HTTP callback, webhook, user action).
+**When to use:** Payment confirmation or a user action must arrive before processing can continue. An External transition waits for `resumeAndExecute()`, then asks its Guard to accept or reject the supplied data.
 
 ```java
 .from(PAYMENT_PENDING).external(CONFIRMED, paymentGuard)
@@ -136,7 +193,7 @@ When: Waiting for an outside event (HTTP callback, webhook, user action).
 
 ### `from(state).external(to, guard, timeout)`
 
-When: External wait with a deadline. If no event arrives in time, flow expires.
+**When to use:** A particular wait, such as payment confirmation, needs a deadline. Set a timeout on that External transition so the flow expires if no event arrives in time.
 
 ```java
 .from(PAYMENT_PENDING).external(CONFIRMED, paymentGuard, Duration.ofMinutes(5))
@@ -155,7 +212,7 @@ When: External wait with a deadline. If no event arrives in time, flow expires.
 
 ### `from(state).branch(branch).to(s, label).endBranch()`
 
-When: Conditional routing based on context data.
+**When to use:** The next step depends on data, such as a risk score deciding whether additional authentication is needed. The Branch returns a label, and the definition maps each label to a destination.
 
 ```java
 .from(RISK_CHECKED).branch(riskBranch)
@@ -186,7 +243,7 @@ When: Conditional routing based on context data.
 
 ### `from(state).subFlow(def).onExit("X", s).endSubFlow()`
 
-When: Embedding a child flow inside a parent flow.
+**When to use:** A process such as payment has its own steps and should be reused within a larger flow. A SubFlow runs that child process and maps each terminal state, where the child finishes, to a parent state.
 
 ```java
 .from(PAYMENT).subFlow(paymentDetailFlow)
@@ -214,7 +271,7 @@ When: Embedding a child flow inside a parent flow.
 
 ### `.onError(from, to)`
 
-When: Routing a specific state's errors to a specific error state.
+**When to use:** Failure at one step needs a different destination from the rest of the flow, such as a retry path for a token exchange. `onError` assigns the error destination for that source state.
 
 ```java
 .onError(TOKEN_EXCHANGE, RETRIABLE_ERROR)
@@ -233,7 +290,7 @@ When: Routing a specific state's errors to a specific error state.
 
 ### `.onStepError(from, ExceptionClass, to)`
 
-When: Different exception types need different error handling.
+**When to use:** A timeout and an invalid token need different responses even though they occur at the same step. Route by exception type in Java/TypeScript, or by a predicate (an error-checking function) in Rust; unmatched errors fall back to the state error route.
 
 ```java
 .onStepError(TOKEN_EXCHANGE, HttpTimeoutException.class, RETRIABLE_ERROR)
@@ -255,7 +312,7 @@ When: Different exception types need different error handling.
 
 ### `.onAnyError(state)`
 
-When: Catch-all error routing for all non-terminal states.
+**When to use:** Every unfinished state needs a destination for failures that have no more specific handler. `onAnyError` supplies this fallback, such as cancelling the order.
 
 ```java
 .onAnyError(CANCELLED)
@@ -274,7 +331,7 @@ When: Catch-all error routing for all non-terminal states.
 
 ### `.initiallyAvailable(types...)`
 
-When: Declaring what data is provided at `startFlow()`.
+**When to use:** The first Processor needs input supplied by the caller, such as an order request. Declare its type so `build()` can check dependencies; supply the actual value when calling `startFlow()`.
 
 ```java
 .initiallyAvailable(OrderRequest.class)
@@ -293,7 +350,7 @@ When: Declaring what data is provided at `startFlow()`.
 
 ### `.ttl(duration)` / `.setTtl(ms)`
 
-When: Setting the flow's global time-to-live.
+**When to use:** The whole process must finish within a fixed lifetime, regardless of its current state. TTL (time-to-live) sets that overall limit; an External timeout limits one wait.
 
 ```java
 .ttl(Duration.ofHours(24))
@@ -312,7 +369,7 @@ When: Setting the flow's global time-to-live.
 
 ### `.maxGuardRetries(n)` / `.setMaxGuardRetries(n)`
 
-When: Limiting how many times a guard can reject before routing to error.
+**When to use:** Repeatedly rejected external input should eventually end in an error route. Set the rejection limit here; it counts Guard rejections rather than automatically resending a request.
 
 ```java
 .maxGuardRetries(3)
@@ -331,7 +388,7 @@ When: Limiting how many times a guard can reject before routing to error.
 
 ### `.onStateEnter(state, action)` / `.onStateExit(state, action)`
 
-When: Running side-effects when entering or exiting a specific state.
+**When to use:** Entering or leaving a state should trigger an action, such as writing an audit record. Register a callback, a function the engine calls at that point in the transition.
 
 ```java
 builder
@@ -354,7 +411,7 @@ Builder::new("order")
 
 ### `.build()`
 
-When: Always. Validates 8+ structural checks and builds the DataFlowGraph.
+**When to use:** After declaring the flow and before running it, check that its transitions and data dependencies are consistent. `build()` performs 8+ structural checks and constructs the DataFlowGraph, which records which steps produce and require each data type.
 
 ```java
 var def = builder.build();
@@ -373,7 +430,7 @@ let def = builder.build()?;
 
 ### `.warnings()`
 
-When: Checking structural warnings after build (e.g., liveness risk).
+**When to use:** After building, inspect diagnostics that may need design review. A liveness warning flags a risk that a flow will stop making progress, for example because it waits for an external event that may never arrive.
 
 ```java
 var def = builder.build();
@@ -403,9 +460,11 @@ for err in &result.errors {
 
 ## FlowEngine
 
+Use the engine to execute a definition for a particular order, login attempt, or other request. It starts new instances and resumes existing ones when external input arrives.
+
 ### `startFlow(definition, sessionId, initialData)`
 
-When: Starting a new flow instance.
+**When to use:** A new order or login attempt needs its own execution and initial data. Starting a flow runs its auto-chain, the automatic steps before the next external wait or completion.
 
 ```java
 var flow = engine.startFlow(oidcFlow, "session-123",
@@ -428,7 +487,7 @@ let flow_id = engine.start_flow(oidc_def.clone(), "session-123",
 
 ### `resumeAndExecute(flowId, definition, externalData)`
 
-When: An external event arrives (callback, webhook, user action).
+**When to use:** An outside response has arrived for a flow that is already waiting. Pass the flow ID and event data to resume it; the Guard validates the input before the following automatic steps run.
 
 ```java
 flow = engine.resumeAndExecute(flow.id(), oidcFlow,
@@ -453,9 +512,11 @@ let flow = engine.store.get(&flow_id).unwrap();
 
 ## FlowInstance
 
+Use a FlowInstance to inspect one execution: its current state, result, error, and data requirements.
+
 ### `currentState()`
 
-When: Checking where the flow is right now.
+**When to use:** A screen or handler needs to know the current stage, such as whether payment is still pending. Read the instance state rather than maintaining a separate progress flag.
 
 ```java
 if (flow.currentState() == PAYMENT_PENDING) {
@@ -478,7 +539,7 @@ if flow.current_state() == PaymentPending {
 
 ### `isCompleted()` / `exitState()`
 
-When: Checking if the flow is done and how it ended.
+**When to use:** A caller must distinguish an unfinished flow from one that completed, was blocked, or expired. Check completion first, then use the exit state to choose the follow-up action.
 
 ```java
 if (flow.isCompleted()) {
@@ -513,7 +574,7 @@ if flow.is_completed() {
 
 ### `lastError()`
 
-When: Inspecting what went wrong after an error transition.
+**When to use:** The flow has reached an error state and you need the recorded cause for logs or diagnosis. `lastError()` exposes the error details associated with that failure.
 
 ```java
 if (flow.currentState() == ERROR) {
@@ -540,7 +601,7 @@ if flow.current_state() == Error {
 
 ### `activeSubFlow()`
 
-When: Checking if the flow is inside a sub-flow.
+**When to use:** The parent is at a broad stage such as payment, but you need to see the child process running inside it. Inspect the active child in Java/TypeScript; the Rust example uses the state path.
 
 ```java
 if (flow.activeSubFlow() != null) {
@@ -565,7 +626,7 @@ if path.len() > 1 {
 
 ### `statePath()` / `statePathString()`
 
-When: Getting the full hierarchical state for logging/UI.
+**When to use:** A parent state alone does not show where a child flow is waiting. A state path lists the current parent and child states, such as `PAYMENT/CONFIRM`, for logs or a status display.
 
 ```java
 log.info("Flow at: {}", flow.statePathString());
@@ -584,7 +645,7 @@ println!("Flow at: {}", flow.state_path_string());
 
 ### `waitingFor()`
 
-When: Telling the client what data to send for the next external transition.
+**When to use:** A client needs to know which external input the flow is waiting for. This query identifies the expected data types so the client can prepare the next event.
 
 ```java
 Set<Class<?>> needed = flow.waitingFor();
@@ -603,7 +664,7 @@ let needed: Vec<TypeId> = flow.waiting_for();
 
 ### `availableData()`
 
-When: Checking what data is in context at the current state.
+**When to use:** You need the data types expected to be available at the current state. This query uses the data-flow graph; use the context accessors when inspecting actual stored values.
 
 ```java
 Set<Class<?>> available = flow.availableData();
@@ -622,7 +683,7 @@ let available: HashSet<TypeId> = flow.available_data();
 
 ### `missingFor()`
 
-When: Debugging why a transition can't proceed.
+**When to use:** Processing cannot continue and you suspect missing input. This query lists data required by the next transition but absent from the context.
 
 ```java
 Set<Class<?>> missing = flow.missingFor();
@@ -641,7 +702,7 @@ let missing: Vec<TypeId> = flow.missing_for();
 
 ### `withVersion(n)` / `set_version(n)` (Rust)
 
-When: FlowStore optimistic locking — update version after save.
+**When to use:** A FlowStore saves a new version and the in-memory instance must reflect that version. Optimistic locking compares versions to detect concurrent updates; these methods update the instance version after the store saves it.
 
 ```java
 // After SQL UPDATE ... SET version = version + 1
@@ -663,7 +724,7 @@ Rust's `set_version_public()` remains as a deprecated compatibility alias.
 
 ### `stateEnteredAt()`
 
-When: Checking when the current state was entered (for per-state timeout).
+**When to use:** You need to measure how long a flow has been in its current state, for example while investigating a slow external response. Java/TypeScript expose the entry time; the Rust example below measures total flow age because the state-entry accessor is internal.
 
 ```java
 Instant entered = flow.stateEnteredAt();
@@ -688,9 +749,11 @@ println!("Flow age: {} seconds", elapsed.as_secs());
 
 ## FlowContext
 
+Use FlowContext to pass typed data between steps. Each Processor declares its required inputs and outputs, then reads or writes the corresponding values here.
+
 ### `get(key)` / `find(key)` / `put(key, value)` / `has(key)`
 
-When: Reading/writing typed data in processors.
+**When to use:** A Processor needs input from an earlier step or must pass its output to a later one. Use `get` for required data, `find` for optional data, `put` to store a value, and `has` to check whether it exists.
 
 ```java
 // In a processor
@@ -717,7 +780,7 @@ if ctx.has::<FraudScore>() { /* ... */ }                      // check
 
 ### `registerAlias(type, alias)` / `toAliasMap()` / `fromAliasMap(map)`
 
-When: Serializing FlowContext to JSON for database persistence.
+**When to use:** Context data must be saved under readable names in JSON. An alias is a string name for a type or key; Java/TypeScript convert to and from alias maps, while Rust exposes the mapping for your own serialization code.
 
 ```java
 // Setup (once)
@@ -762,9 +825,11 @@ ctx.type_id_of_alias("OrderRequest");               // Some(&TypeId::of::<OrderR
 
 ## DataFlowGraph
 
+Use this graph when you need to understand or test the data dependencies declared by the flow. Queries describe types and their producers or consumers; the validation helpers below compare those declarations with an actual context.
+
 ### `availableAt(state)`
 
-When: "What data is available when the flow reaches state X?"
+**When to use:** Before adding a step, check which data types are available on every path to its source state. `availableAt` answers from the definition, without running a flow instance.
 
 ```java
 Set<Class<?>> available = graph.availableAt(PAYMENT_CONFIRMED);
@@ -788,7 +853,7 @@ let info = graph.explain(PaymentConfirmed);
 
 ### `producersOf(type)` / `consumersOf(type)`
 
-When: "Who creates/uses this data type?"
+**When to use:** You need to locate the steps that create or read a type before changing it. Producers declare the type in `produces`; consumers declare it in `requires`.
 
 ```java
 graph.producersOf(PaymentIntent.class);
@@ -816,7 +881,7 @@ let consumers = graph.consumers_of(&TypeId::of::<PaymentIntent>());
 
 ### `deadData()`
 
-When: Finding data types that are produced but never consumed.
+**When to use:** You suspect a step is producing data that no later step needs. Dead data means a type is produced but never declared as required within the flow; check whether callers use it as a final result before removing it.
 
 ```java
 Set<Class<?>> dead = graph.deadData();
@@ -835,7 +900,7 @@ let dead: HashSet<TypeId> = graph.dead_data();
 
 ### `lifetime(type)`
 
-When: Understanding a data type's lifecycle across the flow.
+**When to use:** You need to see where a data type first appears and where it is last consumed. Here, lifetime means those positions in the flow, rather than elapsed time.
 
 ```java
 var lt = graph.lifetime(PaymentIntent.class);
@@ -854,7 +919,7 @@ let lt = graph.lifetime(&TypeId::of::<PaymentIntent>());
 
 ### `pruningHints()`
 
-When: Optimizing memory — finding types no longer needed at each state.
+**When to use:** Context data is accumulating and you want candidates to review for removal at each state. Pruning means discarding data you no longer need; this method returns hints rather than deleting values.
 
 ```java
 Map<S, Set<Class<?>>> hints = graph.pruningHints();
@@ -873,7 +938,7 @@ let hints: HashMap<OrderState, HashSet<TypeId>> = graph.pruning_hints();
 
 ### `impactOf(type)`
 
-When: "If I change this type, what processors are affected?"
+**When to use:** A data type is changing and you need the list of producers and consumers to review. `impactOf` groups both sides of that dependency for the selected type.
 
 ```java
 var impact = graph.impactOf(PaymentIntent.class);
@@ -892,7 +957,7 @@ let (producers, consumers) = graph.impact_of(&TypeId::of::<PaymentIntent>());
 
 ### `parallelismHints()`
 
-When: Finding processors that could theoretically run in parallel.
+**When to use:** You are reviewing whether two pieces of work have a declared data dependency. The result suggests pairs without such dependencies; it does not make the engine execute them concurrently.
 
 ```java
 List<String[]> hints = graph.parallelismHints();
@@ -911,7 +976,7 @@ let hints: Vec<(String, String)> = graph.parallelism_hints();
 
 ### `assertDataFlow(ctx, state)`
 
-When: Testing that a flow instance's context matches expectations.
+**When to use:** A test should detect values missing from the context at a particular state. Compare the instance with the data-flow expectations, then assert that the returned list of missing types is empty.
 
 ```java
 List<Class<?>> missing = graph.assertDataFlow(flow.context(), flow.currentState());
@@ -930,7 +995,7 @@ assert!(missing.is_empty(), "Missing types: {:?}", missing);
 
 ### `verifyProcessor(processor, ctx)`
 
-When: Testing that a processor's actual get/put matches its declarations.
+**When to use:** A Processor declares its inputs and outputs, but you need to test that the expected data is actually present. This helper executes the Processor and reports contract violations, including missing required inputs or missing declared outputs.
 
 ```java
 List<String> violations = DataFlowGraph.verifyProcessor(orderInit, ctx);
@@ -949,7 +1014,7 @@ let violations: Vec<String> = graph.verify_processor(&order_init, &mut ctx);
 
 ### `isCompatible(a, b)`
 
-When: Checking if processor B can replace processor A.
+**When to use:** You want to replace a Processor without increasing its input requirements or removing outputs used elsewhere. Compatibility here concerns the declared data contract: B must require no more than A and produce at least what A produces.
 
 ```java
 boolean ok = DataFlowGraph.isCompatible(orderInitV1, orderInitV2);
@@ -969,7 +1034,7 @@ let ok = DataFlowGraph::<OrderState>::is_compatible(
 
 ### `migrationOrder()`
 
-When: Planning cross-language migration — which processor to port first.
+**When to use:** You are moving a flow to another language and need an implementation order that follows its data dependencies. The returned order puts producers before the steps that need their outputs.
 
 ```java
 List<String> order = graph.migrationOrder();
@@ -988,7 +1053,7 @@ let order: Vec<String> = graph.migration_order();
 
 ### `testScaffold()`
 
-When: Generating test setup — what data each processor needs.
+**When to use:** Writing a Processor test leaves you unsure which inputs to prepare. A scaffold is a starting point for test setup; this method lists required data types, whose sample values you supply yourself.
 
 ```java
 Map<String, List<String>> scaffold = graph.testScaffold();
@@ -1007,7 +1072,7 @@ let scaffold: HashMap<String, Vec<String>> = graph.test_scaffold();
 
 ### `generateInvariantAssertions()`
 
-When: Generating test assertions from data-flow invariants.
+**When to use:** Tests need a checklist of data that should exist at each state. An invariant is a condition that must hold there; this method returns those conditions as strings for use when writing assertions.
 
 ```java
 List<String> assertions = graph.generateInvariantAssertions();
@@ -1026,7 +1091,7 @@ let assertions: Vec<String> = graph.generate_invariant_assertions();
 
 ### `crossFlowMap(graphs...)`
 
-When: Finding data dependencies between multiple flows.
+**When to use:** Separate flows exchange data and you need to identify matching producers and consumers. The map reports types produced in one flow and required in another; it does not transfer the data.
 
 ```java
 var deps = DataFlowGraph.crossFlowMap(orderGraph, refundGraph);
@@ -1042,7 +1107,7 @@ const deps: string[] = DataFlowGraph.crossFlowMap(orderGraph, refundGraph);
 
 ### `diff(before, after)`
 
-When: PR review — what changed between two versions of a flow.
+**When to use:** A flow definition changed and a review needs a concrete summary of its data dependencies. Compare the graphs to identify additions and removals, using the result format shown for each language.
 
 ```java
 var result = DataFlowGraph.diff(v1Graph, v2Graph);
@@ -1061,7 +1126,7 @@ let (added, removed) = DataFlowGraph::diff(&v1_graph, &v2_graph);
 
 ### `versionCompatibility(v1, v2)`
 
-When: Checking if running v1 instances can resume on v2 definition.
+**When to use:** You are updating a definition while older instances may still be waiting. Check for data that the new definition expects at a state but the old instances may lack before planning their migration.
 
 ```java
 var issues = DataFlowGraph.versionCompatibility(v1Graph, v2Graph);
@@ -1077,7 +1142,7 @@ const issues: string[] = DataFlowGraph.versionCompatibility(v1Graph, v2Graph);
 
 ### `toMermaid()` / `toJson()` / `toMarkdown()`
 
-When: Generating documentation/diagrams.
+**When to use:** You need to share the dependency analysis in documentation or consume it in another tool. Mermaid is a text format for diagrams, JSON provides structured data, and Markdown gives a readable checklist.
 
 ```java
 String mermaid = graph.toMermaid();     // flowchart LR (Mermaid)
@@ -1099,7 +1164,7 @@ let md: String = graph.to_markdown();        // migration checklist
 
 ### `renderDataFlow(renderer)` / `toRenderable()`
 
-When: Custom rendering (Graphviz dot, PlantUML, D3.js).
+**When to use:** Your documentation or UI needs a diagram format other than the built-in output. A renderer is a function that turns graph data into that format, such as Graphviz dot or PlantUML diagram text, or data for a D3.js visualization.
 
 ```java
 // Graphviz dot
@@ -1119,9 +1184,11 @@ String dot = graph.renderDataFlow(g -> {
 
 ## FlowDefinition
 
+Use a built definition to inspect the allowed routes or extend it with a child flow. The builder recipes above cover creating the original definition.
+
 ### `renderStateDiagram(renderer)`
 
-When: Custom state diagram rendering (Graphviz, PlantUML).
+**When to use:** You need to draw the allowed state transitions in your own format. A renderer receives the definition and converts its transitions to diagram text, such as Graphviz dot or PlantUML.
 
 ```java
 String dot = definition.renderStateDiagram(d -> {
@@ -1156,7 +1223,7 @@ let json = graph.to_json();        // structured data for custom renderers
 
 ### `withPlugin(from, to, pluginFlow)`
 
-When: Inserting a sub-flow before an existing transition (plugin system).
+**When to use:** A flow needs an extra process, such as gift wrapping before shipping. A plugin flow is a child flow inserted at a chosen transition; Java/TypeScript use `withPlugin`, while the Rust example declares the child in the builder.
 
 ```java
 var extended = baseFlow.withPlugin(CONFIRMED, SHIPPED, giftWrappingFlow);
@@ -1179,9 +1246,11 @@ const extended = baseFlow.withPlugin('CONFIRMED', 'SHIPPED', giftWrappingFlow);
 
 ## Logging
 
+Use logger callbacks to send execution events to your existing logs or monitoring tools. Choose the callback for the question you are investigating: progress, event validation, data writes, or failure.
+
 ### `setTransitionLogger(entry -> ...)`
 
-When: Logging every state transition.
+**When to use:** You need to reconstruct the route an execution took. Register a logger callback to record the flow ID, source, destination, and transition trigger.
 
 ```java
 engine.setTransitionLogger(entry ->
@@ -1203,7 +1272,7 @@ engine.set_transition_logger(|entry|
 
 ### `setGuardLogger(entry -> ...)`
 
-When: Debugging guard acceptance/rejection.
+**When to use:** An external response arrived but the flow did not advance. Log the Guard result and reason to see whether the input was accepted or rejected.
 
 ```java
 engine.setGuardLogger(entry ->
@@ -1227,7 +1296,7 @@ engine.set_guard_logger(|entry|
 
 ### `setStateLogger(entry -> ...)`
 
-When: Debugging what data flows through context.
+**When to use:** A later step cannot find expected data and you need to trace context writes. The state logger reports data additions associated with the executing state.
 
 ```java
 engine.setStateLogger(entry ->
@@ -1249,7 +1318,7 @@ engine.set_state_logger(|entry|
 
 ### `setErrorLogger(entry -> ...)`
 
-When: Alerting on flow errors.
+**When to use:** A flow failure should appear in application monitoring or notify an alerting service. Register a callback to send the error event to that service.
 
 ```java
 engine.setErrorLogger(entry ->
@@ -1268,7 +1337,7 @@ engine.set_error_logger(|entry|
 
 ### `removeAllLoggers()`
 
-When: Disabling all logging (e.g., in tests).
+**When to use:** A test or a particular execution environment should stop invoking the configured loggers. Remove all logger callbacks from the engine.
 
 ```java
 engine.removeAllLoggers();
@@ -1286,9 +1355,11 @@ engine.remove_all_loggers();
 
 ## Pipeline
 
+Use a Pipeline for a fixed sequence of steps with declared inputs and outputs. It checks dependencies without requiring a state enum or external-event transitions.
+
 ### `Tramli.pipeline(name).step(...).build()`
 
-When: Sequential processing without states or external events.
+**When to use:** Work such as importing a CSV file always runs through the same sequence and never waits for an external event. Define Pipeline steps in order and call `build()` to check their data dependencies before execution.
 
 ```java
 var pipeline = Tramli.pipeline("csv-import")
@@ -1319,7 +1390,7 @@ let result = pipeline.execute(vec![
 
 ### `PipelineException`
 
-When: Handling step failures with full context.
+**When to use:** A pipeline failed and you need to know which step failed and which steps completed. Java/TypeScript also expose the context containing partial results; Rust provides the step names and underlying error.
 
 ```java
 try {
@@ -1354,7 +1425,7 @@ match pipeline.execute(data) {
 
 ### `pipeline.dataFlow().deadData()`
 
-When: Finding unused pipeline outputs.
+**When to use:** You want to review outputs that no downstream step declares as input. Check whether the caller uses those values as the pipeline result before treating them as unnecessary.
 
 ```java
 Set<Class<?>> dead = pipeline.dataFlow().deadData();
@@ -1373,7 +1444,7 @@ let dead: HashSet<TypeId> = pipeline.data_flow().dead_data();
 
 ### `pipeline.asStep()`
 
-When: Nesting one pipeline inside another.
+**When to use:** A sequence already used elsewhere should become one step in a larger pipeline. `asStep()` adapts that pipeline to the step interface.
 
 ```java
 PipelineStep auth = authPipeline.asStep();
@@ -1391,11 +1462,11 @@ const main = Tramli.pipeline('request')
     .build();
 ```
 
-> **Note:** `asStep()` is Java/TypeScript only. In Rust, wrap a `Pipeline` in a newtype that implements `PipelineStep` to achieve the same composition.
+> **Note:** `asStep()` is Java/TypeScript only. In Rust, wrap a `Pipeline` in a newtype (a wrapper struct) that implements `PipelineStep` to achieve the same composition.
 
 ### `pipeline.setStrictMode(true)`
 
-When: Verifying that steps actually produce what they declare.
+**When to use:** Dependency checks pass, but a step implementation may forget to write its declared output. Strict mode checks at runtime that each step's declared outputs are present after it runs.
 
 ```java
 pipeline.setStrictMode(true);
@@ -1419,9 +1490,11 @@ pipeline.execute(data)?;
 
 ## Code Generation
 
+Use the definition as the source for diagrams and implementation templates. These recipes show what each generator produces; business logic still belongs in your Processors.
+
 ### `MermaidGenerator.generate(definition)`
 
-When: Generating a state transition diagram for docs/README.
+**When to use:** A hand-maintained state diagram is falling behind changes to the definition. Generate Mermaid diagram text from the definition and include it in your documentation.
 
 ```java
 String mermaid = MermaidGenerator.generate(oidcFlow);
@@ -1443,7 +1516,7 @@ let mermaid = MermaidGenerator::generate_with_view(&oidc_def, MermaidView::State
 
 ### `MermaidGenerator.generateDataFlow(definition)`
 
-When: Generating a data-flow diagram showing requires/produces.
+**When to use:** Reviewers need to see which steps supply the data that other steps read. Generate a diagram of the declared `requires` and `produces` relationships.
 
 ```java
 String mermaid = MermaidGenerator.generateDataFlow(oidcFlow);
@@ -1465,7 +1538,7 @@ let mermaid = MermaidGenerator::generate_with_view(&oidc_def, MermaidView::DataF
 
 ### `MermaidGenerator.generateExternalContract(definition)`
 
-When: Documenting what data external clients must send/receive.
+**When to use:** Someone integrating an external callback needs to understand the data contract at that boundary. The diagram shows the Guard's required input and produced output, making those declarations visible.
 
 ```java
 String mermaid = MermaidGenerator.generateExternalContract(oidcFlow);
@@ -1479,7 +1552,7 @@ const mermaid: string = MermaidGenerator.generateExternalContract(oidcFlow);
 
 ### `SkeletonGenerator.generate(definition, language)`
 
-When: Generating processor skeletons for cross-language migration.
+**When to use:** You are implementing the same flow in another language and need the Processor declarations to start from. A skeleton is an implementation template; fill in its business logic after generation.
 
 ```java
 String rust = SkeletonGenerator.generate(oidcFlow, Language.RUST);
@@ -1497,7 +1570,7 @@ const rust: string = SkeletonGenerator.generate(oidcFlow, 'rust');
 
 ## FlowErrorType
 
-When: Classifying errors for retry/recovery strategy.
+**When to use:** Error handling must distinguish failures that may succeed on retry from failures that should stop the operation. `RETRYABLE` marks the former and `FATAL` the latter; Rust uses error-code strings and routing predicates instead of this enum.
 
 ```java
 try {
