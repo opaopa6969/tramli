@@ -1,78 +1,37 @@
 # Why tramli Works — The Attention Budget
 
-You have a budget. Not money — **attention.**
+This article is for engineers who need to change one step in a login, payment, or approval flow without tracing the whole application.
+It explains how tramli makes data dependencies explicit, what that lets humans and LLMs focus on, and which checks still need tests and review.
+No prior knowledge of tramli is required. [日本語版](why-tramli-works-attention-budget-ja.md)
 
-Every time you read code, your brain spends from this budget. Read a variable name: costs a little. Trace where that variable came from, through 3 files and 400 lines: costs a lot. Run out of budget, and you start missing things. Bugs slip in.
+<a id="your-brain-has-a-ram-limit"></a>
+<a id="what-procedural-code-does-to-your-budget"></a>
 
-This isn't a metaphor. It's how brains actually work, and — surprisingly — it's also how AI language models work. tramli is designed around this single insight.
+## The pain: a small change requires tracing the whole flow
 
----
+Suppose a user opens a page that requires login. The application remembers the requested URL, sends the user to a login page, creates a session, and redirects them back. A bug in that sequence can send the user to the default page instead of the page they requested.
 
-## Your Brain Has a RAM Limit
+Finding the cause means answering several questions: where was the destination assembled, did it survive the login request, and does the final redirect use it? If those answers are scattered across a handler, a form, and a callback, changing the URL-building code also requires tracing its callers and consumers.
 
-Try this: remember these numbers.
+Cookie settings and the request's URL scheme may need review too, but they are different questions. Missing a destination and constructing an incorrect destination need different checks. When all this logic lives together, it is easy to overlook one of them.
 
-> 7, 2, 8, 4, 1, 9, 3
+Here, **attention budget** means the effort spent finding relevant code and keeping its dependencies in mind. It is a design metaphor, not a fixed number of lines a person or model can understand.
 
-Now close your eyes and repeat them.
+## What ordinary refactoring already solves
 
-Most people can hold about 7 items in working memory at once. This has been studied since the 1950s — psychologist George Miller called it "The Magical Number Seven, Plus or Minus Two."
+You can separate URL construction, session creation, and response handling into functions, give their inputs and outputs explicit types, and test them independently. For a short, linear process, that may be enough.
 
-When you read a 500-line function, you're not just reading — you're **holding state in your head.** "Okay, `returnTo` was set on line 38... then on line 167 it's checked but only if `fwdProto` is not null... and `fwdProto` comes from the HTTP header which is set by Traefik, but only if the middleware ran..."
+The extra difficulty appears when a process has branches or waits for an external response. A function signature describes one call, but you still need to check whether every route to that call supplies its inputs. A state machine makes the stages and routes explicit. tramli adds declarations that let it check data dependencies across those routes.
 
-That's way more than 7 items. You've blown your budget. You're going to miss something.
+<a id="what-tramli-does-to-your-budget"></a>
 
----
+## How tramli makes the dependencies visible
 
-## LLMs Have the Same Problem (Literally)
+tramli is a constrained flow engine for Java, TypeScript, and Rust. States are a flat enum. Transitions are Auto (advance automatically), External (wait for an outside event), or Branch (choose a route). A `FlowDefinition` lists the routes; a `StateProcessor` contains the business logic for one transition. Its `requires` declaration lists the data it reads, and `produces` lists the data it promises to provide.
 
-AI language models like Claude and GPT use a mechanism called **attention**. When the model reads your code, every token (roughly, every word or symbol) "looks at" every other token to understand context. This is the core of the Transformer architecture.
+For the login example, the contracts can be described as follows. This is contract notation, not Java syntax; the names describe application data, not built-in tramli types.
 
-Here's the thing: attention has a **fixed budget per layer.** The model distributes its focus across all the tokens in its context window. The more code it has to read, the thinner that attention is spread.
-
-```
-  50-line FlowDefinition  → attention is concentrated → model understands deeply
-1800-line handler         → attention is diluted       → model misses connections
-```
-
-This isn't a design flaw — it's a mathematical property. Attention weights must sum to 1.0 across all positions. More positions = less weight per position = weaker signal for any single connection.
-
-So when an LLM reads a 1800-line procedural handler and misses that `return_to` was set on line 384 but consumed on line 1204, it's not "hallucinating." It's running out of attention budget, just like a human programmer would.
-
----
-
-## What Procedural Code Does to Your Budget
-
-Here's a real scenario that just happened (names simplified):
-
-```
-Line  384:  returnTo = (fwdProto != null ? fwdProto : "http") + "://" + fwdHost + fwdUri
-Line  404:  proto = fwdProto != null ? fwdProto : "http"
-Line  650:  ctx.cookie("__volta_session", sessionId, ...)  // Secure flag?
-Line  890:  ctx.redirect(loginUrl + "?return_to=" + returnTo)  // still available?
-Line 1204:  window.location.href = result.redirect_to || '/console/'  // where did return_to go?
-```
-
-To find the bug, you need to hold **all** of this in your head simultaneously:
-
-1. Where `returnTo` was created (line 384)
-2. What `fwdProto` defaults to when null (line 384 — "http")
-3. Where `fwdProto` comes from (Traefik ForwardAuth headers)
-4. Whether Traefik passes `X-Forwarded-Proto` (depends on middleware config)
-5. Whether the login page preserves `returnTo` through the POST (it doesn't)
-6. Whether the cookie has the `Secure` flag (depends on `isSecure()`, which depends on how Traefik connects)
-
-That's 6 facts spread across 800+ lines and 3 different systems. No human and no LLM can reliably hold all of that.
-
-**The result:** An AI agent spent 14 minutes of continuous debugging — SSH-ing into servers, reading configs, patching code, reverting, patching again — chasing these bugs one by one, each fix revealing the next problem. A human would have done the same, just slower.
-
----
-
-## What tramli Does to Your Budget
-
-tramli restructures the same logic so that each piece **declares what it needs and what it provides:**
-
-```java
+```text
 // LoginRedirectInit
 requires: { RequestOrigin, AuthConfig }
 produces: { LoginRedirect }
@@ -82,97 +41,60 @@ requires: { ResolvedUser, RequestOrigin, AuthConfig }
 produces: { SessionCookie, FinalRedirect }
 ```
 
-Now the same 6 questions have local answers:
+`RequestOrigin` holds information about the incoming request, and `AuthConfig` holds login settings. `LoginRedirectInit` uses them to prepare `LoginRedirect`, the data for sending the user to login. `SessionCreator` uses the resolved user and those inputs to produce a session cookie and the final redirect.
 
-| Question | Procedural (read 1800 lines) | tramli (read 1 processor) |
-|----------|------------------------------|---------------------------|
-| Where does `returnTo` come from? | Trace from line 384 | `LoginRedirectInit.produces(LoginRedirect)` |
-| Is `returnTo` available at session creation? | Read lines 384–1204 | `build()` verified it — yes |
-| What's the URL scheme? | Trace `fwdProto` through 3 systems | `RequestOrigin.scheme` — one field |
-| Does the cookie have `Secure`? | Find line 650, trace `isSecure()` | `SessionCookie.create(origin)` — one method |
+These declarations make a useful omission visible: **`SessionCreator` does not declare that it reads `LoginRedirect`.** If it needs a destination stored there, that dependency must be added to its `requires` contract. tramli cannot infer it from the business requirement. Once declared, `build()` can check whether the preceding routes supply that type.
 
-**Each question costs 1 item of working memory instead of 6.** You stay within budget. The bug doesn't happen.
+For a Java example using the actual API, see the [order-flow example](article-build-time-dataflow.md#what-if-build-caught-it).
 
----
+<a id="the-three-guarantees"></a>
 
-## The "Didn't Need to Read" Principle
+## What the tools check, and what they do not
 
-Here's the most counterintuitive insight: **tramli's value isn't in what it makes you read — it's in what it lets you skip.**
+Calling `build()` constructs and validates a flow definition before any flow instance executes. It is a method call, not a compiler phase: a test must call it for the validation to run in CI.
 
-In a 1800-line handler, every line is implicit context. Changing line 400 might break line 1200. You can't know without reading everything. So you have to read everything.
-
-In tramli, a `StateProcessor` is a **closed unit.** Its inputs are declared (`requires`). Its outputs are declared (`produces`). If you're fixing `SessionCreator`, you don't need to read `TokenExchange` or `LoginRedirectInit`. They can't affect each other — the compiler and `build()` guarantee it.
-
-```
-Procedural:  1800 lines × "might be relevant" = 1800 lines to read
-tramli:        50 lines of FlowDefinition + 30 lines of the 1 processor you need = 80 lines to read
-```
-
-That's a 95% reduction in attention cost. Not by compressing information — by **proving that 95% of the code is irrelevant to your task.**
-
----
-
-## Why This Works for Both Humans and AI
-
-The parallel isn't a coincidence. It's structural:
-
-| | Human Brain | LLM Attention |
+| Question | What tramli checks | What still needs review or tests |
 |---|---|---|
-| Capacity | ~7 items in working memory | Fixed attention budget per layer |
-| Failure mode | "I forgot that `returnTo` was set 800 lines ago" | Attention weight on line 384 too low to connect to line 1204 |
-| What helps | Locality — related things close together | Locality — related tokens close together |
-| What hurts | Global dependencies across 1000+ lines | Long-range dependencies dilute attention |
+| Can this step receive the data it requires? | `build()` checks declared data availability along the flow's paths. | Initial data must actually be supplied, and implementations must honor their declarations. Undeclared reads are not inferred from method bodies. |
+| Is this transition structurally valid? | Enum references catch misspelled state names at compilation; `build()` checks structure, including Auto/Branch cycles and outgoing transitions from terminal states. | A declared transition can still be wrong for the business process. |
+| Does the diagram match the flow definition? | A Mermaid diagram generated from the definition reflects that definition. | A saved copy must be regenerated after changes; the diagram does not describe every operation inside a Processor. |
 
-tramli converts **global dependencies** (line 384 affects line 1204) into **local contracts** (`requires`/`produces` on adjacent processors). This helps humans because it fits in working memory. It helps LLMs because the relevant tokens are close together in the context window.
+The diagram uses the existing Java API, where `authFlow` is the application's flow definition:
 
-This is why an LLM can safely **generate** tramli code: even if it hallucinates a wrong transition, `build()` rejects it immediately. The feedback loop is: generate → compile → `build()` → fix. No 14-minute debugging sessions. No "SSH into the server and tail the logs."
-
----
-
-## The Three Guarantees
-
-tramli makes three things **structurally impossible** — not "unlikely" or "caught by tests," but impossible:
-
-**1. Missing data**
 ```java
-// If SessionCreator needs LoginRedirect but nothing produces it,
-// build() fails BEFORE any code runs:
-//
-// "Processor 'SessionCreator' at SESSION_CREATED requires LoginRedirect
-//  but it may not be available"
-```
-
-**2. Invalid transitions**
-```java
-// States are an enum. A typo like "COMLETE" is a compile error.
-// A cycle in auto-transitions is caught by DAG validation at build().
-// A transition from a terminal state is caught at build().
-```
-
-**3. Stale diagrams**
-```java
-// The diagram IS the code. Generated from the same FlowDefinition
-// that the engine executes. It can never be out of date.
 String mermaid = MermaidGenerator.generate(authFlow);
 ```
 
-These aren't "best practices." They're **compiler-enforced invariants.** You don't need to spend attention budget remembering them — the toolchain remembers for you.
+The [8 build-validation checks](../README.md#8-item-build-validation) cover structure and declared dependencies. They do not establish that a redirect URL has the right value or that a cookie has the right settings. Those remain application behavior to test.
 
----
+<a id="the-didnt-need-to-read-principle"></a>
 
-## Summary
+## Deciding what to read for a change
 
-| | Without tramli | With tramli |
-|---|---|---|
-| Attention cost to understand the flow | Read 1800 lines | Read 50-line FlowDefinition |
-| Attention cost to change one step | Read everything (might break something) | Read 1 processor (can't break others) |
-| "Is `returnTo` available here?" | Trace 800 lines | `build()` already checked |
-| Debugging a data-missing bug | 14 minutes of SSH + log reading | `build()` error at compile time |
-| Works for humans? | — | ✓ (fits in 7±2 working memory) |
-| Works for LLMs? | — | ✓ (fits in attention budget) |
+For a change to session creation, start with the `FlowDefinition`, the `SessionCreator` contract, its implementation, and its tests. This shows where the step runs and what it exchanges with the rest of the flow.
 
-**tramli doesn't make you smarter. It makes the problem smaller — small enough to fit in the attention budget you already have.**
+If the change preserves the meaning of those inputs and outputs, you may be able to keep the review local. If it changes what `FinalRedirect` means, also inspect its consumers. If it changes how `RequestOrigin` is interpreted, inspect its producer and the relevant configuration. A contract helps locate dependencies; it does not make Processors unable to affect one another.
 
----
+For illustration, a 1,800-line handler might become a 50-line flow definition plus separate Processors. Reading that definition and one 30-line Processor is 80 lines as a starting point. These are example sizes, not a measured reduction in effort or proof that the remaining code is irrelevant. The benefit is knowing where to start and when to expand the review.
 
-*tramli = tramline (路面電車の軌道). Your code runs on rails. You can only go where tracks are laid — and that's exactly why you don't get lost.*
+<a id="llms-have-the-same-problem-literally"></a>
+<a id="why-this-works-for-both-humans-and-ai"></a>
+
+## Why this can also help LLMs
+
+An LLM working on the same change can be given the flow definition, the relevant contracts, and the target implementation and tests. Explicit dependencies reduce how much it must reconstruct from scattered code. Build errors then provide concrete feedback about missing declarations or invalid structure.
+
+This is a reason to expect a more manageable task, not evidence of a particular improvement in model accuracy. Human attention and Transformer attention are not the same mechanism. Standard Transformer attention uses normalized weights; that normalization alone does not imply that adding code uniformly weakens every relevant connection. See [Attention Is All You Need, §3.2](https://arxiv.org/html/1706.03762v7#S3.SS2) for the mechanism.
+
+The practical claim is narrower: **making the relevant inputs, outputs, and routes explicit can reduce the material that a human or LLM must search through, leaving less to overlook.** How much it helps depends on the task, the contracts, and the implementation. Passing `build()` does not establish that generated code is correct.
+
+<a id="summary"></a>
+
+## A review workflow
+
+1. Read the flow definition to locate the step and the routes that reach it.
+2. Read the step's contract, implementation, and tests; follow producers or consumers when the change affects the meaning of exchanged data.
+3. Compile and call `build()` in tests to check the revised definition, then test the changed behavior and relevant integrations.
+4. Regenerate any saved diagrams from the revised definition.
+
+Use this approach when keeping track of data across stages is a recurring maintenance problem. If ordinary function calls already make the dependencies clear, adding flow definitions and contracts may create more work than it saves.
