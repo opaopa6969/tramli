@@ -1,8 +1,29 @@
 # Recommended FlowStore DB Schema
 
-Reference schema for PostgreSQL. Adapt for your database.
+This guide is for developers implementing a database-backed `FlowStore`.
+It provides a PostgreSQL reference schema and explains how to preserve flow data, restore instances, and detect conflicting updates. Adapt the schema and SQL to your database.
 
-## Tables
+## Problem: a flow must survive the request that started it
+
+A flow waiting for payment or an authentication callback may resume in another request or after a restart. Saving only its current state is not enough: the next processor also needs the data produced earlier, and the engine needs the original expiry and completion status. Two requests may also try to resume the same flow at once.
+
+## What happens with the straightforward approach?
+
+A row containing just an ID and a state can tell you where execution stopped, but cannot reconstruct the context needed to continue. Saving an unrestricted object dump ties the stored data to language-specific type names. Updating that row without checking its version can overwrite another request's progress.
+
+A database schema addresses only part of the problem. The store must also serialize data, select the correct flow definition, reconstruct the instance, and coordinate writes.
+
+## The pattern: persist an instance and its transition history
+
+Keep the current flow instance in `flow_instances` and its transition records in `transition_log`. `FlowContext` is the flow's typed data container; store its values under stable string aliases so that the stored names do not depend on a language's internal type identifiers.
+
+On load, turn those values back into the application's domain types and pass the saved metadata to `FlowInstance.restore()`. On update, compare the saved version with the database version to detect a concurrent change. The store owns transaction boundaries; tramli does not create them from this schema.
+
+## Code examples
+
+### Tables
+
+The reference tables include state, context, lifetime, version, completion status, and fields for SubFlow metadata. A SubFlow is a child flow executed as part of a parent flow. These columns do not implement child-flow restoration by themselves; that remains part of the store implementation.
 
 ```sql
 CREATE TABLE flow_instances (
@@ -36,20 +57,21 @@ CREATE INDEX idx_flow_instances_session ON flow_instances(session_id);
 CREATE INDEX idx_transition_log_flow ON transition_log(flow_id);
 ```
 
-## FlowContext Serialization
+### FlowContext Serialization
 
-FlowContext stores data keyed by type. For cross-language portability,
-use **string aliases** instead of language-specific type identifiers.
+Use the same aliases wherever stored context is written or read. An alias identifies a data type; it is not a JSON codec. The application's serializer must handle the value of that type.
 
-### Alias Registration
+#### Alias Registration
+
+Java exports a map from aliases to objects. JSON serialization happens after that export. Rust also supports alias registration. In TypeScript, `FlowKey` already uses a string.
 
 ```java
 // Java: register alias before serialization
 ctx.registerAlias(OrderRequest.class, "OrderRequest");
 ctx.registerAlias(PaymentIntent.class, "PaymentIntent");
 
-// Serialize: alias → JSON value
-Map<String, String> json = ctx.toAliasMap();  // {"OrderRequest": "{...}", "PaymentIntent": "{...}"}
+// Export: alias → domain object
+Map<String, Object> values = ctx.toAliasMap();  // alias → domain object
 ```
 
 ```rust
@@ -62,7 +84,9 @@ ctx.register_alias::<OrderRequest>("OrderRequest");
 const OrderRequest = flowKey<OrderRequest>('OrderRequest');
 ```
 
-### JSON Format
+#### JSON Format
+
+Store each domain value as JSON under its agreed alias:
 
 ```json
 {
@@ -71,7 +95,9 @@ const OrderRequest = flowKey<OrderRequest>('OrderRequest');
 }
 ```
 
-### Save / Load Pattern
+#### Save / Load Pattern
+
+The following JDBC excerpt shows where context serialization and restoration fit. It assumes the connection, prepared statement, result set, and domain types already exist; SQL bindings, metadata reads, and exception handling are abbreviated. The load example assumes both shown values are present. A real store converts each saved value using its registered domain type.
 
 ```java
 // Save
@@ -85,12 +111,22 @@ public void save(FlowInstance<?> flow) {
 // Load
 public FlowInstance<S> loadForUpdate(String flowId, FlowDefinition<S> def) {
     Map<String, Object> contextMap = objectMapper.readValue(rs.getString("context_json"), MAP_TYPE);
-    FlowContext ctx = FlowContext.fromAliasMap(flowId, contextMap, aliasRegistry);
+    // Convert JSON values to domain objects before importing them.
+    contextMap.put("OrderRequest", objectMapper.convertValue(contextMap.get("OrderRequest"), OrderRequest.class));
+    contextMap.put("PaymentIntent", objectMapper.convertValue(contextMap.get("PaymentIntent"), PaymentIntent.class));
+    FlowContext ctx = new FlowContext(flowId);
+    ctx.registerAlias(OrderRequest.class, "OrderRequest");
+    ctx.registerAlias(PaymentIntent.class, "PaymentIntent");
+    ctx.fromAliasMap(contextMap);
     return FlowInstance.restore(flowId, sessionId, def, ctx, state, ...);
 }
 ```
 
-## Optimistic Locking
+`fromAliasMap()` is an instance method: register aliases on the new context before calling it. It imports values without converting generic JSON maps into domain objects, which is why the conversion above is needed.
+
+### Optimistic Locking
+
+Only update the row if its version still matches the version you loaded:
 
 ```sql
 UPDATE flow_instances
@@ -99,13 +135,13 @@ WHERE id = ? AND version = ?;
 -- If 0 rows updated → concurrent modification, throw
 ```
 
-Use `FlowInstance.withVersion(newVersion)` after save to keep local state in sync.
+If no row is updated, report the conflict instead of treating the save as successful. After a successful Java save, replace the locally held instance with the copy returned by `FlowInstance.withVersion(newVersion)` to keep its version in sync. Rust uses `set_version()`; see the [custom store guide](custom-flowstore.md).
 
-## PostgreSQL Tips
+### PostgreSQL Tips
 
-### SET LOCAL must be a separate statement
+#### SET LOCAL must be a separate statement
 
-Do NOT combine `SET LOCAL lock_timeout` with `SELECT` in one PreparedStatement:
+Execute `SET LOCAL lock_timeout` separately from the query that returns rows. Combining both in the illustrated `executeQuery()` path can expose the result of `SET LOCAL` instead of the expected row set. Use the same connection and transaction so the local setting applies to the query.
 
 ```java
 // ❌ WRONG: JDBC returns SET LOCAL's empty result, never reaches SELECT
@@ -116,17 +152,15 @@ conn.createStatement().execute("SET LOCAL lock_timeout = '5s'");
 ps = conn.prepareStatement("SELECT * FROM flow_instances WHERE id = ? FOR UPDATE");
 ```
 
-### Flow definition mismatch
+#### Flow definition mismatch
 
-Never mix FlowDefinition versions within a single flow lifecycle. If `/callback` uses
-FlowDefinition v2 but `/verify` still uses v1, `resumeAndExecute()` will fail with
-`FLOW_NOT_FOUND` because the flow ID was created by v2.
+Every endpoint resuming one lifecycle must use the definition selected for that lifecycle. For example, `/callback` and `/verify` must agree on the definition used to restore the same stored flow. A definition describes allowed transitions and data requirements; it is not part of the serialized context.
 
-**Rule: all endpoints in one authentication flow must use the same FlowDefinition instance.**
+Do not diagnose every `FLOW_NOT_FOUND` as a definition mismatch. The engine reports it when the store cannot return an active instance for the ID. If the store chooses rows by definition, check that selection as well as the ID and completion status. For deliberate upgrades, see [long-lived flows](long-lived-flows.md#restore-with-latest-definition).
 
-## FlowInstance.restore() Parameters
+### FlowInstance.restore() Parameters
 
-The `restore()` factory method takes 10 parameters. Reference:
+The Java and TypeScript factories take these 10 parameters. The table uses Java-style type names, with `Date` for TypeScript timestamps. Java permits a null session ID; the TypeScript signature uses `string`.
 
 | # | Parameter | Type | Notes |
 |---|-----------|------|-------|
@@ -141,82 +175,83 @@ The `restore()` factory method takes 10 parameters. Reference:
 | 9 | version | int | Optimistic locking version |
 | 10 | exitState | String? | null if active, state name if completed |
 
-## loadForUpdate with Definition
+These parameters restore the listed instance fields. They do not include an active child instance or the time the current state was entered. If your store must preserve those across reloads, account for them separately rather than assuming this factory restores them.
 
-TypeScript FlowStore implementations should accept `definition` as a second parameter:
+### loadForUpdate with Definition
+
+The TypeScript engine passes a definition when loading an instance. A concrete store method can accept that optional argument to reconstruct the instance:
 
 ```typescript
 loadForUpdate<S extends string>(flowId: string, definition?: FlowDefinition<S>): FlowInstance<S> | undefined;
 ```
 
-This allows the store to reconstruct `FlowInstance` using `FlowInstance.restore()`,
-which requires the definition reference. InMemoryFlowStore ignores this parameter
-since it holds FlowInstance objects directly.
+`FlowInstance.restore()` needs the definition reference. `InMemoryFlowStore` ignores it because it already holds `FlowInstance` objects. This example describes the concrete loading method, not a replacement for the exported `FlowStore` interface. The current engine consumes the loaded instance synchronously; making this method return a Promise does not make that engine path asynchronous.
 
-## Auto-Chain Design Intent
+### Auto-Chain Design Intent
 
-**tramli's auto-chain executes synchronously to completion.** When `startFlow()` or
-`resumeAndExecute()` is called, the engine fires all Auto/Branch transitions until
-it hits an External transition or a terminal state. The call returns only after
-the entire chain completes.
+An auto-chain is the sequence of Auto and Branch transitions executed before the engine next waits at an External transition or reaches a terminal state. `startFlow()` and `resumeAndExecute()` complete that sequence before returning in Java, or before their returned Promise resolves in TypeScript.
 
-This is intentional:
-- **Atomicity**: the chain is a single logical unit. Partial execution would require
-  rollback coordination
-- **Simplicity**: one request = one complete transition sequence
-- **Predictability**: after `startFlow()` returns, the flow is either waiting at
-  External or completed
+This makes a chain one logical execution unit and leaves the caller at a defined stopping point. It does **not** automatically make the chain a database transaction or roll back external side effects. The store and application must provide those guarantees where needed.
 
-**If you need UI progress updates during a long chain:**
-1. Use External transitions to break the chain into steps, resuming from the client
-2. Emit events from within processors (e.g., socket.io) for progress indication
-3. Run `startFlow()` in a background task and poll `FlowInstance.currentState()`
+For progress updates during a long chain:
 
-## Error Information
+1. Use External transitions to split it into steps, then resume from the client.
+2. Emit progress events from processors, for example through socket.io.
+3. Run `startFlow()` in a background task and poll the current state (`FlowInstance.currentState()` in Java), if the store exposes intermediate progress.
 
-When a processor throws during execution, the engine:
-1. Restores context from backup (pre-processor state)
-2. Sets `FlowInstance.lastError()` with the error message
-3. Routes to the error transition (if configured via `onError`/`onAnyError`)
+### Error Information
 
-The `lastError` property is available for rollback processors to inspect what went wrong.
+For Java processor exceptions, the engine restores the saved context, records the message in `FlowInstance.lastError()`, and routes to the configured `onError` or `onAnyError` transition. Error-handling code can inspect the message to understand the failure. Context restoration does not undo an HTTP request or a database write made by a processor.
 
-## PostgreSQL JDBC 実装の注意点
+<a id="postgresql-jdbc-実装の注意点"></a>
 
-volta-auth-proxy の本番運用で発見された落とし穴。
+### JDBC and HTTP integration examples
 
-### SET LOCAL + SELECT の複合文
+These excerpts show two failures that can look like lost flow or session data in an authentication handler.
+
+<a id="set-local--select-の複合文"></a>
+
+#### Combined SET LOCAL and SELECT
+
+The longer form of the JDBC example shows why the query can fail before the handler receives its flow row:
 
 ```java
-// ❌ 動かない — rs は SET LOCAL の結果（空）を返す
+// Incorrect: SET LOCAL does not produce the expected row set
 String sql = """
     SET LOCAL lock_timeout = '5s';
     SELECT ... FROM auth_flows WHERE id = ? FOR UPDATE
     """;
 PreparedStatement ps = conn.prepareStatement(sql);
 ResultSet rs = ps.executeQuery();
-// → "クエリは結果を返却しませんでした" エラー
+// Error: the query did not return results
 
-// ✅ 正しい — 別 Statement で実行
+// Correct: execute with a separate Statement
 try (var stmt = conn.createStatement()) {
     stmt.execute("SET LOCAL lock_timeout = '5s'");
 }
 PreparedStatement ps = conn.prepareStatement("SELECT ... FOR UPDATE");
 ```
 
-**影響例:** OIDC callback で flow が見つからない → 400 → セッション Cookie 未設定 → ログインループ。
-エラーメッセージが「クエリは結果を返却しませんでした」で、flow データの問題に見えない。
+If that failure stops an authentication callback before it sets a session cookie, the user may be sent back to login. Check the failed SQL operation before assuming the flow row is missing.
 
-### Set-Cookie ヘッダの上書き (Javalin)
+<a id="set-cookie-ヘッダの上書き-javalin"></a>
 
-FlowStore とは直接関係ないが、認証フローの実装で頻出:
+#### Replacing Set-Cookie headers in Javalin
+
+This is an HTTP integration issue, separate from persistence. When an authentication response needs two cookies, replacing the header can discard the first one:
 
 ```java
-// ❌ Javalin の ctx.header() は上書き
+// Incorrect: ctx.header() replaces the header
 ctx.header("Set-Cookie", "session=abc");
-ctx.header("Set-Cookie", "mfa_flow=xyz");  // session cookie が消える
+ctx.header("Set-Cookie", "mfa_flow=xyz");  // replaces the session cookie
 
-// ✅ addHeader で追加
+// Correct: append with addHeader
 ctx.res().addHeader("Set-Cookie", "session=abc");
 ctx.res().addHeader("Set-Cookie", "mfa_flow=xyz");
 ```
+
+## When not to use this pattern
+
+Use `InMemoryFlowStore` when flows only need to live within one process, such as in a unit test. A database schema adds serialization, transaction, and migration work that those flows may not need.
+
+Treat this as a reference, not a ready-made persistent store. Applications with active SubFlows, state deadlines across restarts, or delivery guarantees beyond storing an instance need additional implementation and validation. Use an existing store that meets those needs when one is available.
