@@ -12,7 +12,8 @@ use crate::error::FlowError;
 /// # Processor Contract
 /// Processors MUST NOT perform destructive changes on existing context entries.
 /// Processors should only add new entries via `put()`. On processor failure,
-/// the engine routes to the error transition without restoring context.
+/// the engine restores the context snapshot taken before processor execution
+/// and routes to the error transition.
 pub struct FlowContext {
     pub flow_id: String,
     pub created_at: std::time::Instant,

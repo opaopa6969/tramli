@@ -653,7 +653,17 @@ impl<S: FlowState, Store: FlowStore<S>> FlowEngine<S, Store> {
                         })
                         .unwrap_or(t);
                     if let Some(proc) = &specific.processor {
-                        proc.process(&mut flow.context)?;
+                        let backup = flow.context.snapshot();
+                        if let Err(e) = proc.process(&mut flow.context) {
+                            flow.context.restore_from(backup);
+                            Self::handle_error_with_cause(flow, current, def, Some(&e));
+                            return Ok(Some((
+                                format!("{:?}", current),
+                                format!("{:?}", flow.current_state()),
+                                "error".to_string(),
+                                true,
+                            )));
+                        }
                     }
                     let from_dbg = format!("{:?}", current);
                     if let Some(action) = def.exit_action(current) {
@@ -670,7 +680,8 @@ impl<S: FlowState, Store: FlowStore<S>> FlowEngine<S, Store> {
                         false,
                     )));
                 }
-                Self::handle_error(flow, current, def);
+                let cause = FlowError::unknown_branch(branch.name(), &label);
+                Self::handle_error_with_cause(flow, current, def, Some(&cause));
                 return Ok(Some((
                     format!("{:?}", current),
                     format!("{:?}", flow.current_state()),
