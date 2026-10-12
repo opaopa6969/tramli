@@ -1,5 +1,18 @@
 # FlowEngine Specification
 
+この仕様は、`FlowEngine` がフローを開始・再開する際の処理順序、外部イベントの選択、失敗時の復元とエラー経路を決めます。
+Java・TypeScript・Rust の実装者と、実行時の挙動を確認する利用者向けです。
+利用目的は README の[「なぜ tramli が必要か」](../../README-ja.md#なぜ-tramli-が必要か)、全体像は[「FlowEngine」](../../README-ja.md#flowengine)を参照してください。
+
+**読み方**: [FlowContext](flow-context-spec.md) と [FlowDefinition](flow-definition-spec.md) を先に読み、この文書では Configuration → startFlow → resumeAndExecute → executeAutoChain → handleError の順で実行を追います。
+Loggers、FlowInstance Behavior、Exception Codes は、各手順に登場する記録・状態更新・エラーの参照先です。
+
+**用語**: フロー定義は状態と遷移の記述、フローインスタンス（FlowInstance）はその定義に沿って進む個別の実行、FlowStore はインスタンスを保存・取得するインターフェースです。
+Processor は遷移に伴う処理、Guard は外部イベントを検証する処理、`requires` / `produces` は必要とする／提供するデータの宣言、snapshot は復元用に保存したデータです。
+Auto-chain は自動遷移と分岐を続けて実行する処理、SubFlow は親フローに組み込む子フロー、TTL（time-to-live）はフローの有効期間、UUID はインスタンスを識別するための一意な識別子です。
+explicit trigger は `externalOn` で指定するイベント識別用の型／キー、legacy はその指定を使わず Guard の `requires` に基づいて選択する方式を指します。
+DD-026 #17 は、3 言語の挙動を揃えるために Branch の状態入退場コールバックを検討した設計判断の項目番号です。
+
 **Source**: Java reference implementation (v3.1.0)
 
 ## Configuration

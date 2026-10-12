@@ -1,5 +1,13 @@
 # Shared Test Scenarios — 3 言語共通
 
+この文書は、Java・TypeScript・Rust の実装が同じ入力に対して同じ結果になるかを確認する共通テストの入力と期待値を決めます。
+各言語の実装者とテスト担当者向けです。
+利用目的は README の[「なぜ tramli が必要か」](../../README-ja.md#なぜ-tramli-が必要か)、構成要素は[「コアコンセプト」](../../README-ja.md#コアコンセプト)を参照してください。
+
+**読み方**: [FlowContext](flow-context-spec.md) → [FlowDefinition](flow-definition-spec.md) → [FlowEngine](flow-engine-spec.md) で仕様を確認してから、対象の S 番号のシナリオを読みます。
+各シナリオでは States と Transitions でフローを確認し、Processor／Guard の定義、Test 内の呼び出し、Expect の期待値の順に読みます。
+S 番号はシナリオ識別子、`initial` / `terminal` は初期／終端状態、`requires` / `produces` は必要とする／提供するデータ、`noop` は何もしない処理、snake_case は単語をアンダースコアで区切る命名法です。
+
 各言語で以下のシナリオを同じ入力・同じ期待出力でテストする。
 テスト名は全言語で統一する（snake_case）。
 

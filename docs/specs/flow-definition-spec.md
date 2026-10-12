@@ -1,5 +1,16 @@
 # FlowDefinition Specification
 
+この仕様は、`FlowDefinition` で状態・遷移・エラー経路を宣言する方法と、`build()` が行う検証を決めます。
+Java・TypeScript・Rust の実装者と、フロー定義の検証条件を確認する利用者向けです。
+利用目的は README の[「なぜ tramli が必要か」](../../README-ja.md#なぜ-tramli-が必要か)、全体像は[「FlowDefinition」](../../README-ja.md#flowdefinition)を参照してください。
+
+**読み方**: Builder API で定義方法を確認し、build() Process → Validation Checks → Warnings で実行前の検証を読み、Accessor Methods と withPlugin で構築後の操作を確認します。
+
+**用語**: 初期状態（initial state）は開始地点、終端状態（terminal state）は終了地点、Processor は遷移に伴う処理、Guard は外部イベントを検証する処理です。
+Auto は自動遷移、External は外部イベントによる遷移、Branch は返されたラベルで行き先を選ぶ遷移、SubFlow は親フローに組み込む子フローを指します。
+`requires` は処理に必要なデータの宣言、`produces` は処理が提供するデータの宣言、`DataFlowGraph` はその依存関係を表すグラフです。
+TTL（time-to-live）はフローインスタンスの有効期間、DAG（directed acyclic graph）は有向の循環を含まないグラフ、perpetual は終端への到達を必須としないフローを指します。
+
 **Source**: Java reference implementation (v3.1.0)
 
 ## Builder API
