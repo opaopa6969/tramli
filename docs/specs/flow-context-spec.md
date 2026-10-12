@@ -1,5 +1,15 @@
 # FlowContext Specification
 
+This specification defines how `FlowContext` stores and retrieves data passed between processing steps, restores data after failures, and uses aliases to handle stored data across languages.
+It is intended for Java, TypeScript, and Rust implementers and for users who want to understand how data is handled.
+For use cases, see [Why tramli exists](../../README.md#why-tramli-exists) in the README; for an overview, see [FlowContext](../../README.md#flowcontext).
+
+**How to read**: Follow Core Operations → Snapshot / Restore → Alias Support → Key Design to learn about value operations, restoration, aliases, and language-specific keys.
+
+**Terminology**: A key identifies a value; attributes are key-value pairs; an alias is a string name assigned to a language-specific key.
+A shallow copy does not duplicate the internal contents of stored values.
+The branded string in `FlowKey<T>` is a string key associated with the value type `T`; `TypeId` is a Rust type identifier; `CloneAny` is a Rust trait for storing and cloning values of different types.
+
 **Source**: Java reference implementation (v3.1.0)
 
 ## Core Operations

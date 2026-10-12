@@ -1,5 +1,16 @@
 # FlowDefinition Specification
 
+This specification defines how to declare states, transitions, and error routes in `FlowDefinition`, and the validation performed by `build()`.
+It is intended for Java, TypeScript, and Rust implementers and for users who want to understand the validation criteria for flow definitions.
+For use cases, see [Why tramli exists](../../README.md#why-tramli-exists) in the README; for an overview, see [FlowDefinition](../../README.md#flowdefinition).
+
+**How to read**: Start with Builder API to learn how to define a flow, follow build() Process → Validation Checks → Warnings for validation before execution, then read Accessor Methods and withPlugin for operations after construction.
+
+**Terminology**: An initial state is the starting point; a terminal state is an endpoint; a Processor performs work associated with a transition; a Guard validates an external event.
+Auto is an automatic transition; External is a transition driven by an external event; Branch selects a destination using a returned label; SubFlow is a child flow embedded in a parent flow.
+`requires` declares the data a processing step needs; `produces` declares the data it provides; `DataFlowGraph` represents those dependencies as a graph.
+TTL (time-to-live) is the lifetime of a flow instance; a DAG (directed acyclic graph) is a directed graph without cycles; perpetual describes a flow that is not required to reach a terminal state.
+
 **Source**: Java reference implementation (v3.1.0)
 
 ## Builder API

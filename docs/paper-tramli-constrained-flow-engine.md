@@ -1,8 +1,26 @@
 # tramli: Definition-Time Validated Constrained Flow Engine with Data-Flow Contracts
 
+This document explains what tramli validates before execution to address structural and data-dependency errors in multi-step processes, and the limits of that validation.
+It is intended for developers selecting libraries, implementers, and researchers. For specific use cases, see [Why tramli exists](../README.md#why-tramli-exists) in the README.
+
 > v3 — DGE 査読 Round 1 (G1-G12) + Round 2 (G13, G15-G21) 反映。全 Gap 解消。
 
 **Target audience**: Engineers selecting state machine libraries, library authors, and researchers interested in the intersection of data-flow analysis and state machine design. This is a positioning paper, not a formal academic submission.
+
+DGE (Dialogue-driven Gap Extraction) is this repository's review method for finding design gaps through dialogue from multiple perspectives; G numbers identify the findings raised during those reviews.
+
+## Plain-language summary
+
+Multi-step application processes need to track both their current stage and the data needed by later steps.
+A change can leave a stage unreachable, create an automatic loop, or omit data on one route.
+tramli describes the stages and transitions together in a flow definition.
+Its states are flat enums, and its transitions use automatic steps, external events, or labelled branches.
+Each processing step declares which data it needs and which data it provides.
+Calling `build()` checks the flow structure and declared data dependencies before any flow instance runs.
+A derived data-flow graph shows where data is produced and consumed.
+The library has Java, TypeScript, and Rust implementations with shared tests.
+These checks validate declarations; they do not prove that processing code actually supplies the declared data.
+They also do not prove eventual completion or provide durable, distributed execution; the cross-language evidence is empirical.
 
 ## Abstract
 
@@ -11,6 +29,8 @@ State machine libraries are widely used for managing complex application workflo
 ---
 
 ## 1. Introduction
+
+LLM (large language model) refers to a model that generates text and code.
 
 ### 1.1 The Problem
 
@@ -45,6 +65,8 @@ tramli is a **focused, embeddable library** for applications where the dominant 
 
 ### 2.1 Theoretical Foundations
 
+An FSM (finite state machine) models a process using a finite set of states and transitions; UML (Unified Modeling Language) is a notation system for design; SCXML (State Chart XML) is a specification for describing state machines in XML.
+
 **Harel Statecharts (1987)** introduced hierarchical states, orthogonal regions, and history states as extensions to flat finite state machines. UML State Machines and SCXML formalized these concepts into standards. tramli intentionally omits these features — it models flows as flat state graphs with three transition types (Auto, External, Branch), gaining simplicity at the cost of expressiveness. Specifically, orthogonal regions (concurrent state) and history states (state memory) are outside tramli's model. This restricts tramli to sequential, non-concurrent workflows, which covers the majority of business process flows (authentication, payment, approval) but not concurrent protocol modeling.
 
 **Extended Finite State Machines (EFSMs)** augment FSMs with variables and guards on transitions. Data-flow analysis of EFSMs (cf. Cheng & Krishnakumar, 1993) applies classical definition-use analysis to track variable assignments and references across state transitions. tramli's requires/produces contracts are a **specialization of EFSM data-flow analysis**: instead of tracking individual variables, tramli tracks data types (Class keys). This coarser granularity trades precision for simplicity — a processor that declares `requires(OrderRequest.class)` does not specify which fields of OrderRequest it uses. The benefit is that contracts are trivially declared and verified without complex pointer analysis.
@@ -68,6 +90,8 @@ Temporal.io (~19,400 stars) and AWS Step Functions solve a fundamentally differe
 ## 3. Design
 
 ### Design Intuition: Compiler Techniques for State Machines
+
+A DAG (directed acyclic graph) is a directed graph without cycles; DFS (depth-first search) and BFS (breadth-first search) are graph traversal methods that explore depth first and breadth first, respectively.
 
 tramli applies well-known compiler techniques to state machine definitions. Readers familiar with compiler theory will recognize:
 
@@ -108,6 +132,8 @@ tramli has 8 composable building blocks:
 Auto and Branch transitions form a DAG — enforced at definition time. External transitions pause the flow until an event arrives.
 
 ### 3.3 Auto-Chain
+
+OIDC (OpenID Connect) is an authentication protocol; MFA (multi-factor authentication) uses multiple authentication factors. Both appear in the authentication flow example below.
 
 When an External transition's guard passes, the engine continues firing Auto and Branch transitions until it reaches another External transition or a terminal state:
 
@@ -221,6 +247,8 @@ Definition-time validation ensures all terminal states of the child flow are map
 ## 4. Implementation
 
 ### 4.1 Three-Language Monorepo
+
+JDBC (Java Database Connectivity) is Java's database connectivity API; a DSL (domain-specific language) is a language for expressing a specific kind of task; TS is an abbreviation for TypeScript.
 
 tramli is implemented in Java (21+), TypeScript (Node 18+), and Rust (1.75+) within a single repository. The architecture follows a **specification-implementation separation** pattern (analogous to JDBC's single API with multiple vendor implementations): FlowDefinition is the specification, and each language's FlowEngine is an implementation that must conform to the same behavioral contract.
 
@@ -380,6 +408,8 @@ This parallels other successful constraint-based designs: Rust's borrow checker 
 
 ### 6.5 Safety vs Liveness
 
+TTL (time-to-live) is the lifetime of a flow; DD-009 is the design decision number in this repository for the setting that allows flows without terminal states.
+
 tramli's 8-item validation checks **safety properties** — "nothing bad happens" (unreachable states, missing data, infinite loops). It does not check **liveness properties** — "something good eventually happens."
 
 Specifically: a flow stopped at an External transition will wait indefinitely if the external event never arrives. The TTL mechanism provides **bounded liveness** — the flow will expire after a configured duration. However, perpetual flows (DD-009, `allow_perpetual()`) have no TTL and no terminal states. A perpetual flow with an External transition can deadlock permanently if the event source fails.
@@ -411,6 +441,8 @@ The requires/produces contract is the **invariant common to all four theories**.
 
 ### Validation by alternative designs (DD-021)
 
+DD-021 is the decision number summarizing the internal design explorations of Carta (a proposal using hierarchical states) and Tenure (a proposal that records events to update state); the DGE sessions below are records of the dialogues that examined those proposals.
+
 Two independent DGE sessions tested whether tramli's flat model is limiting:
 
 **Carta** (Harel Statechart design): Hierarchical states with entry/exit actions and visual formalism. When data-flow verification was applied, hierarchical states degraded verification (implicit paths through super-states) and orthogonal regions broke it entirely (exponential path combinations).
@@ -431,6 +463,8 @@ Two independent DGE sessions tested whether tramli's flat model is limiting:
 ---
 
 ## 7. Future Work
+
+DD-018 is the design decision number in this repository for addressing stored data across languages through documentation and alias APIs rather than making FlowStore a separate service.
 
 Listed by priority (highest first):
 

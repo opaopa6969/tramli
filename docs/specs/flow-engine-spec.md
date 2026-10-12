@@ -1,5 +1,18 @@
 # FlowEngine Specification
 
+This specification defines the processing order when `FlowEngine` starts or resumes a flow, external event selection, restoration after failures, and error routes.
+It is intended for Java, TypeScript, and Rust implementers and for users who want to understand runtime behavior.
+For use cases, see [Why tramli exists](../../README.md#why-tramli-exists) in the README; for an overview, see [FlowEngine](../../README.md#flowengine).
+
+**How to read**: Read [FlowContext](flow-context-spec.md) and [FlowDefinition](flow-definition-spec.md) first, then follow execution in this document through Configuration → startFlow → resumeAndExecute → executeAutoChain → handleError.
+Refer to Loggers, FlowInstance Behavior, and Exception Codes for logging, state updates, and errors mentioned in each step.
+
+**Terminology**: A flow definition describes states and transitions; a flow instance (FlowInstance) is an individual execution that follows that definition; FlowStore is an interface for storing and retrieving instances.
+A Processor performs work associated with a transition; a Guard validates an external event; `requires` / `produces` declare needed / provided data; a snapshot is data saved for restoration.
+An auto-chain executes automatic transitions and branches in succession; SubFlow is a child flow embedded in a parent flow; TTL (time-to-live) is the lifetime of a flow; a UUID is a unique identifier used to identify an instance.
+An explicit trigger is an event-identifying type/key specified by `externalOn`; legacy refers to selection based on a Guard's `requires` without that specification.
+DD-026 #17 identifies the item in a design decision that considered Branch state entry/exit callbacks to align behavior across the three languages.
+
 **Source**: Java reference implementation (v3.1.0)
 
 ## Configuration

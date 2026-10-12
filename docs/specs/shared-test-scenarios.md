@@ -1,5 +1,13 @@
 # Shared Test Scenarios — 3 言語共通
 
+This document defines the inputs and expected results of shared tests that check whether the Java, TypeScript, and Rust implementations produce the same results for the same inputs.
+It is intended for implementers and testers of each language.
+For use cases, see [Why tramli exists](../../README.md#why-tramli-exists) in the README; for the components, see [Core Concepts](../../README.md#core-concepts).
+
+**How to read**: Read the specifications in the order [FlowContext](flow-context-spec.md) → [FlowDefinition](flow-definition-spec.md) → [FlowEngine](flow-engine-spec.md), then read the scenario with the relevant S number.
+In each scenario, examine the flow in States and Transitions, then read the Processor/Guard definitions, the calls in Test, and the expected results in Expect, in that order.
+S numbers identify scenarios; `initial` / `terminal` denote initial / terminal states; `requires` / `produces` denote needed / provided data; `noop` is an operation that does nothing; snake_case is a naming convention that separates words with underscores.
+
 各言語で以下のシナリオを同じ入力・同じ期待出力でテストする。
 テスト名は全言語で統一する（snake_case）。
 
