@@ -11,7 +11,7 @@ Refer to Loggers, FlowInstance Behavior, and Exception Codes for logging, state 
 A Processor performs work associated with a transition; a Guard validates an external event; `requires` / `produces` declare needed / provided data; a snapshot is data saved for restoration.
 An auto-chain executes automatic transitions and branches in succession; SubFlow is a child flow embedded in a parent flow; TTL (time-to-live) is the lifetime of a flow; a UUID is a unique identifier used to identify an instance.
 An explicit trigger is an event-identifying type/key specified by `externalOn`; legacy refers to selection based on a Guard's `requires` without that specification.
-DD-026 #17 identifies the item in a design decision that considered Branch state entry/exit callbacks to align behavior across the three languages.
+DD-026 #17 identifies the design decision that Branch transitions fire state entry/exit callbacks in all three languages.
 
 **Source**: Java reference implementation (v3.1.0)
 
@@ -180,12 +180,14 @@ if depth >= maxChainDepth: throw MAX_CHAIN_DEPTH
 3. target = branchTargets[label] (throw UNKNOWN_BRANCH if not found)
 4. Execute specific branch processor (if present)
 5. On error: context.restoreFrom(backup), handleError, return ERROR
-6. flow.transitionTo(target)
-7. store.recordTransition
-8. Return 1
+6. fireExit(flow, from)
+7. flow.transitionTo(target)
+8. fireEnter(flow, target)
+9. store.recordTransition
+10. Return 1
 
-> **Note (DD-026 #17)**: Java does NOT fire enterAction/exitAction on branch.
-> TS/Rust fire on all transitions including branch. Java is considered a bug.
+> **Note (DD-026 #17)**: enterAction/exitAction fire on branch transitions in all three
+> implementations. Java previously skipped them; that was fixed in commit 3299424d.
 
 ## handleError
 

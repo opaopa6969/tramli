@@ -7,7 +7,7 @@ For use cases, see [Why tramli exists](../../README.md#why-tramli-exists) in the
 **How to read**: Follow Core Operations → Snapshot / Restore → Alias Support → Key Design to learn about value operations, restoration, aliases, and language-specific keys.
 
 **Terminology**: A key identifies a value; attributes are key-value pairs; an alias is a string name assigned to a language-specific key.
-A shallow copy does not duplicate the internal contents of stored values.
+A shallow copy does not duplicate the internal contents of stored values; Rust's snapshot copies values via `Clone` instead (see Snapshot / Restore).
 The branded string in `FlowKey<T>` is a string key associated with the value type `T`; `TypeId` is a Rust type identifier; `CloneAny` is a Rust trait for storing and cloning values of different types.
 
 **Source**: Java reference implementation (v3.1.0)
@@ -18,17 +18,20 @@ The branded string in `FlowKey<T>` is a string key associated with the value typ
 |--------|----------|
 | put(key, value) | Store value. Overwrites previous. Fires stateLogger if set. |
 | get(key) | Return value or throw MISSING_CONTEXT |
-| find(key) | Return value or null/None/Option |
+| find(key) | Return value if present. Absent: `Optional.empty()` (Java), `undefined` (TypeScript), `None` (Rust) |
 | has(key) | Return true if key present |
 
 ## Snapshot / Restore
 
 | Method | Behavior |
 |--------|----------|
-| snapshot() | Shallow copy of all attributes (for rollback) |
+| snapshot() | Copy of all attributes (for rollback). Depth is language-dependent; see note |
 | restoreFrom(snapshot) | Clear all attributes, restore from snapshot |
 
-**Note**: Shallow copy — nested object mutations are NOT rolled back.
+**Note (language difference)**:
+- Java / TypeScript: shallow copy of the attribute map. Values are shared, so in-place mutations of a stored object are NOT rolled back.
+- Rust: each value is copied with its `Clone` implementation (`CloneAny::clone_box`), because a boxed value cannot be shared without changing the storage type. In-place mutations are rolled back to the extent that the type's `Clone` copies its contents (e.g. `Vec` contents are copied; values behind `Rc`/`Arc` are shared).
+- In all languages, Processors should add new entries via `put()` rather than mutate stored values, so rollback behaves the same regardless of copy depth.
 
 ## Alias Support (Cross-Language Serialization)
 
