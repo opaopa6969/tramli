@@ -22,6 +22,8 @@
 
 **クックブック**: [API クックブック — 全メソッドの使用例](docs/api-cookbook-ja.md) | [English](docs/api-cookbook.md)
 
+**ドキュメント一覧**: [docs/ の全文書と読む順番](docs/README-ja.md) | [English](docs/README.md)
+
 ---
 
 ## 目次

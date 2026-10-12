@@ -23,6 +23,8 @@ State machines where **invalid transitions cannot exist** — enforced at build 
 
 **Cookbook**: [API Cookbook — every method with examples](docs/api-cookbook.md) | [日本語版](docs/api-cookbook-ja.md)
 
+**All docs**: [index of every document and a reading order](docs/README.md) | [日本語版](docs/README-ja.md)
+
 ---
 
 ## Table of Contents
