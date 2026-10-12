@@ -6,6 +6,7 @@ crates.io, npm (@unlaxer/tramli), and Maven Central (org.unlaxer:tramli).
 ## [Unreleased]
 
 ### Added
+- Java `FlowContext.aliasOf(type)` / `keyOfAlias(alias)` return registered aliases / types, or `null` when unregistered. (#143)
 - Rust `FlowInstance::set_version()` provides an idiomatic public API for
   persistent `FlowStore` implementations to advance optimistic-lock versions
   without replacing the instance or losing its context. The existing
