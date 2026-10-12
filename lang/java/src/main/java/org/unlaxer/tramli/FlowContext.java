@@ -67,6 +67,26 @@ public final class FlowContext {
         classToAlias.put(type, alias);
     }
 
+    /**
+     * Returns the registered alias for a type.
+     *
+     * @param type the type whose alias is requested
+     * @return the registered alias, or {@code null} if the type is not registered
+     */
+    public String aliasOf(Class<?> type) {
+        return classToAlias.get(type);
+    }
+
+    /**
+     * Returns the type registered for an alias.
+     *
+     * @param alias the alias whose type is requested
+     * @return the registered type, or {@code null} if the alias is not registered
+     */
+    public Class<?> keyOfAlias(String alias) {
+        return aliasToClass.get(alias);
+    }
+
     /** Export context as alias → value map (for JSON serialization). */
     public Map<String, Object> toAliasMap() {
         var map = new LinkedHashMap<String, Object>();

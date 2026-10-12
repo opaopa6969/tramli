@@ -1289,6 +1289,7 @@ This is the same advantage that Airflow/Temporal users wish they had: **build-ti
 | `put(key, value)` | Store typed value |
 | `has(key)` | Check if key exists |
 | `registerAlias(type, alias)` | Register string alias for cross-language serialization |
+| `aliasOf(type)` / `keyOfAlias(alias)` | Look up registered alias / type (Java: null if unregistered) |
 | `toAliasMap()` | Export as alias → value map (for JSON serialization) |
 | `fromAliasMap(map)` | Import from alias → value map |
 

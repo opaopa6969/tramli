@@ -10,6 +10,43 @@ class FlowContextTest {
     record Beta(int count) {}
 
     @Test
+    void aliasOfReturnsRegisteredAlias() {
+        var ctx = new FlowContext("f1");
+        ctx.registerAlias(Alpha.class, "alpha");
+        assertEquals("alpha", ctx.aliasOf(Alpha.class));
+    }
+
+    @Test
+    void keyOfAliasReturnsRegisteredType() {
+        var ctx = new FlowContext("f1");
+        ctx.registerAlias(Alpha.class, "alpha");
+        assertSame(Alpha.class, ctx.keyOfAlias("alpha"));
+    }
+
+    @Test
+    void unregisteredAliasLookupsReturnNull() {
+        var ctx = new FlowContext("f1");
+        ctx.put(Alpha.class, new Alpha("hello"));
+        ctx.registerAlias(Beta.class, "beta");
+        assertNull(ctx.aliasOf(Alpha.class));
+        assertNull(ctx.keyOfAlias("Alpha"));
+        assertNull(ctx.keyOfAlias("unknown"));
+    }
+
+    @Test
+    void aliasLookupsRoundTripForMultipleTypes() {
+        var ctx = new FlowContext("f1");
+        ctx.registerAlias(Alpha.class, "alpha");
+        ctx.registerAlias(Beta.class, "beta");
+        for (Class<?> type : new Class<?>[] {Alpha.class, Beta.class}) {
+            assertSame(type, ctx.keyOfAlias(ctx.aliasOf(type)));
+        }
+        for (String alias : new String[] {"alpha", "beta"}) {
+            assertEquals(alias, ctx.aliasOf(ctx.keyOfAlias(alias)));
+        }
+    }
+
+    @Test
     void putAndGet() {
         var ctx = new FlowContext("f1");
         ctx.put(Alpha.class, new Alpha("hello"));

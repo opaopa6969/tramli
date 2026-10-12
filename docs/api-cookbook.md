@@ -782,6 +782,8 @@ if ctx.has::<FraudScore>() { /* ... */ }                      // check
 
 **When to use:** Context data must be saved under readable names in JSON. An alias is a string name for a type or key; Java/TypeScript convert to and from alias maps, while Rust exposes the mapping for your own serialization code.
 
+In Java, `aliasOf(type)` / `keyOfAlias(alias)` look up registered aliases / types, returning `null` when unregistered.
+
 ```java
 // Setup (once)
 ctx.registerAlias(OrderRequest.class, "OrderRequest");

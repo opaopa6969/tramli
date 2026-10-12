@@ -800,6 +800,8 @@ if ctx.has::<FraudScore>() { /* ... */ }                      // check
 
 **いつ使うか:** コンテキストのデータを、読みやすい名前で JSON に保存したいときに使います。alias（別名）は型やキーに対応する文字列です。Java/TypeScript は別名を使うマップへの変換・復元ができ、Rust は自分でシリアライズするための対応表を取得できます。
 
+Java の `aliasOf(type)` / `keyOfAlias(alias)` は登録済みの別名 / 型を取得し、未登録なら `null` を返します。
+
 ```java
 // Setup (once)
 ctx.registerAlias(OrderRequest.class, "OrderRequest");
