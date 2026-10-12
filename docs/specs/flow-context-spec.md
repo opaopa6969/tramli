@@ -1,14 +1,14 @@
 # FlowContext Specification
 
-この仕様は、処理の間でデータを受け渡す `FlowContext` の保存・取得、失敗時の復元、言語間で保存データを扱うための別名を決めます。
-Java・TypeScript・Rust の実装者と、データの扱いを確認する利用者向けです。
-利用目的は README の[「なぜ tramli が必要か」](../../README-ja.md#なぜ-tramli-が必要か)、全体像は[「FlowContext」](../../README-ja.md#flowcontext)を参照してください。
+This specification defines how `FlowContext` stores and retrieves data passed between processing steps, restores data after failures, and uses aliases to handle stored data across languages.
+It is intended for Java, TypeScript, and Rust implementers and for users who want to understand how data is handled.
+For use cases, see [Why tramli exists](../../README.md#why-tramli-exists) in the README; for an overview, see [FlowContext](../../README.md#flowcontext).
 
-**読み方**: Core Operations → Snapshot / Restore → Alias Support → Key Design の順に、値の操作、復元、別名、言語ごとのキーを確認します。
+**How to read**: Follow Core Operations → Snapshot / Restore → Alias Support → Key Design to learn about value operations, restoration, aliases, and language-specific keys.
 
-**用語**: キーは値を識別するもの、属性（attributes）はキーと値の組、エイリアス（alias）は言語固有のキーに付ける文字列の別名です。
-浅いコピー（shallow copy）は格納した値の内部まで複製しないコピーです。
-`FlowKey<T>` の branded string は値の型 `T` と結び付けた文字列キー、`TypeId` は Rust の型識別子、`CloneAny` は異なる型の値を格納し複製するための Rust の trait です。
+**Terminology**: A key identifies a value; attributes are key-value pairs; an alias is a string name assigned to a language-specific key.
+A shallow copy does not duplicate the internal contents of stored values.
+The branded string in `FlowKey<T>` is a string key associated with the value type `T`; `TypeId` is a Rust type identifier; `CloneAny` is a Rust trait for storing and cloning values of different types.
 
 **Source**: Java reference implementation (v3.1.0)
 

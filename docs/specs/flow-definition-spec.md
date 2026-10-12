@@ -1,15 +1,15 @@
 # FlowDefinition Specification
 
-この仕様は、`FlowDefinition` で状態・遷移・エラー経路を宣言する方法と、`build()` が行う検証を決めます。
-Java・TypeScript・Rust の実装者と、フロー定義の検証条件を確認する利用者向けです。
-利用目的は README の[「なぜ tramli が必要か」](../../README-ja.md#なぜ-tramli-が必要か)、全体像は[「FlowDefinition」](../../README-ja.md#flowdefinition)を参照してください。
+This specification defines how to declare states, transitions, and error routes in `FlowDefinition`, and the validation performed by `build()`.
+It is intended for Java, TypeScript, and Rust implementers and for users who want to understand the validation criteria for flow definitions.
+For use cases, see [Why tramli exists](../../README.md#why-tramli-exists) in the README; for an overview, see [FlowDefinition](../../README.md#flowdefinition).
 
-**読み方**: Builder API で定義方法を確認し、build() Process → Validation Checks → Warnings で実行前の検証を読み、Accessor Methods と withPlugin で構築後の操作を確認します。
+**How to read**: Start with Builder API to learn how to define a flow, follow build() Process → Validation Checks → Warnings for validation before execution, then read Accessor Methods and withPlugin for operations after construction.
 
-**用語**: 初期状態（initial state）は開始地点、終端状態（terminal state）は終了地点、Processor は遷移に伴う処理、Guard は外部イベントを検証する処理です。
-Auto は自動遷移、External は外部イベントによる遷移、Branch は返されたラベルで行き先を選ぶ遷移、SubFlow は親フローに組み込む子フローを指します。
-`requires` は処理に必要なデータの宣言、`produces` は処理が提供するデータの宣言、`DataFlowGraph` はその依存関係を表すグラフです。
-TTL（time-to-live）はフローインスタンスの有効期間、DAG（directed acyclic graph）は有向の循環を含まないグラフ、perpetual は終端への到達を必須としないフローを指します。
+**Terminology**: An initial state is the starting point; a terminal state is an endpoint; a Processor performs work associated with a transition; a Guard validates an external event.
+Auto is an automatic transition; External is a transition driven by an external event; Branch selects a destination using a returned label; SubFlow is a child flow embedded in a parent flow.
+`requires` declares the data a processing step needs; `produces` declares the data it provides; `DataFlowGraph` represents those dependencies as a graph.
+TTL (time-to-live) is the lifetime of a flow instance; a DAG (directed acyclic graph) is a directed graph without cycles; perpetual describes a flow that is not required to reach a terminal state.
 
 **Source**: Java reference implementation (v3.1.0)
 

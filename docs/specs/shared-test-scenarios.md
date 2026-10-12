@@ -1,12 +1,12 @@
 # Shared Test Scenarios — 3 言語共通
 
-この文書は、Java・TypeScript・Rust の実装が同じ入力に対して同じ結果になるかを確認する共通テストの入力と期待値を決めます。
-各言語の実装者とテスト担当者向けです。
-利用目的は README の[「なぜ tramli が必要か」](../../README-ja.md#なぜ-tramli-が必要か)、構成要素は[「コアコンセプト」](../../README-ja.md#コアコンセプト)を参照してください。
+This document defines the inputs and expected results of shared tests that check whether the Java, TypeScript, and Rust implementations produce the same results for the same inputs.
+It is intended for implementers and testers of each language.
+For use cases, see [Why tramli exists](../../README.md#why-tramli-exists) in the README; for the components, see [Core Concepts](../../README.md#core-concepts).
 
-**読み方**: [FlowContext](flow-context-spec.md) → [FlowDefinition](flow-definition-spec.md) → [FlowEngine](flow-engine-spec.md) で仕様を確認してから、対象の S 番号のシナリオを読みます。
-各シナリオでは States と Transitions でフローを確認し、Processor／Guard の定義、Test 内の呼び出し、Expect の期待値の順に読みます。
-S 番号はシナリオ識別子、`initial` / `terminal` は初期／終端状態、`requires` / `produces` は必要とする／提供するデータ、`noop` は何もしない処理、snake_case は単語をアンダースコアで区切る命名法です。
+**How to read**: Read the specifications in the order [FlowContext](flow-context-spec.md) → [FlowDefinition](flow-definition-spec.md) → [FlowEngine](flow-engine-spec.md), then read the scenario with the relevant S number.
+In each scenario, examine the flow in States and Transitions, then read the Processor/Guard definitions, the calls in Test, and the expected results in Expect, in that order.
+S numbers identify scenarios; `initial` / `terminal` denote initial / terminal states; `requires` / `produces` denote needed / provided data; `noop` is an operation that does nothing; snake_case is a naming convention that separates words with underscores.
 
 各言語で以下のシナリオを同じ入力・同じ期待出力でテストする。
 テスト名は全言語で統一する（snake_case）。
