@@ -70,6 +70,13 @@ impl FlowError {
         )
     }
 
+    pub fn unknown_branch(branch_name: &str, label: &str) -> Self {
+        Self::new(
+            "UNKNOWN_BRANCH",
+            format!("Branch '{branch_name}' returned unknown label: {label}"),
+        )
+    }
+
     pub fn max_chain_depth() -> Self {
         Self::new("MAX_CHAIN_DEPTH", "Auto-chain exceeded maximum depth of 10")
     }

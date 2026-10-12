@@ -26,6 +26,7 @@ crates.io, npm (@unlaxer/tramli), and Maven Central (org.unlaxer:tramli).
   strict_mode, max_chain_depth) and the store's allocated capacity intact.
 
 ### Fixed
+- Rust Branch の Processor 失敗時に context を復元してエラー経路へ遷移し、未知ラベルの `UNKNOWN_BRANCH` を原因別ルーティングと `last_error` に渡すよう修正した。
 - Rust `SubFlowAdapter::nesting_depth()` now recurses into the wrapped
   definition's own sub-flow transitions instead of always reporting `1`. Build
   validation's max-nesting-depth check (limit 3) relies on this value, so a
