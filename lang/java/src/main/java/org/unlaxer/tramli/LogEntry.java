@@ -11,7 +11,7 @@ public final class LogEntry {
     /** Emitted on each state transition. */
     public record Transition(String flowId, String flowName, String from, String to, String trigger, long durationMicros) {}
 
-    /** Emitted when context.put() is called (opt-in via setStateLogger). */
+    /** Emitted after successful processors for added or replaced values (opt-in via setStateLogger). */
     public record State(String flowId, String flowName, String state, Class<?> type, Object value) {
         public String typeName() { return type.getSimpleName(); }
     }

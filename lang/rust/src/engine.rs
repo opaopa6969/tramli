@@ -111,7 +111,7 @@ impl<S: FlowState, Store: FlowStore<S>> FlowEngine<S, Store> {
     ) {
         self.transition_logger = Some(Box::new(logger));
     }
-    /// Set state logger. Called on each context.put(). Opt-in for debugging.
+    /// Set state logger. Called after successful processors for added or replaced values. Opt-in.
     pub fn set_state_logger(&mut self, logger: impl Fn(&StateLogEntry) + Send + Sync + 'static) {
         self.state_logger = Some(Box::new(logger));
     }
@@ -252,7 +252,12 @@ impl<S: FlowState, Store: FlowStore<S>> FlowEngine<S, Store> {
                             }
                             let to = transition.to;
                             if let Some(proc) = &transition.processor {
-                                match proc.process(&mut flow.context) {
+                                match Self::process_and_log(
+                                    flow,
+                                    proc.as_ref(),
+                                    false,
+                                    self.state_logger.as_deref(),
+                                ) {
                                     Err(ref e) => {
                                         flow.context.restore_from(backup);
                                         Self::handle_error_with_cause(flow, current, &def, Some(e));
@@ -413,7 +418,13 @@ impl<S: FlowState, Store: FlowStore<S>> FlowEngine<S, Store> {
                 let def = flow.definition.clone();
 
                 // Step dispatch: SubFlow > Auto > Branch > External(stop)
-                Self::dispatch_step(flow, current, &def, self.strict_mode)?
+                Self::dispatch_step(
+                    flow,
+                    current,
+                    &def,
+                    self.strict_mode,
+                    self.state_logger.as_deref(),
+                )?
             }; // flow borrow ends
 
             // Phase 2: record + log + check if we should stop
@@ -525,6 +536,7 @@ impl<S: FlowState, Store: FlowStore<S>> FlowEngine<S, Store> {
         current: S,
         def: &FlowDefinition<S>,
         strict_mode: bool,
+        state_logger: Option<&(dyn Fn(&StateLogEntry) + Send + Sync)>,
     ) -> Result<Option<(String, String, String, bool)>, FlowError> {
         // 1. SubFlow
         if let Some(sft) = def
@@ -580,7 +592,12 @@ impl<S: FlowState, Store: FlowStore<S>> FlowEngine<S, Store> {
         {
             if let Some(proc) = &t.processor {
                 let backup = flow.context.snapshot();
-                let result = proc.process(&mut flow.context);
+                let result = Self::process_and_log(
+                    flow,
+                    proc.as_ref(),
+                    strict_mode || def.strict_mode,
+                    state_logger,
+                );
                 let strict_fail = result.is_ok()
                     && (strict_mode || def.strict_mode)
                     && proc.produces().iter().any(|p| !flow.context.has_type_id(p));
@@ -654,7 +671,9 @@ impl<S: FlowState, Store: FlowStore<S>> FlowEngine<S, Store> {
                         .unwrap_or(t);
                     if let Some(proc) = &specific.processor {
                         let backup = flow.context.snapshot();
-                        if let Err(e) = proc.process(&mut flow.context) {
+                        if let Err(e) =
+                            Self::process_and_log(flow, proc.as_ref(), false, state_logger)
+                        {
                             flow.context.restore_from(backup);
                             Self::handle_error_with_cause(flow, current, def, Some(&e));
                             return Ok(Some((
@@ -693,6 +712,36 @@ impl<S: FlowState, Store: FlowStore<S>> FlowEngine<S, Store> {
 
         // No auto/branch/subflow — stop
         Ok(None)
+    }
+
+    fn process_and_log(
+        flow: &mut FlowInstance<S>,
+        processor: &dyn StateProcessor<S>,
+        verify: bool,
+        logger: Option<&(dyn Fn(&StateLogEntry) + Send + Sync)>,
+    ) -> Result<(), FlowError> {
+        if logger.is_some() {
+            flow.context.begin_logged_puts();
+        }
+        let result = processor.process(&mut flow.context);
+        if let Some(logger) = logger {
+            let success = result.is_ok()
+                && (!verify
+                    || processor
+                        .produces()
+                        .iter()
+                        .all(|p| flow.context.has_type_id(p)));
+            for (key, value) in flow.context.finish_logged_puts(success) {
+                logger(&StateLogEntry {
+                    flow_id: flow.id.clone(),
+                    flow_name: flow.definition.name.clone(),
+                    state: format!("{:?}", flow.current_state()),
+                    key,
+                    value,
+                });
+            }
+        }
+        result
     }
 
     fn handle_error(flow: &mut FlowInstance<S>, from_state: S, def: &FlowDefinition<S>) {

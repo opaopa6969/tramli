@@ -27,9 +27,21 @@ DD-026 #17 identifies the design decision that Branch transitions fire state ent
 | Logger | Fires When | Entry Fields |
 |--------|-----------|--------------|
 | transitionLogger | Every state transition | flowId, flowName, from, to, trigger |
-| stateLogger | context.put() by processor (opt-in) | flowId, flowName, state, type/key, value |
+| stateLogger | After a successful Auto / label-specific Branch / External processor, once per added or replaced key (opt-in; no notification on processor failure or produces violation) | flowId, flowName, state (transition source), type/key, final value |
 | errorLogger | Error route taken or TERMINAL_ERROR | flowId, flowName, from, to, trigger, cause |
 | guardLogger | After guard.validate() | flowId, flowName, state, guardName, result, reason |
+
+State logging compares the context immediately before and after each processor. Java / TypeScript
+notify new keys and values replaced by reference identity (`!=` / `!==`); putting the same
+reference or mutating an existing object in place does not notify. Rust records the types
+written by `put` during the processor: each `put` replaces an owned value, even if equal.
+Repeated writes to one key produce one entry with its final value. Initial data, external
+data, guard output data, and state enter/exit actions are excluded. Failed processors
+restore context without emitting state entries; Auto produces validation also precedes logging.
+No logging snapshots or write tracking are allocated when the state logger is unset.
+Rust uses the full type name as `key`; `value` renders strings and scalar primitives,
+and is `<opaque: TYPE_NAME>` for other `CloneAny` values, which have no formatting bound.
+Entry ordering is unspecified.
 
 ## startFlow
 
