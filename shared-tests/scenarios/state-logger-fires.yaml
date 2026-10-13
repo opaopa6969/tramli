@@ -1,0 +1,25 @@
+flow: state-logger
+description: "Successful processors log added/replaced keys once, using the transition source state"
+# Executable counterparts: StateLoggerTest.java, state-logger.test.ts, state_logger.rs
+# Rust uses String/u32 in place of Java/TS dedicated keys; compare logical values.
+processor_modes: [auto, branch_label_run, external_accepted]
+initial_data:
+  Existing: original
+processor_puts:
+  - {key: Existing, value: intermediate}
+  - {key: Existing, value: final}
+  - {key: Added, value: new}
+expect_success:
+  state: DONE
+  state_log_entries:
+    - {state: INIT, key: Existing, value: final}
+    - {state: INIT, key: Added, value: new}
+  # Rust state spelling: Init; Added is u32(7); values are rendered strings.
+expect_processor_failure:
+  state: ERROR
+  state_log_entries: []
+  restored: {Existing: original}
+  absent: [Added]
+expect_logger_removed:
+  state: DONE
+  state_log_entries: []

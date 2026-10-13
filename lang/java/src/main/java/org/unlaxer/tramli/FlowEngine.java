@@ -50,7 +50,7 @@ public final class FlowEngine {
         this.transitionLogger = logger;
     }
 
-    /** Set state logger. Called on each context.put(). Opt-in for debugging. */
+    /** Set state logger. Called after successful processors for added or replaced context values. Opt-in. */
     public void setStateLogger(java.util.function.Consumer<LogEntry.State> logger) {
         this.stateLogger = logger;
     }
@@ -182,7 +182,7 @@ public final class FlowEngine {
                     }
                     try {
                         if (transition.processor() != null) {
-                            transition.processor().process(flow.context());
+                            processAndLog(flow, transition.processor(), false);
                         }
                         S from = flow.currentState();
                         fireExit(flow, from);
@@ -266,11 +266,27 @@ public final class FlowEngine {
         }
     }
 
+    private <S extends Enum<S> & FlowState> void processAndLog(
+            FlowInstance<S> flow, StateProcessor processor, boolean verify) {
+        var logger = stateLogger;
+        Map<Class<?>, Object> before = logger != null ? flow.context().snapshot() : null;
+        String state = logger != null ? flow.currentState().name() : null;
+        processor.process(flow.context());
+        if (verify) verifyProduces(processor, flow.context(), flow.definition().strictMode());
+        if (logger != null) {
+            for (var entry : flow.context().snapshot().entrySet()) {
+                if (!before.containsKey(entry.getKey()) || before.get(entry.getKey()) != entry.getValue()) {
+                    logger.accept(new LogEntry.State(flow.id(), flow.definition().name(), state,
+                            entry.getKey(), entry.getValue()));
+                }
+            }
+        }
+    }
+
     private <S extends Enum<S> & FlowState> int dispatchAuto(FlowInstance<S> flow, Transition<S> t) {
         long start = System.nanoTime();
         if (t.processor() != null) {
-            t.processor().process(flow.context());
-            verifyProduces(t.processor(), flow.context(), flow.definition().strictMode());
+            processAndLog(flow, t.processor(), true);
         }
         S from = flow.currentState();
         fireExit(flow, from);
@@ -296,7 +312,7 @@ public final class FlowEngine {
                 .filter(tr -> tr.isBranch() && label.equals(tr.branchLabel())).findFirst()
                 .or(() -> transitions.stream().filter(tr -> tr.isBranch() && tr.to() == target).findFirst())
                 .orElse(t);
-        if (specific.processor() != null) specific.processor().process(flow.context());
+        if (specific.processor() != null) processAndLog(flow, specific.processor(), false);
         S from = flow.currentState();
         fireExit(flow, from);
         flow.transitionTo(target);

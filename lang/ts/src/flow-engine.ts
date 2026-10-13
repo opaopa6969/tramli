@@ -3,7 +3,7 @@ import type { FlowDefinition } from './flow-definition.js';
 import { FlowInstance } from './flow-instance.js';
 import { FlowError } from './flow-error.js';
 import type { InMemoryFlowStore } from './in-memory-flow-store.js';
-import type { Transition, GuardOutput } from './types.js';
+import type { Transition, GuardOutput, StateProcessor } from './types.js';
 
 /** Default max auto-chain depth. Override via constructor options. */
 export const DEFAULT_MAX_CHAIN_DEPTH = 10;
@@ -125,7 +125,10 @@ export class FlowEngine {
             for (const [key, value] of output.data) flow.context.put(key as any, value);
           }
           try {
-            if (transition.processor) await transition.processor.process(flow.context);
+            if (transition.processor) {
+              if (this.stateLogger) await this.processAndLog(flow, transition.processor);
+              else await transition.processor.process(flow.context);
+            }
             const from = flow.currentState;
             this.fireExit(flow, from);
             flow.transitionTo(transition.to);
@@ -199,8 +202,11 @@ export class FlowEngine {
       try {
         if (autoOrBranch.type === 'auto') {
           if (autoOrBranch.processor) {
-            await autoOrBranch.processor.process(flow.context);
-            this.verifyProduces(autoOrBranch.processor, flow.context, flow.definition.strictMode);
+            if (this.stateLogger) await this.processAndLog(flow, autoOrBranch.processor, true);
+            else {
+              await autoOrBranch.processor.process(flow.context);
+              this.verifyProduces(autoOrBranch.processor, flow.context, flow.definition.strictMode);
+            }
           }
           const from = flow.currentState;
           this.fireExit(flow, from);
@@ -218,7 +224,10 @@ export class FlowEngine {
               `Branch '${branch.name}' returned unknown label: ${label}`);
           }
           const specific = transitions.find(t => t.type === 'branch' && t.branchLabel === label) ?? transitions.find(t => t.type === 'branch' && t.to === target) ?? autoOrBranch;
-          if (specific.processor) await specific.processor.process(flow.context);
+          if (specific.processor) {
+            if (this.stateLogger) await this.processAndLog(flow, specific.processor);
+            else await specific.processor.process(flow.context);
+          }
           const from = flow.currentState;
           this.fireExit(flow, from);
           flow.transitionTo(target);
@@ -391,6 +400,21 @@ export class FlowEngine {
         `External event matched multiple equally specific guards at state ${state}`);
     }
     return mostSpecific[0];
+  }
+
+  private async processAndLog<S extends string>(flow: FlowInstance<S>, processor: StateProcessor<S>, verify = false): Promise<void> {
+    const logger = this.stateLogger;
+    const before = logger ? flow.context.snapshot() : undefined;
+    const state = logger ? flow.currentState : undefined;
+    await processor.process(flow.context);
+    if (verify) this.verifyProduces(processor, flow.context, flow.definition.strictMode);
+    if (logger && before) {
+      for (const [key, value] of flow.context.snapshot()) {
+        if (!before.has(key) || before.get(key) !== value) {
+          logger({ flowId: flow.id, flowName: flow.definition.name, state: state!, key, value });
+        }
+      }
+    }
   }
 
   private verifyProduces(processor: { name: string; produces: any[] }, ctx: FlowContext, defStrictMode?: boolean): void {

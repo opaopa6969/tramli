@@ -13,3 +13,7 @@ To add a new scenario:
 1. Write the YAML specification here
 2. Implement the corresponding test in all 3 languages
 3. Verify all 3 pass
+
+`state-logger-fires.yaml` is implemented in the dedicated logger suites:
+`StateLoggerTest.java`, `state-logger.test.ts`, and `state_logger.rs`. It includes
+Auto, label-specific Branch, and accepted External processors, rollback and opt-out.

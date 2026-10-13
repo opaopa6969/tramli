@@ -495,3 +495,15 @@ that sub-flow was itself nested, so depth-4+ chains silently passed validation
 (divergence from Java/TypeScript, which recurse into the nested definition). Fixed
 by computing `SubFlowAdapter::nesting_depth()` recursively from the wrapped
 definition's own sub-flow transitions.
+
+---
+
+## State Logger: Successful Processor Writes
+
+See [state-logger-fires.yaml](../../shared-tests/scenarios/state-logger-fires.yaml).
+Dedicated logger tests in each language run Auto, label-specific Branch, and accepted
+External processors. Each processor replaces an initial value twice and adds a key.
+Expect one entry per changed key with the final value and transition source state.
+A processor failure restores the initial context and emits no entries; removing the
+logger allows the processor to complete without callbacks. Java/TS also verify that
+putting the same reference does not notify; Rust puts replace owned values.

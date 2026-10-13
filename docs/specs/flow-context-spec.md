@@ -16,7 +16,7 @@ The branded string in `FlowKey<T>` is a string key associated with the value typ
 
 | Method | Behavior |
 |--------|----------|
-| put(key, value) | Store value. Overwrites previous. Fires stateLogger if set. |
+| put(key, value) | Store value, overwriting the previous value. During a successful engine processor, an opt-in stateLogger reports each added/replaced key once with its final value and transition source state; failures/produces violations emit nothing. Java/TS use reference identity; Rust records types written by put. See [Loggers](flow-engine-spec.md#loggers). |
 | get(key) | Return value or throw MISSING_CONTEXT |
 | find(key) | Return value if present. Absent: `Optional.empty()` (Java), `undefined` (TypeScript), `None` (Rust) |
 | has(key) | Return true if key present |
