@@ -75,7 +75,7 @@ jobs:
   publish:
     if: github.event_name == 'workflow_dispatch' && inputs.publish
     needs: validate
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, tramli-ci]
     environment: release
     permissions:
       contents: read
