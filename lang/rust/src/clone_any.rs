@@ -7,6 +7,11 @@ use std::any::Any;
 pub trait CloneAny: Any + Send {
     fn clone_box(&self) -> Box<dyn CloneAny>;
     fn as_any(&self) -> &dyn Any;
+
+    /// 型消去後も具象型の名前を取得する。永続化用の安定した識別子には alias を使う。
+    fn type_name(&self) -> &'static str {
+        std::any::type_name::<Self>()
+    }
 }
 
 impl<T: Any + Clone + Send + 'static> CloneAny for T {

@@ -87,8 +87,18 @@ public final class FlowContext {
         return aliasToClass.get(alias);
     }
 
-    /** Export context as alias → value map (for JSON serialization). */
-    public Map<String, Object> toAliasMap() {
+    /** 登録表（alias → 型）の独立したコピーを返す。 */
+    public Map<String, Class<?>> exportAliases() {
+        return new LinkedHashMap<>(aliasToClass);
+    }
+
+    /** 登録表を取り込み、registerAlias と同じように両方向を更新する。 */
+    public void importAliases(Map<String, Class<?>> map) {
+        map.forEach((alias, type) -> registerAlias(type, alias));
+    }
+
+    /** データ（alias → 値）の浅いコピーを返す。未登録の型には単純名を使う。 */
+    public Map<String, Object> toAliasedData() {
         var map = new LinkedHashMap<String, Object>();
         for (var entry : attributes.entrySet()) {
             String alias = classToAlias.getOrDefault(entry.getKey(), entry.getKey().getSimpleName());
@@ -97,15 +107,32 @@ public final class FlowContext {
         return map;
     }
 
-    /** Import context from alias → value map (for deserialization). */
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    public void fromAliasMap(Map<String, Object> map) {
+    /** 登録済み alias の値を取り込む。未登録の alias は無視する。 */
+    public void fromAliasedData(Map<String, Object> map) {
         for (var entry : map.entrySet()) {
             Class<?> clazz = aliasToClass.get(entry.getKey());
             if (clazz != null) {
                 attributes.put(clazz, entry.getValue());
             }
         }
+    }
+
+    /**
+     * Export context as alias → value map (for JSON serialization).
+     * @deprecated データの書き出しには {@link #toAliasedData()} を使う。
+     */
+    @Deprecated
+    public Map<String, Object> toAliasMap() {
+        return toAliasedData();
+    }
+
+    /**
+     * Import context from alias → value map (for deserialization).
+     * @deprecated データの読み込みには {@link #fromAliasedData(Map)} を使う。
+     */
+    @Deprecated
+    public void fromAliasMap(Map<String, Object> map) {
+        fromAliasedData(map);
     }
 
     public Map<Class<?>, Object> snapshot() {

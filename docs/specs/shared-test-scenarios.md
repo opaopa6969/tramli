@@ -507,3 +507,15 @@ Expect one entry per changed key with the final value and transition source stat
 A processor failure restores the initial context and emits no entries; removing the
 logger allows the processor to complete without callbacks. Java/TS also verify that
 putting the same reference does not notify; Rust puts replace owned values.
+
+---
+
+## Alias: データの往復
+
+[alias-data-round-trip.yaml](../../shared-tests/scenarios/alias-data-round-trip.yaml) を参照。
+`FlowContextTest.java` / `flow-context.test.ts` / `context_alias.rs` の
+`alias_data_round_trip` が共通の入力・期待値を検証する。
+登録表をコピーして別コンテキストへ取り込み、alpha → Alpha("hello")、beta → Beta(7)
+のデータを往復する。既存 Alpha("old") は上書きし、未知 alias の値は無視して、
+取り込み後のデータが元の 2 件と一致することを確認する。
+Rust は借用した値を `clone_box()` で所有値へ変換して取り込む。

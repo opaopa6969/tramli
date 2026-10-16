@@ -1290,8 +1290,11 @@ This is the same advantage that Airflow/Temporal users wish they had: **build-ti
 | `has(key)` | Check if key exists |
 | `registerAlias(type, alias)` | Register string alias for cross-language serialization |
 | `aliasOf(type)` / `keyOfAlias(alias)` | Look up registered alias / type (Java: null if unregistered) |
-| `toAliasMap()` | Export as alias → value map (for JSON serialization) |
-| `fromAliasMap(map)` | Import from alias → value map |
+| `exportAliases()` / `importAliases(map)` | 登録表（alias → key）のコピーを取得 / 登録表を取り込み、両方向を更新 |
+| `toAliasedData()` / `fromAliasedData(map)` | データ（alias → 値）を取得 / 登録済み alias の値を取り込む。未登録 alias は無視 |
+| `toAliasMap()` / `fromAliasMap(map)` (**deprecated**) | 旧挙動を維持: Java はデータ、TS は登録表。上記の対応する API に移行 |
+
+Rust は `export_aliases` / `import_aliases` と `to_aliased_data` / `from_aliased_data` を提供し、旧 API は追加しません。データ書き出し時の未登録キーは Java の単純型名、TS の key 文字列、Rust の完全型名になります。Rust は値を借用で書き出し、`Box<dyn CloneAny>` の所有権を受け取って、登録済み `TypeId` と実際の型が一致する値だけを取り込みます。JSON 変換と型の復元は呼び出し側で行います。
 
 #### FlowEngine
 
