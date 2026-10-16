@@ -8,7 +8,7 @@ pub trait CloneAny: Any + Send {
     fn clone_box(&self) -> Box<dyn CloneAny>;
     fn as_any(&self) -> &dyn Any;
 
-    /// 型消去後も具象型の名前を取得する。永続化用の安定した識別子には alias を使う。
+    /// Name of the concrete type, available after type erasure. Use aliases as stable identifiers for persistence.
     fn type_name(&self) -> &'static str {
         std::any::type_name::<Self>()
     }

@@ -112,12 +112,12 @@ impl FlowContext {
             .insert(TypeId::of::<T>(), alias.to_string());
     }
 
-    /// 登録表（alias → TypeId）の独立したコピーを返す。
+    /// Return an independent copy of the alias registry (alias → TypeId).
     pub fn export_aliases(&self) -> HashMap<String, TypeId> {
         self.alias_to_type.clone()
     }
 
-    /// 登録表を取り込み、register_alias と同じように両方向を更新する。
+    /// Import a registry, updating both directions like `register_alias`.
     pub fn import_aliases(&mut self, map: HashMap<String, TypeId>) {
         for (alias, type_id) in map {
             self.alias_to_type.insert(alias.clone(), type_id);
@@ -125,8 +125,8 @@ impl FlowContext {
         }
     }
 
-    /// データ（alias → 値の借用）を返す。未登録の型には具象型の完全名を使う。
-    /// 値はシリアライズせず、呼び出し側で downcast や clone_box を行う。
+    /// Return the data (alias → borrowed value). Unregistered types use the full
+    /// concrete type name. Values are not serialized; callers downcast or `clone_box`.
     pub fn to_aliased_data(&self) -> HashMap<String, &dyn CloneAny> {
         self.attrs
             .iter()
@@ -142,8 +142,8 @@ impl FlowContext {
             .collect()
     }
 
-    /// 登録済み alias と値の実際の型が一致する場合のみ取り込む。
-    /// 未登録の alias や型不一致の値は無視し、既存のデータを維持する。
+    /// Import values whose actual type matches the registered alias's TypeId.
+    /// Unregistered aliases and type mismatches are ignored; existing data is kept.
     pub fn from_aliased_data(&mut self, map: HashMap<String, Box<dyn CloneAny>>) {
         for (alias, value) in map {
             if let Some(&type_id) = self.alias_to_type.get(&alias) {

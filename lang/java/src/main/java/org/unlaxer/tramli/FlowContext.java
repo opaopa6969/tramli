@@ -87,17 +87,17 @@ public final class FlowContext {
         return aliasToClass.get(alias);
     }
 
-    /** 登録表（alias → 型）の独立したコピーを返す。 */
+    /** Return an independent copy of the alias registry (alias → type). */
     public Map<String, Class<?>> exportAliases() {
         return new LinkedHashMap<>(aliasToClass);
     }
 
-    /** 登録表を取り込み、registerAlias と同じように両方向を更新する。 */
+    /** Import a registry, updating both directions like {@link #registerAlias}. */
     public void importAliases(Map<String, Class<?>> map) {
         map.forEach((alias, type) -> registerAlias(type, alias));
     }
 
-    /** データ（alias → 値）の浅いコピーを返す。未登録の型には単純名を使う。 */
+    /** Return a shallow copy of the data (alias → value). Unregistered types use their simple name. */
     public Map<String, Object> toAliasedData() {
         var map = new LinkedHashMap<String, Object>();
         for (var entry : attributes.entrySet()) {
@@ -107,7 +107,7 @@ public final class FlowContext {
         return map;
     }
 
-    /** 登録済み alias の値を取り込む。未登録の alias は無視する。 */
+    /** Import values for registered aliases. Unregistered aliases are ignored. */
     public void fromAliasedData(Map<String, Object> map) {
         for (var entry : map.entrySet()) {
             Class<?> clazz = aliasToClass.get(entry.getKey());
@@ -119,7 +119,7 @@ public final class FlowContext {
 
     /**
      * Export context as alias → value map (for JSON serialization).
-     * @deprecated データの書き出しには {@link #toAliasedData()} を使う。
+     * @deprecated Use {@link #toAliasedData()} to export data.
      */
     @Deprecated
     public Map<String, Object> toAliasMap() {
@@ -128,7 +128,7 @@ public final class FlowContext {
 
     /**
      * Import context from alias → value map (for deserialization).
-     * @deprecated データの読み込みには {@link #fromAliasedData(Map)} を使う。
+     * @deprecated Use {@link #fromAliasedData(Map)} to import data.
      */
     @Deprecated
     public void fromAliasMap(Map<String, Object> map) {

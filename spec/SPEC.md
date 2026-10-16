@@ -602,11 +602,11 @@ A `FlowInstance` is the execution record for a single flow run. Its schema (auth
 
 **Shallow copy caveat.** `snapshot()` is shallow — nested mutable objects are *not* rolled back. Users who rely on rollback must treat context values as effectively immutable (or copy-on-write) within a processor.
 
-**Alias support (DD-018, #145).** 登録表とデータの API を分離する。Java/TS の `exportAliases()` / `importAliases(map)` は alias → key の登録表（書き出しはコピー、取り込みは `registerAlias` と同じ両方向更新）。`toAliasedData()` / `fromAliasedData(map)` は alias → 値のデータ。`registerAlias` / `aliasOf` / `keyOfAlias` は個別の登録・参照に使う。Rust は `register_alias` / `alias_of` / `type_id_of_alias`、`export_aliases` / `import_aliases`、`to_aliased_data` / `from_aliased_data` を使う。
+**Alias support (DD-018, #145).** The registry API and the data API are separate. In Java/TS, `exportAliases()` / `importAliases(map)` handle the alias → key registry (export returns a copy; import updates both directions like `registerAlias`), and `toAliasedData()` / `fromAliasedData(map)` handle alias → value data. `registerAlias` / `aliasOf` / `keyOfAlias` register and look up individual entries. Rust uses `register_alias` / `alias_of` / `type_id_of_alias`, `export_aliases` / `import_aliases`, and `to_aliased_data` / `from_aliased_data`.
 
-未登録キーは Java `getSimpleName()`、TS の key 文字列、Rust の具象型の `std::any::type_name` で書き出す。データ取り込みでは未登録 alias を無視する。Rust は `HashMap<String, &dyn CloneAny>` を返し、`HashMap<String, Box<dyn CloneAny>>` を所有権ごと取り込む際に登録された `TypeId` と値の実際の型を照合し、不一致なら無視する。`CloneAny::type_name()` の既定実装により、型消去・復元後も型名を取得する。Java/TS のデータ取り込みは値の型を検証せず、デシリアライズは呼び出し側の責務とする。
+Unregistered keys are exported as `getSimpleName()` (Java), the key string (TS), or `std::any::type_name` of the concrete type (Rust). Data import ignores unregistered aliases. Rust returns `HashMap<String, &dyn CloneAny>` and, when importing an owned `HashMap<String, Box<dyn CloneAny>>`, checks each value's actual type against the registered `TypeId`, ignoring mismatches. The default `CloneAny::type_name()` implementation keeps type names available after type erasure and restoration. Java/TS data import does not validate value types; deserialization is the caller's responsibility.
 
-旧 `toAliasMap` / `fromAliasMap` は **deprecated** とし、Java は従来のデータ操作、TS は従来の登録表操作を維持する。Java はデータ用新 API、TS は登録表用新 API へ移行する。Rust に旧 API は追加しない。
+The legacy `toAliasMap` / `fromAliasMap` are **deprecated** and keep their previous behavior: data in Java, the registry in TS. Java migrates to the new data API and TS to the new registry API. Rust does not get the legacy API.
 
 **Key design by language:**
 - Java: `Class<?>` (one value per type).
@@ -670,7 +670,7 @@ Java / TS additionally expose `loadForUpdate(flowId, definition)` for optimistic
 Custom stores (PostgreSQL, Redis, DynamoDB, …) must:
 
 1. Persist every field of `FlowInstance` — in particular `stateEnteredAt` (v1.15+). Implementations that skip `stateEnteredAt` degrade per-state timeouts to "use flow creation time as fallback" (conservative — flows may expire earlier than expected on restore).
-2. `FlowContext` の保存・復元には `toAliasedData()` / `fromAliasedData()`（Rust は snake_case）と各型のシリアライズ処理を使い、各言語で同じ alias を登録する（DD-018）。
+2. Save and restore `FlowContext` with `toAliasedData()` / `fromAliasedData()` (snake_case in Rust) plus per-type serialization, registering the same aliases in every language (DD-018).
 3. Implement optimistic locking on `version` — reject `save` if the stored version differs from the instance's version.
 4. Return `None` / `null` for `get_mut` / `loadForUpdate` on completed flows (to force callers to observe `FLOW_ALREADY_COMPLETED`).
 5. Never mutate `FlowInstance` fields other than `version` inside `save`; engine owns all other mutations.
@@ -719,9 +719,9 @@ The library ships no single canonical wire format, but DD-018 mandates the *alia
 }
 ```
 
-`context` は `toAliasedData()` の alias → 値を各型の codec で JSON 化したもの。復元時は各言語で `registerAlias` または `importAliases` により対応表を設定し、値を適切な具象型に復元してから `fromAliasedData()` を呼ぶ。未登録 alias は無視され、後から登録しても値は自動復元されない。
+`context` is the alias → value output of `toAliasedData()`, serialized to JSON by per-type codecs. To restore, set up the mapping in each language with `registerAlias` or `importAliases`, convert values to their concrete types, then call `fromAliasedData()`. Unregistered aliases are ignored, and registering them afterwards does not restore those values.
 
-上記の `contextAliases` はアプリケーションが任意に保持する型名メタデータの例であり、`exportAliases()` の直接の出力ではない。`put` は alias を自動登録しない。Java の `Class` と Rust の `TypeId` は言語間の保存形式ではないため、受信側が自分の型・キーに対応付ける。Rust の API 名は snake_case で、JSON codec は呼び出し側が実装する（DD-018）。
+The `contextAliases` above is an example of type-name metadata the application may keep; it is not the direct output of `exportAliases()`. `put` does not register aliases automatically. Java `Class` and Rust `TypeId` are not cross-language storage formats, so the receiver maps aliases to its own types/keys. Rust API names are snake_case, and the JSON codec is implemented by the caller (DD-018).
 
 ## 3.9 Transition Log Query Patterns
 
@@ -2045,7 +2045,7 @@ public final class FlowContext {
     public void importAliases(Map<String, Class<?>> map);
     public Map<String, Object> toAliasedData();
     public void fromAliasedData(Map<String, Object> map);
-    @Deprecated public Map<String, Object> toAliasMap(); // データ（従来どおり）
+    @Deprecated public Map<String, Object> toAliasMap(); // data (legacy behavior)
     @Deprecated public void fromAliasMap(Map<String, Object> map);
 }
 ```

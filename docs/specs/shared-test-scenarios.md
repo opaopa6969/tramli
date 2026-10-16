@@ -510,12 +510,12 @@ putting the same reference does not notify; Rust puts replace owned values.
 
 ---
 
-## Alias: データの往復
+## Alias: data round trip
 
-[alias-data-round-trip.yaml](../../shared-tests/scenarios/alias-data-round-trip.yaml) を参照。
-`FlowContextTest.java` / `flow-context.test.ts` / `context_alias.rs` の
-`alias_data_round_trip` が共通の入力・期待値を検証する。
-登録表をコピーして別コンテキストへ取り込み、alpha → Alpha("hello")、beta → Beta(7)
-のデータを往復する。既存 Alpha("old") は上書きし、未知 alias の値は無視して、
-取り込み後のデータが元の 2 件と一致することを確認する。
-Rust は借用した値を `clone_box()` で所有値へ変換して取り込む。
+See [alias-data-round-trip.yaml](../../shared-tests/scenarios/alias-data-round-trip.yaml).
+`alias_data_round_trip` in `FlowContextTest.java` / `flow-context.test.ts` /
+`context_alias.rs` checks the shared inputs and expectations.
+The registry is copied into another context, and the data alpha → Alpha("hello"),
+beta → Beta(7) makes a round trip. The existing Alpha("old") is overwritten, a value
+under an unknown alias is ignored, and the imported data must equal the original two entries.
+Rust converts borrowed values to owned values with `clone_box()` before importing.
