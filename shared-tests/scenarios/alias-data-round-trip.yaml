@@ -1,0 +1,27 @@
+context: alias-data-round-trip
+description: "登録表とデータを分けて往復し、未登録 alias は無視する"
+# 実行するテスト: FlowContextTest.java / flow-context.test.ts / context_alias.rs
+# 全言語のテスト名: alias_data_round_trip
+aliases:
+  alpha: Alpha
+  beta: Beta
+initial_data:
+  Alpha: {value: hello}
+  Beta: {count: 7}
+expect_exported_data:
+  alpha: {value: hello}
+  beta: {count: 7}
+import_extra_data:
+  unknown: {value: ignored}
+target_initial_data:
+  Alpha: {value: old}
+steps:
+  - export_aliases_from_source
+  - import_aliases_into_target
+  - export_aliased_data_from_source
+  - add_import_extra_data
+  - import_aliased_data_into_target
+expect_target_data:
+  Alpha: {value: hello}
+  Beta: {count: 7}
+expect_target_entry_count: 2

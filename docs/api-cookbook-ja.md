@@ -796,50 +796,64 @@ if ctx.has::<FraudScore>() { /* ... */ }                      // check
 
 <a id="registeralias--toaliasmap--fromaliasmap"></a>
 
-### `registerAlias(type, alias)` / `toAliasMap()` / `fromAliasMap(map)`
+### `registerAlias(type, alias)` / `toAliasedData()` / `fromAliasedData(map)`
 
-**いつ使うか:** コンテキストのデータを、読みやすい名前で JSON に保存したいときに使います。alias（別名）は型やキーに対応する文字列です。Java/TypeScript は別名を使うマップへの変換・復元ができ、Rust は自分でシリアライズするための対応表を取得できます。
+**用途:** データを alias（型やキーに対応する名前）で保存・復元する。登録表は `exportAliases()` / `importAliases(map)` で扱い、データは `toAliasedData()` / `fromAliasedData(map)` で扱う。登録表の書き出しはコピーを返し、取り込みは `registerAlias` と同じ両方向更新を行う。
 
-Java の `aliasOf(type)` / `keyOfAlias(alias)` は登録済みの別名 / 型を取得し、未登録なら `null` を返します。
+未登録キーの書き出し名は Java の単純型名、TS の key 文字列、Rust の完全型名。保存形式を安定させるには明示的な alias を使う。読み込み時、未登録 alias は無視される。Java/TS は値の型を検証しないため、呼び出し側で型を復元・検証する。
 
 ```java
-// Setup (once)
+// 保存側・復元側で同じ alias を登録する
 ctx.registerAlias(OrderRequest.class, "OrderRequest");
 ctx.registerAlias(PaymentIntent.class, "PaymentIntent");
 
-// Save to DB
-String json = objectMapper.writeValueAsString(ctx.toAliasMap());
+String json = objectMapper.writeValueAsString(ctx.toAliasedData());
 // {"OrderRequest": {...}, "PaymentIntent": {...}}
 
-// Load from DB
-Map<String, Object> map = objectMapper.readValue(json, MAP_TYPE);
-ctx.fromAliasMap(map);
+// JSON オブジェクトを登録された具象型に変換してから取り込む
+var data = new java.util.LinkedHashMap<String, Object>();
+var fields = objectMapper.readTree(json).fields();
+while (fields.hasNext()) {
+    var field = fields.next();
+    Class<?> type = ctx.keyOfAlias(field.getKey());
+    if (type != null) {
+        data.put(field.getKey(), objectMapper.treeToValue(field.getValue(), type));
+    }
+}
+ctx.fromAliasedData(data);
 ```
 
 ```typescript
-// Setup (once)
 ctx.registerAlias(OrderRequest, 'OrderRequest');
 ctx.registerAlias(PaymentIntent, 'PaymentIntent');
 
-// Save to DB
-const json = JSON.stringify(Object.fromEntries(ctx.toAliasMap()));
-// {"OrderRequest": {...}, "PaymentIntent": {...}}
+const json = JSON.stringify(Object.fromEntries(ctx.toAliasedData()));
+// {"OrderRequest": {...}, "PaymentIntent": {...}} — 登録表ではなく値
 
-// Load from DB
-const map = new Map(Object.entries(JSON.parse(json)));
-ctx.fromAliasMap(map);
+// この例は JSON 互換の plain object を値とする。
+// Date やクラスインスタンス等は、ここで専用の変換・検証を行う。
+const data = new Map<string, unknown>(Object.entries(JSON.parse(json)));
+ctx.fromAliasedData(data);
 ```
 
 ```rust
-// Setup (once) — turbofish syntax specifies the Rust type
 ctx.register_alias::<OrderRequest>("OrderRequest");
 ctx.register_alias::<PaymentIntent>("PaymentIntent");
 
-// Query alias ↔ TypeId mapping
-ctx.alias_of(&TypeId::of::<OrderRequest>());       // Some("OrderRequest")
-ctx.type_id_of_alias("OrderRequest");               // Some(&TypeId::of::<OrderRequest>())
-// Use aliases to build your own JSON serialization layer
+// 登録表のコピーを別のコンテキストへ渡す（TypeId はプロセス固有）
+let mut restored = FlowContext::new("restored".into());
+restored.import_aliases(ctx.export_aliases());
+
+// 借用した値をクローンして所有権を渡す、インメモリの往復例
+let data = ctx.to_aliased_data().into_iter()
+    .map(|(alias, value)| (alias, value.clone_box()))
+    .collect();
+restored.from_aliased_data(data);
 ```
+
+Rust の書き出し型は `HashMap<String, &dyn CloneAny>`、取り込み型は `HashMap<String, Box<dyn CloneAny>>`。登録 alias の `TypeId` と値の実際の型が一致する場合のみ格納し、型不一致・未登録は無視する。JSON の保存・復元には、alias ごとに downcast / デシリアライズを行うアプリケーション側の codec が必要になる。
+
+**旧 API からの移行:** Java の `toAliasMap` / `fromAliasMap` はデータ操作のまま deprecated とし、`toAliasedData` / `fromAliasedData` に置き換える。TS の旧 API は登録表操作のまま deprecated とし、同じ動作が必要なら `exportAliases` / `importAliases` に置き換える。TS でデータを保存する場合は上記のデータ用 API を使う。Rust に旧 API は追加しない。
 
 ---
 

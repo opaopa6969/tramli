@@ -65,12 +65,47 @@ export class FlowContext {
     return this.aliasToKey.get(alias) as FlowKey<unknown> | undefined;
   }
 
-  /** Export all registered aliases as a map (alias → key). */
+  /** 登録表（alias → key）の独立したコピーを返す。 */
+  exportAliases(): Map<string, string> {
+    return new Map(this.aliasToKey);
+  }
+
+  /** 登録表を取り込み、registerAlias と同じように両方向を更新する。 */
+  importAliases(map: Map<string, string>): void {
+    for (const [alias, key] of map) {
+      this.registerAlias(key as FlowKey<unknown>, alias);
+    }
+  }
+
+  /** データ（alias → 値）の浅いコピーを返す。未登録の key はそのまま使う。 */
+  toAliasedData(): Map<string, unknown> {
+    const map = new Map<string, unknown>();
+    for (const [key, value] of this.attributes) {
+      map.set(this.keyToAlias.get(key) ?? key, value);
+    }
+    return map;
+  }
+
+  /** 登録済み alias の値を取り込む。未登録の alias は無視する。 */
+  fromAliasedData(map: Map<string, unknown>): void {
+    for (const [alias, value] of map) {
+      const key = this.keyOfAlias(alias);
+      if (key !== undefined) this.put(key, value);
+    }
+  }
+
+  /**
+   * Export all registered aliases as a map (alias → key).
+   * @deprecated 登録表の書き出しには exportAliases() を使う。
+   */
   toAliasMap(): Map<string, string> {
     return new Map(this.aliasToKey);
   }
 
-  /** Import aliases from a map (alias → key). */
+  /**
+   * Import aliases from a map (alias → key).
+   * @deprecated 登録表の読み込みには importAliases(map) を使う。
+   */
   fromAliasMap(map: Map<string, string>): void {
     for (const [alias, key] of map) {
       this.aliasToKey.set(alias, key);

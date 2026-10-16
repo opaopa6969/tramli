@@ -6,6 +6,11 @@ crates.io, npm (@unlaxer/tramli), and Maven Central (org.unlaxer:tramli).
 ## [Unreleased]
 
 ### Added
+- Java / TypeScript / Rust の FlowContext に登録表用 `exportAliases` / `importAliases`
+  とデータ用 `toAliasedData` / `fromAliasedData` を追加（Rust は snake_case）。
+  未登録キーは Java の単純型名、TS の key、Rust の完全型名で書き出し、
+  未登録 alias の取り込みは無視する。Rust は値の実際の型も照合する。
+  Rust `CloneAny::type_name()` に既定実装を追加し、型消去後の型名取得に使用する。 (#145)
 - Java `FlowContext.aliasOf(type)` / `keyOfAlias(alias)` return registered aliases / types, or `null` when unregistered. (#143)
 - Rust `FlowInstance::set_version()` provides an idiomatic public API for
   persistent `FlowStore` implementations to advance optimistic-lock versions
@@ -24,6 +29,12 @@ crates.io, npm (@unlaxer/tramli), and Maven Central (org.unlaxer:tramli).
   `InMemoryFlowStore::with_capacity(n)` for pool/reuse patterns: clear all
   flows and transition history while keeping engine configuration (loggers,
   strict_mode, max_chain_depth) and the store's allocated capacity intact.
+
+### Deprecated
+- Java / TS の `toAliasMap` / `fromAliasMap` は旧挙動を維持して非推奨化。
+  Java のデータ操作は `toAliasedData` / `fromAliasedData` へ、TS の登録表操作は
+  `exportAliases` / `importAliases` へ移行する。TS で値を保存する場合はデータ用 API を使う。
+  Rust に旧 API は追加せず、Java / TS の旧 API 削除は次のメジャーバージョンで検討する。 (#145)
 
 ### Fixed
 - Java / TypeScript / Rust の FlowEngine が成功した Auto・Branch・External Processor の context 追加・上書きを stateLogger に通知し、失敗時は通知しないよう修正した。 (#143)
