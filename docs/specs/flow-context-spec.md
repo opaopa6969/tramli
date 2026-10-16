@@ -37,23 +37,23 @@ The branded string in `FlowKey<T>` is a string key associated with the value typ
 
 | Java / TypeScript | Rust | 動作 |
 |-------------------|------|------|
-| `registerAlias(key/type, alias)` | `register_alias::<T>(alias)` | alias とキーの両方向を登録する |
-| `aliasOf(key/type)` | `alias_of(&type_id)` | 登録済み alias を取得する（未登録: Java `null`、TS `undefined`、Rust `None`） |
-| `keyOfAlias(alias)` | `type_id_of_alias(alias)` | 登録済みキーを取得する（未登録時は上記と同様） |
-| `exportAliases()` | `export_aliases()` | 登録表（alias → key）の独立したコピーを返す |
-| `importAliases(map)` | `import_aliases(map)` | 登録表を追加・上書きし、`registerAlias` と同じ両方向の更新を行う |
-| `toAliasedData()` | `to_aliased_data()` | データ（alias → 値）を返す。Java/TS は浅いコピー、Rust は値への借用 |
-| `fromAliasedData(map)` | `from_aliased_data(map)` | 登録済み alias のデータを追加・上書きする。未登録 alias は無視する |
-| `toAliasMap()` (**deprecated**) | なし | 旧挙動を維持: Java は alias → **値**、TS は alias → **key** |
-| `fromAliasMap(map)` (**deprecated**) | なし | 旧挙動を維持: Java は**データ**を取り込み、TS は**登録表**を取り込む |
+| `registerAlias(key/type, alias)` | `register_alias::<T>(alias)` | Register the alias ↔ key mapping in both directions |
+| `aliasOf(key/type)` | `alias_of(&type_id)` | Get the registered alias (unregistered: Java `null`, TS `undefined`, Rust `None`) |
+| `keyOfAlias(alias)` | `type_id_of_alias(alias)` | Get the registered key (unregistered: same as above) |
+| `exportAliases()` | `export_aliases()` | Return an independent copy of the registry (alias → key) |
+| `importAliases(map)` | `import_aliases(map)` | Add or overwrite registry entries, updating both directions like `registerAlias` |
+| `toAliasedData()` | `to_aliased_data()` | Return data (alias → value). Java/TS: shallow copy; Rust: borrowed values |
+| `fromAliasedData(map)` | `from_aliased_data(map)` | Add or overwrite data for registered aliases; unregistered aliases are ignored |
+| `toAliasMap()` (**deprecated**) | none | Legacy behavior kept: Java returns alias → **value**, TS returns alias → **key** |
+| `fromAliasMap(map)` (**deprecated**) | none | Legacy behavior kept: Java imports **data**, TS imports the **registry** |
 
-未登録キーの書き出し名は Java の `Class.getSimpleName()`、TS の key 文字列、Rust の具象型に対する `std::any::type_name`（完全名）。Rust は `CloneAny::type_name()` の既定実装で取得し、復元された値にも適用する。フォールバック名は自動登録されない。取り込み前に alias を登録しなければ、その値は無視される。
+Unregistered keys are exported as `Class.getSimpleName()` (Java), the key string (TS), or `std::any::type_name` of the concrete type (full name, Rust). Rust obtains it through the default `CloneAny::type_name()` implementation, which also works for restored values. Fallback names are not registered automatically; a value whose alias is not registered before import is ignored.
 
-Java は `Map<String, Class<?>>`、TS は `Map<string, string>`、Rust は `HashMap<String, TypeId>` が登録表の型。キーは言語・プロセス固有なので、登録表そのものを共通の保存形式にはしない。言語間で同じ alias とデータのスキーマを使い、各言語で alias とキーを対応付ける。
+The registry type is `Map<String, Class<?>>` (Java), `Map<string, string>` (TS), and `HashMap<String, TypeId>` (Rust). Keys are language- and process-specific, so the registry itself is not a shared storage format. Use the same aliases and data schema across languages, and map aliases to keys in each language.
 
-データの型は Java `Map<String, Object>`、TS `Map<string, unknown>`。両者は値の型を検証せず、呼び出し側で適切な型にデシリアライズする。Rust は書き出しが `HashMap<String, &dyn CloneAny>`、取り込みが所有権を受け取る `HashMap<String, Box<dyn CloneAny>>`。登録された `TypeId` と `as_any().type_id()` が一致する値だけを取り込み、不一致なら既存データを維持する。これらの API 自体は JSON 変換を行わない。
+The data type is `Map<String, Object>` (Java) and `Map<string, unknown>` (TS); neither validates value types, so the caller deserializes to the right type. Rust exports `HashMap<String, &dyn CloneAny>` and imports an owned `HashMap<String, Box<dyn CloneAny>>`, storing only values whose `as_any().type_id()` matches the registered `TypeId` and keeping existing data otherwise. These APIs do not perform JSON conversion.
 
-移行先: Java の旧 API は `toAliasedData` / `fromAliasedData`、TS の旧 API は `exportAliases` / `importAliases`。TS で値を保存したい場合はデータ用 API を選ぶ。旧 API の削除は次のメジャーバージョンで検討する。
+Migration: Java's legacy API maps to `toAliasedData` / `fromAliasedData`; TypeScript's maps to `exportAliases` / `importAliases`. To save values in TypeScript, use the data API. Removal of the legacy API will be considered for the next major version.
 
 ## Key Design
 

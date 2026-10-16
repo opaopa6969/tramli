@@ -780,19 +780,19 @@ if ctx.has::<FraudScore>() { /* ... */ }                      // check
 
 ### `registerAlias(type, alias)` / `toAliasedData()` / `fromAliasedData(map)`
 
-**用途:** データを alias（型やキーに対応する名前）で保存・復元する。登録表は `exportAliases()` / `importAliases(map)` で扱い、データは `toAliasedData()` / `fromAliasedData(map)` で扱う。登録表の書き出しはコピーを返し、取り込みは `registerAlias` と同じ両方向更新を行う。
+**When to use:** save and restore context data under aliases (stable names mapped to types or keys). Use `exportAliases()` / `importAliases(map)` for the alias registry and `toAliasedData()` / `fromAliasedData(map)` for the data. Exporting the registry returns a copy; importing updates both directions, like `registerAlias`.
 
-未登録キーの書き出し名は Java の単純型名、TS の key 文字列、Rust の完全型名。保存形式を安定させるには明示的な alias を使う。読み込み時、未登録 alias は無視される。Java/TS は値の型を検証しないため、呼び出し側で型を復元・検証する。
+Unregistered keys are exported as the simple class name (Java), the key string (TS), or the full type name (Rust); register explicit aliases for a stable storage format. On import, unregistered aliases are ignored. Java/TS do not validate value types, so the caller must restore and validate them.
 
 ```java
-// 保存側・復元側で同じ alias を登録する
+// Register the same aliases on the saving and restoring side
 ctx.registerAlias(OrderRequest.class, "OrderRequest");
 ctx.registerAlias(PaymentIntent.class, "PaymentIntent");
 
 String json = objectMapper.writeValueAsString(ctx.toAliasedData());
 // {"OrderRequest": {...}, "PaymentIntent": {...}}
 
-// JSON オブジェクトを登録された具象型に変換してから取り込む
+// Convert each JSON object to its registered type before importing
 var data = new java.util.LinkedHashMap<String, Object>();
 var fields = objectMapper.readTree(json).fields();
 while (fields.hasNext()) {
@@ -810,10 +810,10 @@ ctx.registerAlias(OrderRequest, 'OrderRequest');
 ctx.registerAlias(PaymentIntent, 'PaymentIntent');
 
 const json = JSON.stringify(Object.fromEntries(ctx.toAliasedData()));
-// {"OrderRequest": {...}, "PaymentIntent": {...}} — 登録表ではなく値
+// {"OrderRequest": {...}, "PaymentIntent": {...}} — values, not the registry
 
-// この例は JSON 互換の plain object を値とする。
-// Date やクラスインスタンス等は、ここで専用の変換・検証を行う。
+// This example assumes JSON-compatible plain objects as values.
+// Convert and validate Dates, class instances, etc. here.
 const data = new Map<string, unknown>(Object.entries(JSON.parse(json)));
 ctx.fromAliasedData(data);
 ```
@@ -822,20 +822,20 @@ ctx.fromAliasedData(data);
 ctx.register_alias::<OrderRequest>("OrderRequest");
 ctx.register_alias::<PaymentIntent>("PaymentIntent");
 
-// 登録表のコピーを別のコンテキストへ渡す（TypeId はプロセス固有）
+// Copy the registry into another context (TypeId is process-specific)
 let mut restored = FlowContext::new("restored".into());
 restored.import_aliases(ctx.export_aliases());
 
-// 借用した値をクローンして所有権を渡す、インメモリの往復例
+// In-memory round trip: clone the borrowed values to pass ownership
 let data = ctx.to_aliased_data().into_iter()
     .map(|(alias, value)| (alias, value.clone_box()))
     .collect();
 restored.from_aliased_data(data);
 ```
 
-Rust の書き出し型は `HashMap<String, &dyn CloneAny>`、取り込み型は `HashMap<String, Box<dyn CloneAny>>`。登録 alias の `TypeId` と値の実際の型が一致する場合のみ格納し、型不一致・未登録は無視する。JSON の保存・復元には、alias ごとに downcast / デシリアライズを行うアプリケーション側の codec が必要になる。
+In Rust, export returns `HashMap<String, &dyn CloneAny>` and import takes `HashMap<String, Box<dyn CloneAny>>`. A value is stored only if its actual type matches the registered alias's `TypeId`; mismatched or unregistered entries are ignored. Saving to and restoring from JSON requires an application-side codec that downcasts / deserializes each alias.
 
-**旧 API からの移行:** Java の `toAliasMap` / `fromAliasMap` はデータ操作のまま deprecated とし、`toAliasedData` / `fromAliasedData` に置き換える。TS の旧 API は登録表操作のまま deprecated とし、同じ動作が必要なら `exportAliases` / `importAliases` に置き換える。TS でデータを保存する場合は上記のデータ用 API を使う。Rust に旧 API は追加しない。
+**Migrating from the legacy API:** Java's `toAliasMap` / `fromAliasMap` keep operating on data and are deprecated; replace them with `toAliasedData` / `fromAliasedData`. TypeScript's legacy methods keep operating on the registry and are deprecated; replace them with `exportAliases` / `importAliases` if you need that behavior. To save data in TypeScript, use the data API above. Rust does not get the legacy API.
 
 ---
 

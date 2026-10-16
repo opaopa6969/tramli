@@ -6,11 +6,13 @@ crates.io, npm (@unlaxer/tramli), and Maven Central (org.unlaxer:tramli).
 ## [Unreleased]
 
 ### Added
-- Java / TypeScript / Rust の FlowContext に登録表用 `exportAliases` / `importAliases`
-  とデータ用 `toAliasedData` / `fromAliasedData` を追加（Rust は snake_case）。
-  未登録キーは Java の単純型名、TS の key、Rust の完全型名で書き出し、
-  未登録 alias の取り込みは無視する。Rust は値の実際の型も照合する。
-  Rust `CloneAny::type_name()` に既定実装を追加し、型消去後の型名取得に使用する。 (#145)
+- `FlowContext` in Java / TypeScript / Rust gains `exportAliases` / `importAliases`
+  for the alias registry and `toAliasedData` / `fromAliasedData` for context data
+  (snake_case in Rust). Unregistered keys are exported as the simple class name
+  (Java), the key (TS), or the full type name (Rust); unregistered aliases are
+  ignored on import, and Rust also checks each value's actual type. Rust
+  `CloneAny::type_name()` gains a default implementation used to name
+  type-erased values. (#145)
 - Java `FlowContext.aliasOf(type)` / `keyOfAlias(alias)` return registered aliases / types, or `null` when unregistered. (#143)
 - Rust `FlowInstance::set_version()` provides an idiomatic public API for
   persistent `FlowStore` implementations to advance optimistic-lock versions
@@ -31,14 +33,21 @@ crates.io, npm (@unlaxer/tramli), and Maven Central (org.unlaxer:tramli).
   strict_mode, max_chain_depth) and the store's allocated capacity intact.
 
 ### Deprecated
-- Java / TS の `toAliasMap` / `fromAliasMap` は旧挙動を維持して非推奨化。
-  Java のデータ操作は `toAliasedData` / `fromAliasedData` へ、TS の登録表操作は
-  `exportAliases` / `importAliases` へ移行する。TS で値を保存する場合はデータ用 API を使う。
-  Rust に旧 API は追加せず、Java / TS の旧 API 削除は次のメジャーバージョンで検討する。 (#145)
+- Java / TypeScript `toAliasMap` / `fromAliasMap` are deprecated with their
+  existing behavior unchanged (data in Java, the registry in TS). Migrate Java
+  to `toAliasedData` / `fromAliasedData` and TypeScript to `exportAliases` /
+  `importAliases`; to save values in TypeScript, use the data API. Rust does not
+  get the legacy API. Removal will be considered for the next major version. (#145)
 
 ### Fixed
-- Java / TypeScript / Rust の FlowEngine が成功した Auto・Branch・External Processor の context 追加・上書きを stateLogger に通知し、失敗時は通知しないよう修正した。 (#143)
-- Rust Branch の Processor 失敗時に context を復元してエラー経路へ遷移し、未知ラベルの `UNKNOWN_BRANCH` を原因別ルーティングと `last_error` に渡すよう修正した。
+- `FlowEngine` in Java / TypeScript / Rust now notifies the stateLogger of
+  context entries added or replaced by successful Auto, Branch, and External
+  processors; nothing is emitted when a processor fails. Previously the
+  stateLogger was never called. (#143)
+- Rust: when a Branch processor fails, the engine now restores the context and
+  routes to the error transition instead of returning the error to the caller.
+  An unknown branch label now produces `UNKNOWN_BRANCH`, visible to
+  exception-based routing and `last_error`, matching Java/TypeScript. (#143)
 - Rust `SubFlowAdapter::nesting_depth()` now recurses into the wrapped
   definition's own sub-flow transitions instead of always reporting `1`. Build
   validation's max-nesting-depth check (limit 3) relies on this value, so a
@@ -48,9 +57,10 @@ crates.io, npm (@unlaxer/tramli), and Maven Central (org.unlaxer:tramli).
   (`shared_spec.rs`/`SharedSpecTest.java`/`shared-spec.test.ts`) covering both
   the 3-level (allowed) and 4-level (rejected) cases in all three languages;
   previously this validation path had no test coverage anywhere.
-- Rust crate の Quick Start の未実装 guard を実行可能な例に置き換え、
-  外部イベント待ちから完了までの状態を検証するようにした。
-  README を crate ドキュメントとして取り込み、既存の `cargo test` で例を検証する。
+- The Rust crate Quick Start's unimplemented guard is replaced with a runnable
+  example that checks the states from waiting for an external event through
+  completion. The README is included as crate documentation, so `cargo test`
+  verifies the example.
 - Rust `Builder::branch()` now adds transitions in `.to()` declaration order
   instead of `HashMap` iteration order. `DataFlowGraph::traverse` is
   order-sensitive for cyclic joins, so the randomized order made

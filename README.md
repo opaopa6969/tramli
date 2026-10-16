@@ -1290,11 +1290,11 @@ This is the same advantage that Airflow/Temporal users wish they had: **build-ti
 | `has(key)` | Check if key exists |
 | `registerAlias(type, alias)` | Register string alias for cross-language serialization |
 | `aliasOf(type)` / `keyOfAlias(alias)` | Look up registered alias / type (Java: null if unregistered) |
-| `exportAliases()` / `importAliases(map)` | 登録表（alias → key）のコピーを取得 / 登録表を取り込み、両方向を更新 |
-| `toAliasedData()` / `fromAliasedData(map)` | データ（alias → 値）を取得 / 登録済み alias の値を取り込む。未登録 alias は無視 |
-| `toAliasMap()` / `fromAliasMap(map)` (**deprecated**) | 旧挙動を維持: Java はデータ、TS は登録表。上記の対応する API に移行 |
+| `exportAliases()` / `importAliases(map)` | Export a copy of the alias registry (alias → key) / import a registry, updating both directions |
+| `toAliasedData()` / `fromAliasedData(map)` | Export context data (alias → value) / import values for registered aliases; unregistered aliases are ignored |
+| `toAliasMap()` / `fromAliasMap(map)` (**deprecated**) | Legacy behavior kept: data in Java, the registry in TS. Migrate to the matching API above |
 
-Rust は `export_aliases` / `import_aliases` と `to_aliased_data` / `from_aliased_data` を提供し、旧 API は追加しません。データ書き出し時の未登録キーは Java の単純型名、TS の key 文字列、Rust の完全型名になります。Rust は値を借用で書き出し、`Box<dyn CloneAny>` の所有権を受け取って、登録済み `TypeId` と実際の型が一致する値だけを取り込みます。JSON 変換と型の復元は呼び出し側で行います。
+Rust provides `export_aliases` / `import_aliases` and `to_aliased_data` / `from_aliased_data`; the legacy API is not added. When exporting data, unregistered keys are named by the simple class name (Java), the key string (TS), or the full type name (Rust). Rust exports borrowed values and imports owned `Box<dyn CloneAny>` values, storing only those whose actual type matches the registered `TypeId`. JSON conversion and type restoration are the caller's responsibility.
 
 #### FlowEngine
 

@@ -1,7 +1,7 @@
 context: alias-data-round-trip
-description: "登録表とデータを分けて往復し、未登録 alias は無視する"
-# 実行するテスト: FlowContextTest.java / flow-context.test.ts / context_alias.rs
-# 全言語のテスト名: alias_data_round_trip
+description: "Round-trip the registry and data separately; ignore unregistered aliases"
+# Tests: FlowContextTest.java / flow-context.test.ts / context_alias.rs
+# Test name in all languages: alias_data_round_trip
 aliases:
   alpha: Alpha
   beta: Beta
