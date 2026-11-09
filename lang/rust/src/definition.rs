@@ -1393,24 +1393,24 @@ fn check_rp_from<S: FlowState>(
             state_available,
             errors,
         );
+    }
 
-        // Error path analysis: if processor fails, its produces are NOT available.
-        // Both on_step_error routes and the on_error fallback are possible targets.
-        if t.processor.is_some() {
-            for error_target in def.error_targets(t.from) {
-                let mut error_avail = state_available.get(&state).unwrap().clone();
-                if let Some(g) = &t.guard {
-                    error_avail.extend(g.produces());
-                }
-                check_rp_from(
-                    def,
-                    error_target,
-                    &error_avail,
-                    externally_provided,
-                    state_available,
-                    errors,
-                );
-            }
+    // Error path analysis (issue #157): any step leaving a non-terminal state can fail
+    // (processor or branch error, guard retries exhausted). The engine restores
+    // the context to what it was before the guard ran, so every error target
+    // (on_step_error routes and the on_error fallback) receives exactly the
+    // guaranteed set of this state.
+    if !state.is_terminal() && !def.transitions_from(state).is_empty() {
+        for error_target in def.error_targets(state) {
+            let error_avail = state_available.get(&state).unwrap().clone();
+            check_rp_from(
+                def,
+                error_target,
+                &error_avail,
+                externally_provided,
+                state_available,
+                errors,
+            );
         }
     }
 }
