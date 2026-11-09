@@ -40,6 +40,9 @@ crates.io, npm (@unlaxer/tramli), and Maven Central (org.unlaxer:tramli).
   get the legacy API. Removal will be considered for the next major version. (#145)
 
 ### Fixed
+- Rust `build_and_validate()` now collects independent structural diagnostics
+  even when no initial state exists, matching Java/TypeScript and `build()`.
+  Checks that need an initial state remain skipped. (#158)
 - `build()` requires/produces validation (Java / TypeScript / Rust) now checks
   error targets for every way a step can fail, not only processor failures: a
   branch `decide()` error and guard retries being exhausted also route to
