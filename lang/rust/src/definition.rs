@@ -869,15 +869,14 @@ fn collect_errors<S: FlowState>(
     externally_provided: &[TypeId],
 ) -> Vec<ValidationError> {
     // Each check category is run independently so we can tag errors with a code.
+    let mut result: Vec<ValidationError> = Vec::new();
     if def.initial_state.is_none() {
-        return vec![ValidationError {
+        result.push(ValidationError {
             code: "NO_INITIAL_STATE".into(),
             message: "No initial state found".into(),
             state: None,
-        }];
+        });
     }
-
-    let mut result: Vec<ValidationError> = Vec::new();
 
     if !allow_unreachable {
         let mut errs = Vec::new();
