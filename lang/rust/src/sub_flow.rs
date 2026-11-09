@@ -301,7 +301,7 @@ impl<T: FlowState> SubFlowInstance for SubFlowAdapterInstance<T> {
                             &format!("{:?}", current),
                         ) {
                             ctx.restore_from(backup);
-                            return self.handle_external_processor_error(ctx, current, e);
+                            return self.handle_external_processor_error(current, e);
                         }
                     }
                     self.state = Some(ext.to);
@@ -329,7 +329,7 @@ impl<T: FlowState> SubFlowInstance for SubFlowAdapterInstance<T> {
                     &format!("{:?}", current),
                 ) {
                     ctx.restore_from(backup);
-                    return self.handle_external_processor_error(ctx, current, e);
+                    return self.handle_external_processor_error(current, e);
                 }
             }
             self.state = Some(ext.to);
@@ -433,7 +433,6 @@ impl<T: FlowState> SubFlowAdapterInstance<T> {
 
     fn handle_external_processor_error(
         &mut self,
-        ctx: &mut FlowContext,
         current: T,
         cause: FlowError,
     ) -> Result<SubFlowResult, FlowError> {
@@ -445,8 +444,13 @@ impl<T: FlowState> SubFlowAdapterInstance<T> {
             .map(|route| route.target)
             .or_else(|| self.definition.error_transitions.get(&current).copied());
         if let Some(target) = target {
+            // Match the top-level engine and Java/TypeScript: error routing does
+            // not continue the auto-chain from the routed state.
             self.state = Some(target);
-            return self.run_auto_chain(ctx);
+            if target.is_terminal() {
+                return Ok(SubFlowResult::Completed(format!("{:?}", target)));
+            }
+            return Ok(SubFlowResult::WaitingAtExternal);
         }
         // Preserve the adapter's existing error exit for parent mapping/propagation.
         self.handle_error(current, cause)

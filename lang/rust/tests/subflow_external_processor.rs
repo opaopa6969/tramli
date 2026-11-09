@@ -261,3 +261,72 @@ fn assert_failure_route(code: &'static str, target: S, guarded: bool) {
     assert!(!flow.context.has::<i32>());
     assert!(!flow.has_active_sub_flow());
 }
+
+struct Count(Arc<AtomicUsize>);
+impl StateProcessor<S> for Count {
+    fn name(&self) -> &str {
+        "count"
+    }
+    fn requires(&self) -> Vec<TypeId> {
+        vec![]
+    }
+    fn produces(&self) -> Vec<TypeId> {
+        vec![]
+    }
+    fn process(&self, _ctx: &mut FlowContext) -> Result<(), FlowError> {
+        self.0.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    }
+}
+
+/// Error routing to a non-terminal child state stops there, like the top-level
+/// engine and the Java/TypeScript sub-flow paths: the routed state's auto-chain
+/// does not run in the same resume.
+#[test]
+fn failure_routed_to_non_terminal_state_does_not_continue_auto_chain() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let after_route = Arc::new(AtomicUsize::new(0));
+    let def = Builder::new("child-route-non-terminal")
+        .allow_unreachable()
+        .initially_available(vec![TypeId::of::<String>()])
+        .from(S::Wait)
+        .external_with_processor(
+            S::Done,
+            Accept,
+            Produce {
+                guarded: true,
+                calls: calls.clone(),
+                failure: Some("TYPED"),
+            },
+        )
+        .from(S::Next)
+        .auto(S::Done, Count(after_route.clone()))
+        .on_step_error(S::Wait, |e| e.code == "TYPED", "typed", S::Next)
+        .on_error(S::Wait, S::Error)
+        .build()
+        .unwrap();
+    let def = parent(def);
+    let mut engine = FlowEngine::new(InMemoryFlowStore::new());
+    let id = engine
+        .start_flow(
+            def,
+            "session",
+            vec![(TypeId::of::<String>(), Box::new("initial".to_string()))],
+        )
+        .unwrap();
+
+    engine
+        .resume_and_execute(
+            &id,
+            vec![(TypeId::of::<String>(), Box::new("external".to_string()))],
+        )
+        .unwrap();
+
+    let flow = engine.store.get(&id).unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(after_route.load(Ordering::SeqCst), 0);
+    assert!(!flow.is_completed());
+    assert!(flow.has_active_sub_flow());
+    assert_eq!(flow.current_state(), S::Wait);
+    assert!(!flow.context.has::<u32>());
+}
