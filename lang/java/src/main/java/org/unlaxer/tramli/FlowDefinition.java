@@ -81,6 +81,20 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
     public List<Transition<S>> transitions() { return transitions; }
     public Map<S, S> errorTransitions() { return errorTransitions; }
     public Map<S, List<ExceptionRoute<S>>> exceptionRoutes() { return exceptionRoutes; }
+
+    /**
+     * States a flow can enter when a step fails at {@code state}: every
+     * {@code onStepError} route target, then the {@code onError} fallback.
+     */
+    private List<S> errorTargets(S state) {
+        List<S> targets = new ArrayList<>();
+        for (ExceptionRoute<S> route : exceptionRoutes.getOrDefault(state, List.of())) {
+            if (!targets.contains(route.target())) targets.add(route.target());
+        }
+        S fallback = errorTransitions.get(state);
+        if (fallback != null && !targets.contains(fallback)) targets.add(fallback);
+        return targets;
+    }
     public S initialState() { return initialState; }
     public Set<S> terminalStates() { return terminalStates; }
     public boolean strictMode() { return strictMode; }
@@ -586,8 +600,9 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
                     }
                     if (visited.add(t.to())) queue.add(t.to());
                 }
-                S errTarget = def.errorTransitions.get(current);
-                if (errTarget != null && visited.add(errTarget)) queue.add(errTarget);
+                for (S errTarget : def.errorTargets(current)) {
+                    if (visited.add(errTarget)) queue.add(errTarget);
+                }
             }
             for (S s : stateClass.getEnumConstants()) {
                 if (!visited.contains(s) && !s.isTerminal()) {
@@ -617,8 +632,10 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
                 }
                 if (canReachTerminal(def, t.to(), visited)) return true;
             }
-            S errTarget = def.errorTransitions.get(state);
-            return errTarget != null && canReachTerminal(def, errTarget, visited);
+            for (S errTarget : def.errorTargets(state)) {
+                if (canReachTerminal(def, errTarget, visited)) return true;
+            }
+            return false;
         }
 
         private void checkDag(FlowDefinition<S> def, List<String> errors) {
@@ -754,10 +771,10 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
                 checkRequiresProducesFrom(def, t.to(), newAvailable, stateAvailable, errors);
 
                 // Error path analysis: if processor fails, available set does NOT include
-                // the processor's produces. Check error transition target's requirements.
+                // the processor's produces. Check every error target's requirements
+                // (onStepError routes and the onError fallback).
                 if (t.processor() != null) {
-                    S errorTarget = def.errorTransitions.get(t.from());
-                    if (errorTarget != null) {
+                    for (S errorTarget : def.errorTargets(t.from())) {
                         Set<Class<?>> errorAvailable = new HashSet<>(stateAvailable.get(state));
                         // guard produces are available (guard passed before processor ran)
                         if (t.guard() != null) errorAvailable.addAll(t.guard().produces());
