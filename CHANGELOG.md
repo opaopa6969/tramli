@@ -40,6 +40,14 @@ crates.io, npm (@unlaxer/tramli), and Maven Central (org.unlaxer:tramli).
   get the legacy API. Removal will be considered for the next major version. (#145)
 
 ### Fixed
+- `build()` requires/produces validation (Java / TypeScript / Rust) now checks
+  error targets for every way a step can fail, not only processor failures: a
+  branch `decide()` error and guard retries being exhausted also route to
+  `onStepError` / `onError` targets. Error targets are checked with exactly the
+  data guaranteed at the failing state; guard produces are no longer assumed to
+  be available, because the engine restores the context to before the guard ran.
+  Flows whose error handlers relied on guard-produced data are now rejected,
+  matching what the engine actually provides at runtime. (#157)
 - `build()` validation (Java / TypeScript / Rust) now follows `onStepError`
   exception routes like the `onError` fallback: a state entered only through an
   exception route is reachable, an exception route to a terminal state counts as

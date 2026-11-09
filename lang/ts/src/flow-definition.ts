@@ -548,15 +548,16 @@ export class Builder<S extends string> {
         for (const p of t.processor.produces) newAvailable.add(p);
       }
       this.checkRequiresProducesFrom(def, t.to, newAvailable, stateAvailable, errors);
+    }
 
-      // Error path analysis: if processor fails, its produces are NOT available.
-      // Both onStepError routes and the onError fallback are possible targets.
-      if (t.processor) {
-        for (const errorTarget of this.errorTargets(def, t.from)) {
-          const errorAvailable = new Set(stateAvailable.get(state)!);
-          if (t.guard) { for (const p of t.guard.produces) errorAvailable.add(p); }
-          this.checkRequiresProducesFrom(def, errorTarget, errorAvailable, stateAvailable, errors);
-        }
+    // Error path analysis (issue #157): any step leaving a non-terminal state can fail
+    // (processor or branch exception, guard retries exhausted). The engine
+    // restores the context to what it was before the guard ran, so every error
+    // target (onStepError routes and the onError fallback) receives exactly the
+    // guaranteed set of this state.
+    if (!def.stateConfig[state].terminal && def.transitionsFrom(state).length > 0) {
+      for (const errorTarget of this.errorTargets(def, state)) {
+        this.checkRequiresProducesFrom(def, errorTarget, new Set(stateAvailable.get(state)!), stateAvailable, errors);
       }
     }
   }

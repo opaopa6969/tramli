@@ -769,18 +769,17 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
                     newAvailable.addAll(t.processor().produces());
                 }
                 checkRequiresProducesFrom(def, t.to(), newAvailable, stateAvailable, errors);
+            }
 
-                // Error path analysis: if processor fails, available set does NOT include
-                // the processor's produces. Check every error target's requirements
-                // (onStepError routes and the onError fallback).
-                if (t.processor() != null) {
-                    for (S errorTarget : def.errorTargets(t.from())) {
-                        Set<Class<?>> errorAvailable = new HashSet<>(stateAvailable.get(state));
-                        // guard produces are available (guard passed before processor ran)
-                        if (t.guard() != null) errorAvailable.addAll(t.guard().produces());
-                        // but processor produces are NOT available (processor failed)
-                        checkRequiresProducesFrom(def, errorTarget, errorAvailable, stateAvailable, errors);
-                    }
+            // Error path analysis (issue #157): any step leaving a non-terminal state can fail
+            // (processor or branch exception, guard retries exhausted). The engine
+            // restores the context to what it was before the guard ran, so every
+            // error target (onStepError routes and the onError fallback) receives
+            // exactly the guaranteed set of this state.
+            if (!state.isTerminal() && !def.transitionsFrom(state).isEmpty()) {
+                for (S errorTarget : def.errorTargets(state)) {
+                    checkRequiresProducesFrom(def, errorTarget,
+                            new HashSet<>(stateAvailable.get(state)), stateAvailable, errors);
                 }
             }
         }
