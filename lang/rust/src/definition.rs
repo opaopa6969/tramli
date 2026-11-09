@@ -33,6 +33,22 @@ pub struct ExceptionRoute<S: FlowState> {
 }
 
 impl<S: FlowState> FlowDefinition<S> {
+    /// States a flow can enter when a step fails at `state`: every
+    /// `on_step_error` route target, then the `on_error` fallback.
+    pub(crate) fn error_targets(&self, state: S) -> Vec<S> {
+        let mut targets: Vec<S> = self
+            .exception_routes
+            .get(&state)
+            .map(|routes| routes.iter().map(|r| r.target).collect())
+            .unwrap_or_default();
+        if let Some(&e) = self.error_transitions.get(&state) {
+            if !targets.contains(&e) {
+                targets.push(e);
+            }
+        }
+        targets
+    }
+
     pub fn initial_state(&self) -> Option<S> {
         self.initial_state
     }
@@ -307,7 +323,7 @@ impl<S: FlowState> Builder<S> {
             data_flow_graph: DataFlowGraph::empty(),
             enter_actions: HashMap::new(),
             exit_actions: HashMap::new(),
-            exception_routes: HashMap::new(),
+            exception_routes,
             strict_mode: self.strict_mode,
             warnings: Vec::new(),
         };
@@ -337,7 +353,7 @@ impl<S: FlowState> Builder<S> {
             warnings.push(format!("Dead data detected: {:?} — produced but never required by any downstream processor", dead));
         }
         // Exception route ordering warning (broader predicates before narrower ones)
-        for (state, routes) in &exception_routes {
+        for (state, routes) in &def.exception_routes {
             if routes.len() > 1 {
                 warnings.push(format!("onStepError at {:?}: {} routes registered — ensure broader predicates come after specific ones", state, routes.len()));
             }
@@ -347,7 +363,6 @@ impl<S: FlowState> Builder<S> {
             data_flow_graph: graph,
             enter_actions,
             exit_actions,
-            exception_routes,
             warnings,
             ..def
         })
@@ -398,7 +413,7 @@ impl<S: FlowState> Builder<S> {
             data_flow_graph: DataFlowGraph::empty(),
             enter_actions: HashMap::new(),
             exit_actions: HashMap::new(),
-            exception_routes: HashMap::new(),
+            exception_routes,
             strict_mode: self.strict_mode,
             warnings: Vec::new(),
         };
@@ -432,7 +447,7 @@ impl<S: FlowState> Builder<S> {
         if !dead.is_empty() {
             warnings.push(format!("Dead data detected: {:?} — produced but never required by any downstream processor", dead));
         }
-        for (state, routes) in &exception_routes {
+        for (state, routes) in &def.exception_routes {
             if routes.len() > 1 {
                 warnings.push(format!("onStepError at {:?}: {} routes registered — ensure broader predicates come after specific ones", state, routes.len()));
             }
@@ -443,7 +458,6 @@ impl<S: FlowState> Builder<S> {
                 data_flow_graph: graph,
                 enter_actions,
                 exit_actions,
-                exception_routes,
                 warnings,
                 ..def
             }),
@@ -1172,7 +1186,7 @@ fn check_reachability<S: FlowState>(def: &FlowDefinition<S>, errors: &mut Vec<St
                 queue.push(t.to);
             }
         }
-        if let Some(&e) = def.error_transitions.get(&current) {
+        for e in def.error_targets(current) {
             if visited.insert(e) {
                 queue.push(e);
             }
@@ -1221,12 +1235,9 @@ fn can_reach_terminal<S: FlowState>(
             return true;
         }
     }
-    if let Some(&e) = def.error_transitions.get(&state) {
-        if can_reach_terminal(def, e, visited) {
-            return true;
-        }
-    }
-    false
+    def.error_targets(state)
+        .into_iter()
+        .any(|e| can_reach_terminal(def, e, visited))
 }
 
 fn check_dag<S: FlowState>(def: &FlowDefinition<S>, errors: &mut Vec<String>) {
@@ -1383,9 +1394,10 @@ fn check_rp_from<S: FlowState>(
             errors,
         );
 
-        // Error path analysis: if processor fails, its produces are NOT available
+        // Error path analysis: if processor fails, its produces are NOT available.
+        // Both on_step_error routes and the on_error fallback are possible targets.
         if t.processor.is_some() {
-            if let Some(&error_target) = def.error_transitions.get(&t.from) {
+            for error_target in def.error_targets(t.from) {
                 let mut error_avail = state_available.get(&state).unwrap().clone();
                 if let Some(g) = &t.guard {
                     error_avail.extend(g.produces());

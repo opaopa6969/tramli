@@ -369,8 +369,9 @@ export class Builder<S extends string> {
         }
         if (!visited.has(t.to)) { visited.add(t.to); queue.push(t.to); }
       }
-      const errTarget = def.errorTransitions.get(current);
-      if (errTarget && !visited.has(errTarget)) { visited.add(errTarget); queue.push(errTarget); }
+      for (const errTarget of this.errorTargets(def, current)) {
+        if (!visited.has(errTarget)) { visited.add(errTarget); queue.push(errTarget); }
+      }
     }
     for (const s of def.allStates()) {
       if (!visited.has(s) && !def.stateConfig[s].terminal) {
@@ -437,8 +438,22 @@ export class Builder<S extends string> {
       }
       if (this.canReachTerminal(def, t.to, visited)) return true;
     }
-    const errTarget = def.errorTransitions.get(state);
-    return errTarget !== undefined && this.canReachTerminal(def, errTarget, visited);
+    return this.errorTargets(def, state).some(errTarget => this.canReachTerminal(def, errTarget, visited));
+  }
+
+  /**
+   * States a flow can enter when a step fails at `state`: every `onStepError`
+   * route target, then the `onError` fallback. Reads the builder's routes because
+   * they are attached to the definition only after validation.
+   */
+  private errorTargets(def: FlowDefinition<S>, state: S): S[] {
+    const targets: S[] = [];
+    for (const route of this._exceptionRoutes.get(state) ?? []) {
+      if (!targets.includes(route.target)) targets.push(route.target);
+    }
+    const fallback = def.errorTransitions.get(state);
+    if (fallback !== undefined && !targets.includes(fallback)) targets.push(fallback);
+    return targets;
   }
 
   private checkDag(def: FlowDefinition<S>, errors: string[]): void {
@@ -534,10 +549,10 @@ export class Builder<S extends string> {
       }
       this.checkRequiresProducesFrom(def, t.to, newAvailable, stateAvailable, errors);
 
-      // Error path analysis: if processor fails, its produces are NOT available
+      // Error path analysis: if processor fails, its produces are NOT available.
+      // Both onStepError routes and the onError fallback are possible targets.
       if (t.processor) {
-        const errorTarget = def.errorTransitions.get(t.from);
-        if (errorTarget) {
+        for (const errorTarget of this.errorTargets(def, t.from)) {
           const errorAvailable = new Set(stateAvailable.get(state)!);
           if (t.guard) { for (const p of t.guard.produces) errorAvailable.add(p); }
           this.checkRequiresProducesFrom(def, errorTarget, errorAvailable, stateAvailable, errors);

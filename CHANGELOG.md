@@ -40,6 +40,13 @@ crates.io, npm (@unlaxer/tramli), and Maven Central (org.unlaxer:tramli).
   get the legacy API. Removal will be considered for the next major version. (#145)
 
 ### Fixed
+- `build()` validation (Java / TypeScript / Rust) now follows `onStepError`
+  exception routes like the `onError` fallback: a state entered only through an
+  exception route is reachable, an exception route to a terminal state counts as
+  a path to completion, and the requires/produces check verifies the route
+  target with the data available before the failing processor. Previously a
+  processor behind an exception route could require data that the failed step
+  never produced and `build()` still succeeded. (#152)
 - `build()` requires/produces validation (Java / TypeScript / Rust) no longer
   misses a missing requirement when a join state is revisited with a narrower
   available set. The revisit early-return was inverted: it stopped when the new
