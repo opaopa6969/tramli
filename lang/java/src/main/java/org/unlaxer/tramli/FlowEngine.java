@@ -354,18 +354,12 @@ public final class FlowEngine {
         Transition transition = selectExternalTransition(externals, externalData.keySet(), subCurrent.name());
         TransitionGuard guard = transition.guard();
         FlowState subTo = (FlowState) transition.to();
+        Map<Class<?>, Object> acceptedData = Map.of();
 
         if (guard != null) {
             var output = guard.validate(parentFlow.context());
             if (output instanceof TransitionGuard.GuardOutput.Accepted accepted) {
-                for (var entry : accepted.data().entrySet()) {
-                    putRaw(parentFlow.context(), entry.getKey(), entry.getValue());
-                }
-                fireExitRaw(subFlow, subCurrent);
-                subFlow.transitionTo(transition.to());
-                fireEnterRaw(subFlow, (Enum) subTo);
-                store.recordTransition(parentFlow.id(), (FlowState) subCurrent, subTo,
-                        guard.name(), parentFlow.context());
+                acceptedData = accepted.data();
             } else if (output instanceof TransitionGuard.GuardOutput.Rejected) {
                 subFlow.incrementGuardFailure();
                 if (subFlow.guardFailureCount() >= subDef.maxGuardRetries()) {
@@ -392,13 +386,30 @@ public final class FlowEngine {
                 store.save(parentFlow);
                 return parentFlow;
             }
-        } else {
+        }
+
+        // Match top-level External rollback: keep event input, undo accepted data and processor writes.
+        Map<Class<?>, Object> backup = parentFlow.context().snapshot();
+        for (var entry : acceptedData.entrySet()) {
+            putRaw(parentFlow.context(), entry.getKey(), entry.getValue());
+        }
+        boolean succeeded = false;
+        try {
+            if (transition.processor() != null) {
+                processAndLog(subFlow, transition.processor(), false);
+            }
             fireExitRaw(subFlow, subCurrent);
             subFlow.transitionTo(transition.to());
             fireEnterRaw(subFlow, (Enum) subTo);
+            store.recordTransition(parentFlow.id(), (FlowState) subCurrent, subTo,
+                    guard != null ? guard.name() : "external", parentFlow.context());
+            succeeded = true;
+        } catch (Exception e) {
+            parentFlow.context().restoreFrom(backup);
+            handleError(subFlow, (Enum & FlowState) subCurrent, e);
         }
 
-        executeAutoChain(subFlow);
+        if (succeeded) executeAutoChain(subFlow);
 
         if (subFlow.isCompleted()) {
             parentFlow.setActiveSubFlow(null);
@@ -411,6 +422,9 @@ public final class FlowEngine {
                     parentFlow.transitionTo(target);
                     store.recordTransition(parentFlow.id(), from, target,
                             "subFlow:" + subDef.name() + "/" + subFlow.exitState(), parentFlow.context());
+                    executeAutoChain(parentFlow);
+                } else {
+                    handleError(parentFlow, parentFlow.currentState());
                     executeAutoChain(parentFlow);
                 }
             }

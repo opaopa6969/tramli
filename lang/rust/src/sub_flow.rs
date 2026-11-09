@@ -1,5 +1,6 @@
 use crate::context::FlowContext;
 use crate::definition::FlowDefinition;
+use crate::engine::{process_and_log, StateLogEntry};
 use crate::error::FlowError;
 use crate::types::*;
 use std::any::TypeId;
@@ -59,6 +60,16 @@ pub trait SubFlowInstance: Send {
         _external_types: &HashSet<TypeId>,
     ) -> Result<SubFlowResult, FlowError> {
         self.resume(ctx)
+    }
+    /// Resume with optional processor state logging. Existing custom instances
+    /// keep their resume behavior through this default implementation.
+    fn resume_with_external_types_and_logger(
+        &mut self,
+        ctx: &mut FlowContext,
+        external_types: &HashSet<TypeId>,
+        _logger: Option<&(dyn Fn(&StateLogEntry) + Send + Sync)>,
+    ) -> Result<SubFlowResult, FlowError> {
+        self.resume_with_external_types(ctx, external_types)
     }
 }
 
@@ -215,18 +226,28 @@ impl<T: FlowState> SubFlowInstance for SubFlowAdapterInstance<T> {
         ctx: &mut FlowContext,
         external_types: &HashSet<TypeId>,
     ) -> Result<SubFlowResult, FlowError> {
+        self.resume_with_external_types_and_logger(ctx, external_types, None)
+    }
+
+    fn resume_with_external_types_and_logger(
+        &mut self,
+        ctx: &mut FlowContext,
+        external_types: &HashSet<TypeId>,
+        logger: Option<&(dyn Fn(&StateLogEntry) + Send + Sync)>,
+    ) -> Result<SubFlowResult, FlowError> {
         let current = self
             .state
             .ok_or_else(|| FlowError::new("INVALID_STATE", "Sub-flow not started"))?;
 
         if let Some(mut sub_flow) = self.active_sub_flow.take() {
-            let result = match sub_flow.resume_with_external_types(ctx, external_types) {
-                Ok(result) => result,
-                Err(error) => {
-                    self.active_sub_flow = Some(sub_flow);
-                    return Err(error);
-                }
-            };
+            let result =
+                match sub_flow.resume_with_external_types_and_logger(ctx, external_types, logger) {
+                    Ok(result) => result,
+                    Err(error) => {
+                        self.active_sub_flow = Some(sub_flow);
+                        return Err(error);
+                    }
+                };
             match result {
                 SubFlowResult::WaitingAtExternal | SubFlowResult::GuardRejected(_) => {
                     self.active_sub_flow = Some(sub_flow);
@@ -266,12 +287,21 @@ impl<T: FlowState> SubFlowInstance for SubFlowAdapterInstance<T> {
         if let Some(guard) = &ext.guard {
             match guard.validate(ctx) {
                 GuardOutput::Accepted { data } => {
+                    let backup = ctx.snapshot();
                     for (k, v) in data {
                         ctx.put_raw(k, v);
                     }
                     if let Some(proc) = &ext.processor {
-                        if let Err(e) = proc.process(ctx) {
-                            return self.handle_error(current, e);
+                        if let Err(e) = process_and_log(
+                            ctx,
+                            proc.as_ref(),
+                            false,
+                            logger,
+                            &self.definition.name,
+                            &format!("{:?}", current),
+                        ) {
+                            ctx.restore_from(backup);
+                            return self.handle_external_processor_error(current, e);
                         }
                     }
                     self.state = Some(ext.to);
@@ -288,6 +318,20 @@ impl<T: FlowState> SubFlowInstance for SubFlowAdapterInstance<T> {
                 }
             }
         } else {
+            let backup = ctx.snapshot();
+            if let Some(proc) = &ext.processor {
+                if let Err(e) = process_and_log(
+                    ctx,
+                    proc.as_ref(),
+                    false,
+                    logger,
+                    &self.definition.name,
+                    &format!("{:?}", current),
+                ) {
+                    ctx.restore_from(backup);
+                    return self.handle_external_processor_error(current, e);
+                }
+            }
             self.state = Some(ext.to);
         }
 
@@ -385,6 +429,31 @@ impl<T: FlowState> SubFlowAdapterInstance<T> {
             return Err(FlowError::max_chain_depth());
         }
         Ok(SubFlowResult::WaitingAtExternal)
+    }
+
+    fn handle_external_processor_error(
+        &mut self,
+        current: T,
+        cause: FlowError,
+    ) -> Result<SubFlowResult, FlowError> {
+        let target = self
+            .definition
+            .exception_routes
+            .get(&current)
+            .and_then(|routes| routes.iter().find(|route| (route.predicate)(&cause)))
+            .map(|route| route.target)
+            .or_else(|| self.definition.error_transitions.get(&current).copied());
+        if let Some(target) = target {
+            // Match the top-level engine and Java/TypeScript: error routing does
+            // not continue the auto-chain from the routed state.
+            self.state = Some(target);
+            if target.is_terminal() {
+                return Ok(SubFlowResult::Completed(format!("{:?}", target)));
+            }
+            return Ok(SubFlowResult::WaitingAtExternal);
+        }
+        // Preserve the adapter's existing error exit for parent mapping/propagation.
+        self.handle_error(current, cause)
     }
 
     fn handle_error(&mut self, current: T, _cause: FlowError) -> Result<SubFlowResult, FlowError> {

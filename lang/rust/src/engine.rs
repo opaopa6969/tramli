@@ -210,7 +210,13 @@ impl<S: FlowState, Store: FlowStore<S>> FlowEngine<S, Store> {
             let def = flow.definition.clone();
 
             if flow.has_active_sub_flow() {
-                Self::resume_active_sub_flow(flow, current, &def, &data_type_ids)?
+                Self::resume_active_sub_flow(
+                    flow,
+                    current,
+                    &def,
+                    &data_type_ids,
+                    self.state_logger.as_deref(),
+                )?
             } else {
                 // Multi-external: select by explicit trigger or legacy requirement specificity.
                 let externals = def.externals_from(current);
@@ -499,13 +505,18 @@ impl<S: FlowState, Store: FlowStore<S>> FlowEngine<S, Store> {
         current: S,
         def: &FlowDefinition<S>,
         data_type_ids: &std::collections::HashSet<std::any::TypeId>,
+        logger: Option<&(dyn Fn(&StateLogEntry) + Send + Sync)>,
     ) -> Result<Option<(String, String, String)>, FlowError> {
         use crate::sub_flow::SubFlowResult;
 
         let mut instance = flow
             .take_active_sub_flow()
             .expect("active sub-flow must exist after has_active_sub_flow");
-        let result = match instance.resume_with_external_types(&mut flow.context, data_type_ids) {
+        let result = match instance.resume_with_external_types_and_logger(
+            &mut flow.context,
+            data_type_ids,
+            logger,
+        ) {
             Ok(result) => result,
             Err(error) => {
                 flow.set_active_sub_flow(instance);
@@ -744,28 +755,15 @@ impl<S: FlowState, Store: FlowStore<S>> FlowEngine<S, Store> {
         verify: bool,
         logger: Option<&(dyn Fn(&StateLogEntry) + Send + Sync)>,
     ) -> Result<(), FlowError> {
-        if logger.is_some() {
-            flow.context.begin_logged_puts();
-        }
-        let result = processor.process(&mut flow.context);
-        if let Some(logger) = logger {
-            let success = result.is_ok()
-                && (!verify
-                    || processor
-                        .produces()
-                        .iter()
-                        .all(|p| flow.context.has_type_id(p)));
-            for (key, value) in flow.context.finish_logged_puts(success) {
-                logger(&StateLogEntry {
-                    flow_id: flow.id.clone(),
-                    flow_name: flow.definition.name.clone(),
-                    state: format!("{:?}", flow.current_state()),
-                    key,
-                    value,
-                });
-            }
-        }
-        result
+        let state = format!("{:?}", flow.current_state());
+        process_and_log(
+            &mut flow.context,
+            processor,
+            verify,
+            logger,
+            &flow.definition.name,
+            &state,
+        )
     }
 
     fn handle_error(flow: &mut FlowInstance<S>, from_state: S, def: &FlowDefinition<S>) {
@@ -828,4 +826,33 @@ fn rand_id() -> u64 {
     SystemTime::now().hash(&mut h);
     COUNTER.fetch_add(1, Ordering::Relaxed).hash(&mut h);
     h.finish()
+}
+
+// Shared by top-level execution and the built-in sub-flow adapter.
+pub(crate) fn process_and_log<S: FlowState>(
+    context: &mut FlowContext,
+    processor: &dyn StateProcessor<S>,
+    verify: bool,
+    logger: Option<&(dyn Fn(&StateLogEntry) + Send + Sync)>,
+    flow_name: &str,
+    state: &str,
+) -> Result<(), FlowError> {
+    if logger.is_some() {
+        context.begin_logged_puts();
+    }
+    let result = processor.process(context);
+    if let Some(logger) = logger {
+        let success = result.is_ok()
+            && (!verify || processor.produces().iter().all(|p| context.has_type_id(p)));
+        for (key, value) in context.finish_logged_puts(success) {
+            logger(&StateLogEntry {
+                flow_id: context.flow_id.clone(),
+                flow_name: flow_name.to_string(),
+                state: state.to_string(),
+                key,
+                value,
+            });
+        }
+    }
+    result
 }
