@@ -1,0 +1,6 @@
+name = "tramli-soundness"
+version = "0.1.0"
+defaultTargets = ["Tramli"]
+
+[[lean_lib]]
+name = "Tramli"

@@ -61,3 +61,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.75.0
       - run: cd lang/rust && cargo build --locked
       - run: cd lang/rust-plugins && cargo build --locked
+
+  lean:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Linux, X64, tramli-ci]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: leanprover/lean-action@v1.7.1
+        with:
+          lake-package-directory: formal/lean
+          auto-config: 'false'
+          build: 'true'
+          test: 'false'
+          lint: 'false'
+          use-mathlib-cache: 'false'
