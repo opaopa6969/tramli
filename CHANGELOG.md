@@ -40,6 +40,10 @@ crates.io, npm (@unlaxer/tramli), and Maven Central (org.unlaxer:tramli).
   get the legacy API. Removal will be considered for the next major version. (#145)
 
 ### Fixed
+- Java / TypeScript / Rust now execute processors on unguarded External
+  transitions. Processor failures restore the context to its state after external
+  input was merged and use the existing step-specific / state error routes,
+  matching guarded External transitions. (#159)
 - Rust `build_and_validate()` now collects independent structural diagnostics
   even when no initial state exists, matching Java/TypeScript and `build()`.
   Checks that need an initial state remain skipped. (#158)

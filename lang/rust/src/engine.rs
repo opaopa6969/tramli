@@ -326,16 +326,40 @@ impl<S: FlowState, Store: FlowStore<S>> FlowEngine<S, Store> {
                         }
                     }
                 } else {
-                    let from_dbg = format!("{:?}", current);
-                    let to = transition.to;
-                    if let Some(action) = def.exit_action(current) {
-                        action(&mut flow.context);
+                    let backup = flow.context.snapshot();
+                    let result = if let Some(proc) = &transition.processor {
+                        Self::process_and_log(
+                            flow,
+                            proc.as_ref(),
+                            false,
+                            self.state_logger.as_deref(),
+                        )
+                    } else {
+                        Ok(())
+                    };
+                    match result {
+                        Err(ref e) => {
+                            flow.context.restore_from(backup);
+                            Self::handle_error_with_cause(flow, current, &def, Some(e));
+                            Some((
+                                format!("{:?}", current),
+                                format!("{:?}", flow.current_state()),
+                                "error".to_string(),
+                            ))
+                        }
+                        Ok(()) => {
+                            let from_dbg = format!("{:?}", current);
+                            let to = transition.to;
+                            if let Some(action) = def.exit_action(current) {
+                                action(&mut flow.context);
+                            }
+                            flow.transition_to(to);
+                            if let Some(action) = def.enter_action(to) {
+                                action(&mut flow.context);
+                            }
+                            Some((from_dbg, format!("{:?}", to), "external".to_string()))
+                        }
                     }
-                    flow.transition_to(to);
-                    if let Some(action) = def.enter_action(to) {
-                        action(&mut flow.context);
-                    }
-                    Some((from_dbg, format!("{:?}", to), "external".to_string()))
                 }
             }
         }; // flow borrow ends here
