@@ -40,6 +40,13 @@ crates.io, npm (@unlaxer/tramli), and Maven Central (org.unlaxer:tramli).
   get the legacy API. Removal will be considered for the next major version. (#145)
 
 ### Fixed
+- `build()` requires/produces validation (Java / TypeScript / Rust) no longer
+  misses a missing requirement when a join state is revisited with a narrower
+  available set. The revisit early-return was inverted: it stopped when the new
+  set was a subset of the guaranteed set instead of a superset, so the
+  guaranteed set did not shrink and the result depended on traversal order. This
+  restores the documented soundness property (no false negatives). Flows that
+  previously built may now be rejected with a real missing-requires error. (#155)
 - `FlowEngine` in Java / TypeScript / Rust now notifies the stateLogger of
   context entries added or replaced by successful Auto, Branch, and External
   processors; nothing is emitted when a processor fails. Previously the

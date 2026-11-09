@@ -1319,7 +1319,10 @@ fn check_rp_from<S: FlowState>(
     errors: &mut Vec<String>,
 ) {
     if let Some(existing) = state_available.get_mut(&state) {
-        if available.is_subset(existing) {
+        // Join semantics: the guaranteed set is the intersection of all incoming
+        // paths. Stop only when it does not shrink; a revisit with a narrower set
+        // must shrink it and re-evaluate downstream (issue #155).
+        if existing.is_subset(available) {
             return;
         }
         let new_set: HashSet<TypeId> = existing.intersection(available).copied().collect();
