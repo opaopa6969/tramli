@@ -308,20 +308,14 @@ export class FlowEngine {
     const transition = this.selectExternalTransition(externals, dataKeys, subFlow.currentState);
 
     const guard = transition.guard;
+    let acceptedData: Map<string, unknown> | undefined;
     if (guard) {
       const guardStart = performance.now();
       const output: GuardOutput = await guard.validate(parentFlow.context);
       const guardDur = Math.round((performance.now() - guardStart) * 1000);
       if (output.type === 'accepted') {
-        if (output.data) {
-          for (const [key, value] of output.data) parentFlow.context.put(key as any, value);
-        }
-        const sfStart = performance.now();
-        const sfFrom = subFlow.currentState;
-        subFlow.transitionTo(transition.to);
-        this.store.recordTransition(parentFlow.id, sfFrom, transition.to, guard.name, parentFlow.context);
-        this.logTransition(parentFlow, sfFrom, transition.to, guard.name, sfStart);
-        this.logGuard(parentFlow, sfFrom, guard.name, 'accepted', guardDur);
+        acceptedData = output.data;
+        this.logGuard(parentFlow, subFlow.currentState, guard.name, 'accepted', guardDur);
       } else if (output.type === 'rejected') {
         subFlow.incrementGuardFailure();
         if (subFlow.guardFailureCount >= subDef.maxGuardRetries) {
@@ -352,11 +346,34 @@ export class FlowEngine {
         this.store.save(parentFlow);
         return parentFlow;
       }
-    } else {
-      subFlow.transitionTo(transition.to);
     }
 
-    await this.executeAutoChain(subFlow);
+    // Match top-level External rollback: keep event input, undo accepted data and processor writes.
+    const backup = subFlow.context.snapshot();
+    if (acceptedData) {
+      for (const [key, value] of acceptedData) subFlow.context.put(key as any, value);
+    }
+    const sfFrom = subFlow.currentState;
+    const sfStart = performance.now();
+    let succeeded = false;
+    try {
+      if (transition.processor) {
+        if (this.stateLogger) await this.processAndLog(subFlow, transition.processor);
+        else await transition.processor.process(subFlow.context);
+      }
+      this.fireExit(subFlow, sfFrom);
+      subFlow.transitionTo(transition.to);
+      this.fireEnter(subFlow, transition.to);
+      const trigger = guard?.name ?? 'external';
+      this.store.recordTransition(parentFlow.id, sfFrom, transition.to, trigger, parentFlow.context);
+      this.logTransition(parentFlow, sfFrom, transition.to, trigger, sfStart);
+      succeeded = true;
+    } catch (e: any) {
+      subFlow.context.restoreFrom(backup);
+      this.handleError(subFlow, sfFrom, e instanceof Error ? e : new Error(String(e)));
+    }
+
+    if (succeeded) await this.executeAutoChain(subFlow);
 
     if (subFlow.isCompleted) {
       parentFlow.setActiveSubFlow(null);
@@ -373,6 +390,9 @@ export class FlowEngine {
           const trigger = `subFlow:${subDef.name}/${subFlow.exitState}`;
           this.store.recordTransition(parentFlow.id, from, target, trigger, parentFlow.context);
           this.logTransition(parentFlow, from, target, trigger, exitStart);
+          await this.executeAutoChain(parentFlow);
+        } else {
+          this.handleError(parentFlow, parentFlow.currentState);
           await this.executeAutoChain(parentFlow);
         }
       }

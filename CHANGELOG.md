@@ -40,6 +40,7 @@ crates.io, npm (@unlaxer/tramli), and Maven Central (org.unlaxer:tramli).
   get the legacy API. Removal will be considered for the next major version. (#145)
 
 ### Fixed
+- Run child External processors with or without guards in Java, TypeScript, and Rust; restore context on failure before step-specific or state error routing, preserving parent exit mappings. (#165)
 - Java / TypeScript / Rust now execute processors on unguarded External
   transitions. Processor failures restore the context to its state after external
   input was merged and use the existing step-specific / state error routes,
