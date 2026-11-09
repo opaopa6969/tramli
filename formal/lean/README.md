@@ -2,10 +2,13 @@
 
 This Lake project proves soundness of the **intended, corrected abstract
 requires/produces algorithm** for [issue #154](https://github.com/opaopa6969/tramli/issues/154).
-It is not a verification of the Java, TypeScript, or Rust source code. In
-particular, the implementation at the reference revision `d1504aa1` has the
-separate divergences listed below. The theorem must not be read as a claim
-that that revision's `build()` is sound.
+It is not a verification of the Java, TypeScript, or Rust source code. The
+divergences found while formalizing it against revision `d1504aa1` (listed
+below) have since been fixed in all three implementations. The link between
+this model and the code is checked empirically, not proved: the differential
+corpus in [`shared-tests/build-verdicts/`](../../shared-tests/build-verdicts/README.md)
+compares all three implementations with an independent oracle that computes
+the same intersection fixpoint.
 
 ## Build and trust boundary
 
@@ -173,8 +176,9 @@ limits on automatic chain length are outside this safety theorem.
   excluded. Branch/processor failures and retry exhaustion are included.
 - The theorem is about this abstract algorithm. Runtime code, serialization,
   callback implementations, and correspondence to the model are not certified.
-  Soundness for current library binaries requires resolving the known
-  divergences below and honoring the assumptions above.
+  Soundness for the library binaries additionally relies on the implementations
+  matching this model (checked by the differential corpus, not proved) and on
+  the assumptions above.
 
 ## Correspondence to the implementations
 
@@ -193,10 +197,10 @@ under `lang/java/src/main/java/org/unlaxer/tramli/`; TS paths are under
 | `Flow.errors`, `Flow.edges`, `error_route_present` | `errorTransitions`, `exceptionRoutes`; `FlowEngine.java:handleError` (489) | `errorTransitions`, `exceptionRoutes`; `flow-engine.ts:handleError` (458) | `error_transitions`, `exception_routes`; `engine.rs:handle_error_with_cause` (751) |
 | `Trace`, `transfer`, `error_transfer` | `FlowEngine.java:startFlow`, `resumeAndExecute`, `dispatchStep`, `dispatchBranch` | `flow-engine.ts:startFlow`, `resumeAndExecute`, `executeAutoChain` | `engine.rs:start_flow`, `resume_and_execute`, `dispatch_step` |
 | `local_invariant_soundness`, `algorithm_success_implies_invariant`, `algorithm_soundness` | abstract proof obligation for `build()` | abstract proof obligation for `build()` | abstract proof obligation for `build()` |
-| **Known divergence #152**, being fixed separately: model includes every `onStepError` edge | checker omits `exceptionRoutes` | checker omits `exceptionRoutes` | checker omits `exception_routes` |
-| **Known divergence #155**, being fixed separately: stop only if `existing ⊆ incoming` | inverted `existing.containsAll(available)` | inverted `isSubset` test | inverted `available.is_subset(existing)` |
-| **Known divergence #157**, being fixed separately: errors from any active non-terminal source propagate only its set | processor-only analysis credits guard output; External runtime restores pre-guard backup | same checker limitation; External backup precedes accepted data insertion | same checker limitation; External backup precedes accepted data insertion |
-| **Additional divergence #159**: declared normal processors must execute | null-guard External processor is skipped at runtime while its output is credited by the checker | no-guard runtime branch also skips processors; normal typed builder requires a guard | no-guard runtime branch also skips processors; normal typed builder requires a guard |
+| **Fixed divergence #152** (PR #167): model includes every `onStepError` edge | checker omits `exceptionRoutes` | checker omits `exceptionRoutes` | checker omits `exception_routes` |
+| **Fixed divergence #155** (PR #156): stop only if `existing ⊆ incoming` | inverted `existing.containsAll(available)` | inverted `isSubset` test | inverted `available.is_subset(existing)` |
+| **Fixed divergence #157** (PR #168): errors from any active non-terminal source propagate only its set | processor-only analysis credits guard output; External runtime restores pre-guard backup | same checker limitation; External backup precedes accepted data insertion | same checker limitation; External backup precedes accepted data insertion |
+| **Fixed divergence #159** (PR #166): declared normal processors must execute | null-guard External processor is skipped at runtime while its output is credited by the checker | no-guard runtime branch also skips processors; normal typed builder requires a guard | no-guard runtime branch also skips processors; normal typed builder requires a guard |
 
 Issue links: [#152](https://github.com/opaopa6969/tramli/issues/152),
 [#155](https://github.com/opaopa6969/tramli/issues/155),
@@ -204,7 +208,11 @@ Issue links: [#152](https://github.com/opaopa6969/tramli/issues/152),
 [#159](https://github.com/opaopa6969/tramli/issues/159).
 The standalone Java reproduction in #159 was run at the baseline: build
 succeeded, the producer was never called, and execution reported
-`Required context missing: P`. No library implementation is changed here.
+`Required context missing: P`. The language columns describe the behavior at
+`d1504aa1`, before the fixes. With all four fixes on main, fuzzing 10,000
+generated flows (`node shared-tests/build-verdicts/fuzz.mjs 153 10000`)
+reports no discrepancy between any implementation and the oracle. This
+directory changes no library code.
 
 ## Kernel-checked examples
 
@@ -215,5 +223,5 @@ of all three kinds of newly supplied data on error paths, initial data
 surviving errors, cycles with increasing input sets, missing initial data
 on cycles, unreachable-state handling, and error-route generation boundaries.
 These examples complement the universally quantified proofs; they do not
-replace them. Differential implementation tests are tracked separately in
-[#153](https://github.com/opaopa6969/tramli/issues/153).
+replace them. Differential implementation tests live in
+[`shared-tests/build-verdicts/`](../../shared-tests/build-verdicts/README.md) (#153).
