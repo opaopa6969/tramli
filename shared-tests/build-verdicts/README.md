@@ -202,15 +202,12 @@ skipped tests, and Rust reports each skipped case plus totals on captured test
 output (`cargo test --test build_verdicts -- --nocapture` to display it).
 Fuzz mode always evaluates these cases, so agreement after a fix is observable.
 
-Known shared bugs tracked during development are
-[#152](https://github.com/opaopa6969/tramli/issues/152) (missing exception routes),
-[#155](https://github.com/opaopa6969/tramli/issues/155) (incorrect join revisit),
-and [#157](https://github.com/opaopa6969/tramli/issues/157) (error transfer semantics).
-After their corrections reach main, rebase, rerun fuzzing, and remove their skip
-entries only when the corresponding comparisons agree. Retain other independently
-reported mismatches with their own issue references; do not weaken the oracle.
-
-[Rust issue #158](https://github.com/opaopa6969/tramli/issues/158) tracks the
-independent structural diagnostics lost by `build_and_validate()` when the flow
-has no initial state. This is a real error-set divergence, not a spelling alias;
-the expected set keeps all independently detectable errors.
+The corpus was first committed while three shared checker bugs and one Rust
+diagnostics bug were still open. All are fixed on main and have no skip entries:
+[#152](https://github.com/opaopa6969/tramli/issues/152) (exception routes were not traversed),
+[#155](https://github.com/opaopa6969/tramli/issues/155) (a narrower set at a revisited join was ignored),
+[#157](https://github.com/opaopa6969/tramli/issues/157) (error-path transfer did not match runtime rollback), and
+[#158](https://github.com/opaopa6969/tramli/issues/158) (Rust dropped independent diagnostics without an initial state).
+With those fixes, `node shared-tests/build-verdicts/fuzz.mjs 153 10000` reports no
+discrepancy in any language. Add a new entry only for an independently reported
+mismatch with its own issue reference; do not weaken the oracle.
