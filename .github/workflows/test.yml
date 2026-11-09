@@ -10,6 +10,7 @@ jobs:
   java:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, Linux, X64, tramli-ci]
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v6
@@ -21,20 +22,24 @@ jobs:
   typescript:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, Linux, X64, tramli-ci]
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: 20
-      # Using `npm install --legacy-peer-deps` instead of `npm ci` because
-      # package-lock.json is out of sync with workspace package.json versions
-      # (3.7.1 bump). Once the lock is regenerated this should revert to npm ci.
-      - run: npm install --legacy-peer-deps --no-audit
-      - run: npm test --workspace=lang/ts
+      # Install lang/ts on its own from its lockfile, as release-core.yml does.
+      # A root `npm install --legacy-peer-deps` hangs on a clean checkout and
+      # ignores SIGTERM, which held the single runner indefinitely (#162).
+      - run: npm ci --workspaces=false --no-audit
+        working-directory: lang/ts
+      - run: npm test
+        working-directory: lang/ts
 
   rust:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, Linux, X64, tramli-ci]
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -50,6 +55,7 @@ jobs:
   rust-msrv:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, Linux, X64, tramli-ci]
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.75.0
