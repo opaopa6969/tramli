@@ -61,3 +61,34 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.75.0
       - run: cd lang/rust && cargo build --locked
       - run: cd lang/rust-plugins && cargo build --locked
+
+  lean:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Linux, X64, tramli-ci]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      # elan's own downloader fails to resolve hosts on this self-hosted runner
+      # while curl works, so fetch the pinned toolchain directly and call its
+      # lake without the elan shim. The toolchain is cached per version.
+      - name: Install pinned Lean toolchain
+        run: |
+          set -euo pipefail
+          tc="$(sed 's#.*:##' formal/lean/lean-toolchain)"
+          dir="${RUNNER_TOOL_CACHE}/lean/${tc}"
+          if [ ! -x "${dir}/bin/lake" ]; then
+            tmp="$(mktemp -d)"
+            curl -fsSL --retry 5 -o "${tmp}/lean.zip" \
+              "https://releases.lean-lang.org/lean4/${tc}/lean-${tc#v}-linux.zip"
+            unzip -q "${tmp}/lean.zip" -d "${tmp}/x"
+            mkdir -p "$(dirname "${dir}")"
+            rm -rf "${dir}"
+            mv "${tmp}/x/lean-${tc#v}-linux" "${dir}"
+          fi
+          echo "${dir}/bin" >> "${GITHUB_PATH}"
+      - name: Build proofs
+        working-directory: formal/lean
+        run: lake build
+      - name: Audit axioms
+        working-directory: formal/lean
+        run: lake env lean Tramli/Checks.lean
