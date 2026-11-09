@@ -211,11 +211,22 @@ public final class FlowEngine {
                 }
             }
         } else {
-            S from = flow.currentState();
-            fireExit(flow, from);
-            flow.transitionTo(transition.to());
-            fireEnter(flow, transition.to());
-            store.recordTransition(flow.id(), from, transition.to(), "external", flow.context());
+            Map<Class<?>, Object> backup = flow.context().snapshot();
+            try {
+                if (transition.processor() != null) {
+                    processAndLog(flow, transition.processor(), false);
+                }
+                S from = flow.currentState();
+                fireExit(flow, from);
+                flow.transitionTo(transition.to());
+                fireEnter(flow, transition.to());
+                store.recordTransition(flow.id(), from, transition.to(), "external", flow.context());
+            } catch (Exception e) {
+                flow.context().restoreFrom(backup);
+                handleError(flow, currentState, e);
+                store.save(flow);
+                return flow;
+            }
         }
 
         executeAutoChain(flow);

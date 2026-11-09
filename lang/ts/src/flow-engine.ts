@@ -161,12 +161,24 @@ export class FlowEngine {
       }
     } else {
       const transStart = performance.now();
-      const from = flow.currentState;
-      this.fireExit(flow, from);
-      flow.transitionTo(transition.to);
-      this.fireEnter(flow, transition.to);
-      this.store.recordTransition(flow.id, from, transition.to, 'external', flow.context);
-      this.logTransition(flow, from, transition.to, 'external', transStart);
+      const backup = flow.context.snapshot();
+      try {
+        if (transition.processor) {
+          if (this.stateLogger) await this.processAndLog(flow, transition.processor);
+          else await transition.processor.process(flow.context);
+        }
+        const from = flow.currentState;
+        this.fireExit(flow, from);
+        flow.transitionTo(transition.to);
+        this.fireEnter(flow, transition.to);
+        this.store.recordTransition(flow.id, from, transition.to, 'external', flow.context);
+        this.logTransition(flow, from, transition.to, 'external', transStart);
+      } catch (e: any) {
+        flow.context.restoreFrom(backup);
+        this.handleError(flow, currentState, e instanceof Error ? e : new Error(String(e)));
+        this.store.save(flow);
+        return flow;
+      }
     }
 
     await this.executeAutoChain(flow);
