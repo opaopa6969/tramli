@@ -300,6 +300,8 @@ export class Builder<S extends string> {
       maxGuardRetries: this.maxGuardRetries,
       transitions: [...this.transitions],
       errorTransitions: new Map(this.errorTransitions),
+      // DataFlowGraph.build follows exception routes, including for diagnosticGraph.
+      exceptionRoutes: new Map(this._exceptionRoutes),
     });
     let initial: S | null = null;
     const terminals = new Set<S>();
@@ -323,7 +325,6 @@ export class Builder<S extends string> {
     }
     (def as any).warnings = warnings;
     (def as any).strictMode = this._strictMode;
-    (def as any).exceptionRoutes = new Map(this._exceptionRoutes);
     (def as any).enterActions = new Map(this._enterActions);
     (def as any).exitActions = new Map(this._exitActions);
   }

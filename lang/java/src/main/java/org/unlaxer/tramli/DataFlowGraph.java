@@ -692,5 +692,16 @@ public final class DataFlowGraph<S extends Enum<S> & FlowState> {
 
             traverse(def, t.to(), newAvail, externallyProvided, stateAvail, producers, consumers, allProduced, allConsumed);
         }
+
+        // Error routes, as in the build() check (issues #152, #157): any step leaving a
+        // non-terminal state can fail, and the engine restores the context to what it
+        // was before the guard ran, so every onStepError / onError target receives
+        // exactly the guaranteed set of this state (issue #170).
+        if (!state.isTerminal() && !def.transitionsFrom(state).isEmpty()) {
+            for (S errorTarget : def.errorTargets(state)) {
+                traverse(def, errorTarget, new HashSet<>(stateAvail.get(state)), externallyProvided,
+                        stateAvail, producers, consumers, allProduced, allConsumed);
+            }
+        }
     }
 }

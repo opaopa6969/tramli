@@ -85,8 +85,9 @@ public final class FlowDefinition<S extends Enum<S> & FlowState> {
     /**
      * States a flow can enter when a step fails at {@code state}: every
      * {@code onStepError} route target, then the {@code onError} fallback.
+     * Package-private for {@link DataFlowGraph}.
      */
-    private List<S> errorTargets(S state) {
+    List<S> errorTargets(S state) {
         List<S> targets = new ArrayList<>();
         for (ExceptionRoute<S> route : exceptionRoutes.getOrDefault(state, List.of())) {
             if (!targets.contains(route.target())) targets.add(route.target());

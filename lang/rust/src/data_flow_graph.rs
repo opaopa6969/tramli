@@ -807,6 +807,28 @@ impl<S: FlowState> DataFlowGraph<S> {
                 type_names,
             );
         }
+
+        // Error routes, as in the build() check (issues #152, #157): any step leaving
+        // a non-terminal state can fail, and the engine restores the context to what
+        // it was before the guard ran, so every on_step_error / on_error target
+        // receives exactly the guaranteed set of this state (issue #170).
+        if !state.is_terminal() && !def.transitions_from(state).is_empty() {
+            for error_target in def.error_targets(state) {
+                let error_avail = state_avail.get(&state).unwrap().clone();
+                Self::traverse(
+                    def,
+                    error_target,
+                    &error_avail,
+                    externally_provided,
+                    state_avail,
+                    producers,
+                    consumers,
+                    all_produced,
+                    all_consumed,
+                    type_names,
+                );
+            }
+        }
     }
 
     fn collect_type_names(
