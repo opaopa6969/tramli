@@ -699,18 +699,25 @@ impl<S: FlowState> DataFlowGraph<S> {
         all_consumed: &mut HashSet<TypeId>,
         type_names: &mut HashMap<TypeId, String>,
     ) {
-        if let Some(existing) = state_avail.get_mut(&state) {
-            if available.is_subset(existing) {
-                return;
+        let first_visit = match state_avail.get_mut(&state) {
+            Some(existing) => {
+                // Join semantics, as in the build() requires/produces check: the
+                // guaranteed set is the intersection of all incoming paths. A revisit
+                // with a narrower set must shrink it and re-propagate downstream
+                // (issue #170, the same inversion as #155). Stopping when it is
+                // unchanged ends every cycle (issue #114).
+                let before = existing.len();
+                existing.retain(|t| available.contains(t));
+                if existing.len() == before {
+                    return;
+                }
+                false
             }
-            let new_set: HashSet<TypeId> = existing.intersection(available).copied().collect();
-            if new_set == *existing {
-                return;
+            None => {
+                state_avail.insert(state, available.clone());
+                true
             }
-            *existing = new_set;
-        } else {
-            state_avail.insert(state, available.clone());
-        }
+        };
 
         for t in def.transitions.iter().filter(|t| t.from == state) {
             let mut new_avail = state_avail.get(&state).unwrap().clone();
@@ -718,32 +725,35 @@ impl<S: FlowState> DataFlowGraph<S> {
                 new_avail.extend(externally_provided);
             }
 
+            // Re-propagation after a shrink must not record the same nodes again.
             if let Some(guard) = &t.guard {
                 let named_reqs = guard.requires_named();
                 let named_prods = guard.produces_named();
-                Self::collect_type_names(&named_reqs, type_names);
-                Self::collect_type_names(&named_prods, type_names);
-                for (req, _) in &named_reqs {
-                    consumers.entry(*req).or_default().push(NodeInfo {
-                        name: guard.name().to_string(),
-                        from_state: t.from,
-                        to_state: t.to,
-                        kind: "guard",
-                    });
-                    all_consumed.insert(*req);
+                if first_visit {
+                    Self::collect_type_names(&named_reqs, type_names);
+                    Self::collect_type_names(&named_prods, type_names);
+                    for (req, _) in &named_reqs {
+                        consumers.entry(*req).or_default().push(NodeInfo {
+                            name: guard.name().to_string(),
+                            from_state: t.from,
+                            to_state: t.to,
+                            kind: "guard",
+                        });
+                        all_consumed.insert(*req);
+                    }
+                    for (prod, _) in &named_prods {
+                        producers.entry(*prod).or_default().push(NodeInfo {
+                            name: guard.name().to_string(),
+                            from_state: t.from,
+                            to_state: t.to,
+                            kind: "guard",
+                        });
+                        all_produced.insert(*prod);
+                    }
                 }
-                for (prod, _) in &named_prods {
-                    producers.entry(*prod).or_default().push(NodeInfo {
-                        name: guard.name().to_string(),
-                        from_state: t.from,
-                        to_state: t.to,
-                        kind: "guard",
-                    });
-                    all_produced.insert(*prod);
-                    new_avail.insert(*prod);
-                }
+                new_avail.extend(named_prods.iter().map(|(prod, _)| *prod));
             }
-            if let Some(branch) = &t.branch {
+            if let Some(branch) = t.branch.as_ref().filter(|_| first_visit) {
                 let named_reqs = branch.requires_named();
                 Self::collect_type_names(&named_reqs, type_names);
                 for (req, _) in &named_reqs {
@@ -759,27 +769,29 @@ impl<S: FlowState> DataFlowGraph<S> {
             if let Some(proc) = &t.processor {
                 let named_reqs = proc.requires_named();
                 let named_prods = proc.produces_named();
-                Self::collect_type_names(&named_reqs, type_names);
-                Self::collect_type_names(&named_prods, type_names);
-                for (req, _) in &named_reqs {
-                    consumers.entry(*req).or_default().push(NodeInfo {
-                        name: proc.name().to_string(),
-                        from_state: t.from,
-                        to_state: t.to,
-                        kind: "processor",
-                    });
-                    all_consumed.insert(*req);
+                if first_visit {
+                    Self::collect_type_names(&named_reqs, type_names);
+                    Self::collect_type_names(&named_prods, type_names);
+                    for (req, _) in &named_reqs {
+                        consumers.entry(*req).or_default().push(NodeInfo {
+                            name: proc.name().to_string(),
+                            from_state: t.from,
+                            to_state: t.to,
+                            kind: "processor",
+                        });
+                        all_consumed.insert(*req);
+                    }
+                    for (prod, _) in &named_prods {
+                        producers.entry(*prod).or_default().push(NodeInfo {
+                            name: proc.name().to_string(),
+                            from_state: t.from,
+                            to_state: t.to,
+                            kind: "processor",
+                        });
+                        all_produced.insert(*prod);
+                    }
                 }
-                for (prod, _) in &named_prods {
-                    producers.entry(*prod).or_default().push(NodeInfo {
-                        name: proc.name().to_string(),
-                        from_state: t.from,
-                        to_state: t.to,
-                        kind: "processor",
-                    });
-                    all_produced.insert(*prod);
-                    new_avail.insert(*prod);
-                }
+                new_avail.extend(named_prods.iter().map(|(prod, _)| *prod));
             }
 
             Self::traverse(
@@ -794,6 +806,28 @@ impl<S: FlowState> DataFlowGraph<S> {
                 all_consumed,
                 type_names,
             );
+        }
+
+        // Error routes, as in the build() check (issues #152, #157): any step leaving
+        // a non-terminal state can fail, and the engine restores the context to what
+        // it was before the guard ran, so every on_step_error / on_error target
+        // receives exactly the guaranteed set of this state (issue #170).
+        if !state.is_terminal() && !def.transitions_from(state).is_empty() {
+            for error_target in def.error_targets(state) {
+                let error_avail = state_avail.get(&state).unwrap().clone();
+                Self::traverse(
+                    def,
+                    error_target,
+                    &error_avail,
+                    externally_provided,
+                    state_avail,
+                    producers,
+                    consumers,
+                    all_produced,
+                    all_consumed,
+                    type_names,
+                );
+            }
         }
     }
 

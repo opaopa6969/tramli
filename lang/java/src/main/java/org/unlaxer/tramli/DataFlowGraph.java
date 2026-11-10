@@ -630,11 +630,13 @@ public final class DataFlowGraph<S extends Enum<S> & FlowState> {
             Map<Class<?>, List<NodeInfo<S>>> producers,
             Map<Class<?>, List<NodeInfo<S>>> consumers,
             Set<Class<?>> allProduced, Set<Class<?>> allConsumed) {
-        if (stateAvail.containsKey(state)) {
-            Set<Class<?>> existing = stateAvail.get(state);
-            if (existing.containsAll(available)) return;
-            // Stop when the intersection leaves the guaranteed set unchanged (issue #114).
-            if (!existing.retainAll(available)) return;
+        boolean firstVisit = !stateAvail.containsKey(state);
+        if (!firstVisit) {
+            // Join semantics, as in the build() requires/produces check: the guaranteed
+            // set is the intersection of all incoming paths. A revisit with a narrower
+            // set must shrink it and re-propagate downstream (issue #170, the same
+            // inversion as #155). Stopping when it is unchanged ends every cycle (#114).
+            if (!stateAvail.get(state).retainAll(available)) return;
         } else {
             stateAvail.put(state, new HashSet<>(available));
         }
@@ -645,20 +647,25 @@ public final class DataFlowGraph<S extends Enum<S> & FlowState> {
                 newAvail.addAll(externallyProvided);
             }
 
+            // Re-propagation after a shrink must not record the same nodes again.
             if (t.guard() != null) {
-                for (Class<?> req : t.guard().requires()) {
-                    consumers.computeIfAbsent(req, k -> new ArrayList<>())
-                            .add(new NodeInfo<>(t.guard().name(), t.from(), t.to(), "guard"));
-                    allConsumed.add(req);
+                if (firstVisit) {
+                    for (Class<?> req : t.guard().requires()) {
+                        consumers.computeIfAbsent(req, k -> new ArrayList<>())
+                                .add(new NodeInfo<>(t.guard().name(), t.from(), t.to(), "guard"));
+                        allConsumed.add(req);
+                    }
                 }
                 for (Class<?> prod : t.guard().produces()) {
-                    producers.computeIfAbsent(prod, k -> new ArrayList<>())
-                            .add(new NodeInfo<>(t.guard().name(), t.from(), t.to(), "guard"));
-                    allProduced.add(prod);
+                    if (firstVisit) {
+                        producers.computeIfAbsent(prod, k -> new ArrayList<>())
+                                .add(new NodeInfo<>(t.guard().name(), t.from(), t.to(), "guard"));
+                        allProduced.add(prod);
+                    }
                     newAvail.add(prod);
                 }
             }
-            if (t.branch() != null) {
+            if (t.branch() != null && firstVisit) {
                 for (Class<?> req : t.branch().requires()) {
                     consumers.computeIfAbsent(req, k -> new ArrayList<>())
                             .add(new NodeInfo<>(t.branch().name(), t.from(), t.to(), "branch"));
@@ -666,20 +673,35 @@ public final class DataFlowGraph<S extends Enum<S> & FlowState> {
                 }
             }
             if (t.processor() != null) {
-                for (Class<?> req : t.processor().requires()) {
-                    consumers.computeIfAbsent(req, k -> new ArrayList<>())
-                            .add(new NodeInfo<>(t.processor().name(), t.from(), t.to(), "processor"));
-                    allConsumed.add(req);
+                if (firstVisit) {
+                    for (Class<?> req : t.processor().requires()) {
+                        consumers.computeIfAbsent(req, k -> new ArrayList<>())
+                                .add(new NodeInfo<>(t.processor().name(), t.from(), t.to(), "processor"));
+                        allConsumed.add(req);
+                    }
                 }
                 for (Class<?> prod : t.processor().produces()) {
-                    producers.computeIfAbsent(prod, k -> new ArrayList<>())
-                            .add(new NodeInfo<>(t.processor().name(), t.from(), t.to(), "processor"));
-                    allProduced.add(prod);
+                    if (firstVisit) {
+                        producers.computeIfAbsent(prod, k -> new ArrayList<>())
+                                .add(new NodeInfo<>(t.processor().name(), t.from(), t.to(), "processor"));
+                        allProduced.add(prod);
+                    }
                     newAvail.add(prod);
                 }
             }
 
             traverse(def, t.to(), newAvail, externallyProvided, stateAvail, producers, consumers, allProduced, allConsumed);
+        }
+
+        // Error routes, as in the build() check (issues #152, #157): any step leaving a
+        // non-terminal state can fail, and the engine restores the context to what it
+        // was before the guard ran, so every onStepError / onError target receives
+        // exactly the guaranteed set of this state (issue #170).
+        if (!state.isTerminal() && !def.transitionsFrom(state).isEmpty()) {
+            for (S errorTarget : def.errorTargets(state)) {
+                traverse(def, errorTarget, new HashSet<>(stateAvail.get(state)), externallyProvided,
+                        stateAvail, producers, consumers, allProduced, allConsumed);
+            }
         }
     }
 }

@@ -4,6 +4,42 @@ export function edges(c) {
     ? t.targets.map((target, j) => ({ ...target, kind: t.kind, from: t.from, branch: t.branch, name: `e${i}b${j}`, branchName: `e${i}` }))
     : [{ ...t, name: `e${i}` }]);
 }
+const union = (a, b = []) => new Set([...a, ...b]);
+// Guaranteed type set per state, as a Map from state name to Set. A state is a key
+// exactly when data can reach it; without an initial state the Map is empty.
+export function guaranteed(c) {
+  const ts = edges(c);
+  const routes = [...c.onError, ...c.onStepError];
+  const initial = c.states.find(s => s.initial)?.name;
+  const terminals = new Set(c.states.filter(s => s.terminal).map(s => s.name));
+  if (!initial) return new Map();
+  // Discover reachable transfer edges first, then converge by intersections.
+  // Undefined is unreachable; empty is reachable with no guaranteed types.
+  const available = new Map([[initial, new Set(c.initiallyAvailable)]]);
+  let changed = true;
+  const merge = (s, incoming) => {
+    const old = available.get(s);
+    const next = old ? new Set([...old].filter(t => incoming.has(t))) : new Set(incoming);
+    if (!old || old.size !== next.size) { available.set(s, next); changed = true; }
+  };
+  while (changed) {
+    changed = false;
+    for (const t of ts) {
+      const before = available.get(t.from);
+      if (!before) continue;
+      let after = t.kind === 'external' ? union(before, c.externallyProvided) : new Set(before);
+      after = union(after, t.guard?.produces);
+      merge(t.to, union(after, t.processor?.produces));
+    }
+    // Error handlers can run after processor/branch failure or guard exhaustion.
+    // The runtime rolls back guard data; no transition-local data is guaranteed.
+    for (const r of routes) {
+      const before = available.get(r.from);
+      if (before && !terminals.has(r.from) && ts.some(t => t.from === r.from)) merge(r.to, before);
+    }
+  }
+  return available;
+}
 export function verdict(c) {
   const errors = new Map();
   const add = (code, locus) => errors.set(`${code}|${locus}`, [code, locus]);
@@ -35,32 +71,7 @@ export function verdict(c) {
     if (new Set(sets).size !== sets.length) add('EXTERNAL_REQUIRES_NOT_DISTINCT', s.name);
   }
   if (initial) {
-    const union = (a, b = []) => new Set([...a, ...b]);
-    // Discover reachable transfer edges first, then converge by intersections.
-    // Undefined is unreachable; empty is reachable with no guaranteed types.
-    const available = new Map([[initial, new Set(c.initiallyAvailable)]]);
-    let changed = true;
-    const merge = (s, incoming) => {
-      const old = available.get(s);
-      const next = old ? new Set([...old].filter(t => incoming.has(t))) : new Set(incoming);
-      if (!old || old.size !== next.size) { available.set(s, next); changed = true; }
-    };
-    while (changed) {
-      changed = false;
-      for (const t of ts) {
-        const before = available.get(t.from);
-        if (!before) continue;
-        let after = t.kind === 'external' ? union(before, c.externallyProvided) : new Set(before);
-        after = union(after, t.guard?.produces);
-        merge(t.to, union(after, t.processor?.produces));
-      }
-      // Error handlers can run after processor/branch failure or guard exhaustion.
-      // The runtime rolls back guard data; no transition-local data is guaranteed.
-      for (const r of routes) {
-        const before = available.get(r.from);
-        if (before && !terminals.has(r.from) && ts.some(t => t.from === r.from)) merge(r.to, before);
-      }
-    }
+    const available = guaranteed(c);
     for (const t of ts) {
       const before = available.get(t.from);
       if (!before) continue;

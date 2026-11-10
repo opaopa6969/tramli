@@ -462,12 +462,13 @@ function traverse<S extends string>(
   consumers: Map<string, NodeInfo<S>[]>,
   allProduced: Set<string>, allConsumed: Set<string>,
 ): void {
-  if (stateAvail.has(state)) {
-    const existing = stateAvail.get(state)!;
-    let isSubset = true;
-    for (const a of available) { if (!existing.has(a)) { isSubset = false; break; } }
-    if (isSubset) return;
-    // Stop when the intersection leaves the guaranteed set unchanged (issue #114).
+  const existing = stateAvail.get(state);
+  const firstVisit = existing === undefined;
+  if (existing) {
+    // Join semantics, as in the build() requires/produces check: the guaranteed set
+    // is the intersection of all incoming paths. A revisit with a narrower set must
+    // shrink it and re-propagate downstream (issue #170, the same inversion as
+    // #155). Stopping when it is unchanged ends every cycle (issue #114).
     let changed = false;
     for (const a of [...existing]) { if (!available.has(a)) { existing.delete(a); changed = true; } }
     if (!changed) return;
@@ -481,37 +482,68 @@ function traverse<S extends string>(
       for (const k of externallyProvided) newAvail.add(k);
     }
 
+    // Re-propagation after a shrink must not record the same nodes again.
     if (t.guard) {
-      for (const req of t.guard.requires) {
-        addTo(consumers, req, { name: t.guard.name, fromState: t.from, toState: t.to, kind: 'guard' });
-        allConsumed.add(req);
+      if (firstVisit) {
+        for (const req of t.guard.requires) {
+          addTo(consumers, req, { name: t.guard.name, fromState: t.from, toState: t.to, kind: 'guard' });
+          allConsumed.add(req);
+        }
       }
       for (const prod of t.guard.produces) {
-        addTo(producers, prod, { name: t.guard.name, fromState: t.from, toState: t.to, kind: 'guard' });
-        allProduced.add(prod);
+        if (firstVisit) {
+          addTo(producers, prod, { name: t.guard.name, fromState: t.from, toState: t.to, kind: 'guard' });
+          allProduced.add(prod);
+        }
         newAvail.add(prod);
       }
     }
-    if (t.branch) {
+    if (t.branch && firstVisit) {
       for (const req of t.branch.requires) {
         addTo(consumers, req, { name: t.branch.name, fromState: t.from, toState: t.to, kind: 'branch' });
         allConsumed.add(req);
       }
     }
     if (t.processor) {
-      for (const req of t.processor.requires) {
-        addTo(consumers, req, { name: t.processor.name, fromState: t.from, toState: t.to, kind: 'processor' });
-        allConsumed.add(req);
+      if (firstVisit) {
+        for (const req of t.processor.requires) {
+          addTo(consumers, req, { name: t.processor.name, fromState: t.from, toState: t.to, kind: 'processor' });
+          allConsumed.add(req);
+        }
       }
       for (const prod of t.processor.produces) {
-        addTo(producers, prod, { name: t.processor.name, fromState: t.from, toState: t.to, kind: 'processor' });
-        allProduced.add(prod);
+        if (firstVisit) {
+          addTo(producers, prod, { name: t.processor.name, fromState: t.from, toState: t.to, kind: 'processor' });
+          allProduced.add(prod);
+        }
         newAvail.add(prod);
       }
     }
 
     traverse(def, t.to, newAvail, externallyProvided, stateAvail, producers, consumers, allProduced, allConsumed);
   }
+
+  // Error routes, as in the build() check (issues #152, #157): any step leaving a
+  // non-terminal state can fail, and the engine restores the context to what it was
+  // before the guard ran, so every onStepError / onError target receives exactly
+  // the guaranteed set of this state (issue #170).
+  if (!def.stateConfig[state].terminal && def.transitionsFrom(state).length > 0) {
+    for (const target of errorTargets(def, state)) {
+      traverse(def, target, new Set(stateAvail.get(state)!), externallyProvided,
+        stateAvail, producers, consumers, allProduced, allConsumed);
+    }
+  }
+}
+
+/** Every onStepError route target of a state, then its onError fallback. */
+function errorTargets<S extends string>(def: FlowDefinition<S>, state: S): S[] {
+  const targets: S[] = [];
+  for (const route of def.exceptionRoutes?.get(state) ?? []) {
+    if (!targets.includes(route.target)) targets.push(route.target);
+  }
+  const fallback = def.errorTransitions.get(state);
+  if (fallback !== undefined && !targets.includes(fallback)) targets.push(fallback);
+  return targets;
 }
 
 function addTo<S extends string>(map: Map<string, NodeInfo<S>[]>, key: string, info: NodeInfo<S>): void {
