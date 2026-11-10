@@ -40,6 +40,17 @@ crates.io, npm (@unlaxer/tramli), and Maven Central (org.unlaxer:tramli).
   get the legacy API. Removal will be considered for the next major version. (#145)
 
 ### Fixed
+- `DataFlowGraph.availableAt()` in Java / TypeScript / Rust now equals the
+  guaranteed sets of the `build()` requires/produces check. A join revisited
+  with a narrower available set now shrinks: the graph traversal still had the
+  inverted early return that #155 fixed only in the check, so the result
+  depended on declaration order. The traversal also follows `onStepError` /
+  `onError` routes with exactly the failing state's guaranteed set, as the check
+  does since #152 / #157. Previously `availableAt()`, and with it
+  `FlowInstance.availableData()`, `assertDataFlow()`, `pruningHints()` and the
+  invariant assertions, could include data missing on some path, and omitted
+  states entered only through an error route. Re-propagation after a shrink no
+  longer records duplicate producer / consumer nodes. (#170)
 - Run child External processors with or without guards in Java, TypeScript, and Rust; restore context on failure before step-specific or state error routing, preserving parent exit mappings. (#165)
 - Java / TypeScript / Rust now execute processors on unguarded External
   transitions. Processor failures restore the context to its state after external
