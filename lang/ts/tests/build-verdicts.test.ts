@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest';
 import { FlowDefinition } from '../src/flow-definition.js';
 import { flowKey } from '../src/flow-key.js';
 import type { StateConfig, StateProcessor, TransitionGuard } from '../src/types.js';
+import type { DataFlowGraph } from '../src/data-flow-graph.js';
+import { probe } from '../../../shared-tests/data-flow-graph/oracle.mjs';
 
 type Contract = { requires: string[]; produces: string[] };
 type Target = { to: string; label: string; processor?: Contract };
@@ -16,7 +18,9 @@ type Case = {
 };
 type Verdict = { ok: boolean; errors: string[][] };
 type Expected = { verdicts: Record<string, Verdict>; knownMismatches: Record<string, { languages: string[]; cases: string[] }> };
+type GraphResult = { builds: boolean; available: Record<string, string[]> | null };
 const directory = fileURLToPath(new URL('../../../shared-tests/build-verdicts/', import.meta.url));
+const graphDirectory = fileURLToPath(new URL('../../../shared-tests/data-flow-graph/', import.meta.url));
 const cases: Case[] = JSON.parse(readFileSync(process.env.BUILD_VERDICT_CORPUS ?? resolve(directory, 'corpus.json'), 'utf8'));
 const expected: Expected = JSON.parse(readFileSync(resolve(directory, 'expected.json'), 'utf8'));
 
@@ -65,6 +69,19 @@ function verdict(c: Case): Verdict {
   return { ok, errors: [...unique.entries()].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([, pair]) => pair) };
 }
 
+// Every state the graph tracks, with availableAt() for it (both sorted).
+function availableStates(graph: DataFlowGraph<string>): Record<string, string[]> {
+  const states = graph.generateInvariantAssertions().map(a => /^At state (\S+):/.exec(a)![1]).sort();
+  return Object.fromEntries(states.map(s => [s, [...graph.availableAt(s)].sort()]));
+}
+// The probe drops requires and the two flags, which cannot change any guaranteed
+// set. TypeScript also exposes the diagnostic graph of a failed build.
+function graphResult(c: Case): GraphResult {
+  const result = build(probe(c) as Case).buildAndValidate();
+  const graph = result.definition?.dataFlowGraph ?? result.diagnosticGraph;
+  return { builds: result.errors.length === 0, available: graph ? availableStates(graph) : null };
+}
+
 describe('shared build verdicts', () => {
   if (process.env.BUILD_VERDICT_OUTPUT) {
     it('exports every verdict without skips', () => {
@@ -75,6 +92,22 @@ describe('shared build verdicts', () => {
       const issues = Object.entries(expected.knownMismatches).filter(([, skip]) => skip.languages.includes('ts') && skip.cases.includes(c.id)).map(([issue]) => `#${issue}`);
       it.skipIf(issues.length > 0)(`${c.id}${issues.length ? ` known mismatch ${issues.join(', ')}` : ''}`, () => {
         expect(verdict(c)).toEqual(expected.verdicts[c.id]);
+      });
+    }
+  }
+});
+
+describe('shared data-flow graph availability', () => {
+  const graphCases: Case[] = JSON.parse(readFileSync(process.env.DATA_FLOW_GRAPH_CORPUS ?? resolve(directory, 'corpus.json'), 'utf8'));
+  if (process.env.DATA_FLOW_GRAPH_OUTPUT) {
+    it('exports every graph without skips', () => {
+      writeFileSync(process.env.DATA_FLOW_GRAPH_OUTPUT!, JSON.stringify(Object.fromEntries(graphCases.map(c => [c.id, graphResult(c)]))));
+    }, 120_000);
+  } else {
+    const wanted: Record<string, GraphResult> = JSON.parse(readFileSync(resolve(graphDirectory, 'expected.json'), 'utf8'));
+    for (const c of graphCases) {
+      it(c.id, () => {
+        expect(graphResult(c)).toEqual(wanted[c.id]);
       });
     }
   }

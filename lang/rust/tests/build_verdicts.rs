@@ -1,4 +1,5 @@
-//! Test-only shared JSON loader; one serial test, with thread-local state flags.
+//! Test-only shared JSON loader. Each test runs its cases serially on its own
+//! thread, and the state flags are thread-local.
 use serde_json::{json, Value};
 use std::any::TypeId;
 use std::cell::Cell;
@@ -49,8 +50,8 @@ struct T4;
 struct T5;
 struct T6;
 struct T7;
-fn types(v: &Value) -> Vec<TypeId> {
-    let pool = [
+fn pool() -> [TypeId; 8] {
+    [
         TypeId::of::<T0>(),
         TypeId::of::<T1>(),
         TypeId::of::<T2>(),
@@ -59,7 +60,10 @@ fn types(v: &Value) -> Vec<TypeId> {
         TypeId::of::<T5>(),
         TypeId::of::<T6>(),
         TypeId::of::<T7>(),
-    ];
+    ]
+}
+fn types(v: &Value) -> Vec<TypeId> {
+    let pool = pool();
     v.as_array()
         .unwrap()
         .iter()
@@ -268,4 +272,105 @@ fn shared_build_verdicts() {
         "Build verdicts: {} checked, {skipped} known mismatches skipped",
         cases.as_array().unwrap().len() - skipped
     );
+}
+
+/// Requires and the two check-skipping flags cannot change a guaranteed set, so the
+/// probe builds more often and exposes its graph (see shared-tests/data-flow-graph).
+fn probe(c: &Value) -> Value {
+    let mut p = c.clone();
+    p["allowPerpetual"] = json!(true);
+    p["allowUnreachable"] = json!(true);
+    for t in p["transitions"].as_array_mut().unwrap() {
+        for role in ["guard", "branch", "processor"] {
+            if let Some(contract) = t.get_mut(role) {
+                contract["requires"] = json!([]);
+            }
+        }
+        if let Some(targets) = t.get_mut("targets").and_then(Value::as_array_mut) {
+            for target in targets {
+                if let Some(processor) = target.get_mut("processor") {
+                    processor["requires"] = json!([]);
+                }
+            }
+        }
+    }
+    p
+}
+/// Every state the graph tracks, with available_at() for it; null without a definition.
+fn graph_result(c: &Value) -> Value {
+    let result = build(&probe(c)).build_and_validate();
+    let builds = result.errors.is_empty();
+    let pool = pool();
+    let available = result.definition.as_ref().map(|def| {
+        let graph = def.data_flow_graph();
+        let states: BTreeSet<String> = graph
+            .generate_invariant_assertions()
+            .iter()
+            .map(|a| {
+                let rest = a.strip_prefix("At state ").unwrap();
+                rest.split_once(':').unwrap().0.to_owned()
+            })
+            .collect();
+        states
+            .into_iter()
+            .map(|name| {
+                let s = STATES[name[1..].parse::<usize>().unwrap()];
+                let types: BTreeSet<String> = graph
+                    .available_at(s)
+                    .iter()
+                    .map(|id| format!("T{}", pool.iter().position(|p| p == id).unwrap()))
+                    .collect();
+                (name, json!(types))
+            })
+            .collect::<serde_json::Map<_, _>>()
+    });
+    FLAGS.with(|f| f.set((0, 0)));
+    json!({ "builds": builds, "available": available })
+}
+#[test]
+fn shared_data_flow_graphs() {
+    let shared = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../shared-tests");
+    let input = std::env::var_os("DATA_FLOW_GRAPH_CORPUS")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| shared.join("build-verdicts/corpus.json"));
+    let cases: Value = serde_json::from_slice(&std::fs::read(input).unwrap()).unwrap();
+    if let Some(output) = std::env::var_os("DATA_FLOW_GRAPH_OUTPUT") {
+        let results: serde_json::Map<_, _> = cases
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| (c["id"].as_str().unwrap().to_owned(), graph_result(c)))
+            .collect();
+        std::fs::write(output, serde_json::to_vec(&results).unwrap()).unwrap();
+        return;
+    }
+    let expected: Value = serde_json::from_slice(
+        &std::fs::read(shared.join("data-flow-graph/expected.json")).unwrap(),
+    )
+    .unwrap();
+    let mut compared = 0;
+    let mut mismatches = Vec::new();
+    for c in cases.as_array().unwrap() {
+        let id = c["id"].as_str().unwrap();
+        let actual = graph_result(c);
+        assert_eq!(
+            actual["builds"], expected[id]["builds"],
+            "{id}: probe build verdict"
+        );
+        // Rust exposes the graph only for a successful build.
+        if actual["builds"] == json!(true) {
+            compared += 1;
+            if actual["available"] != expected[id]["available"] {
+                mismatches.push(format!(
+                    "{id}: got {} want {}",
+                    actual["available"], expected[id]["available"]
+                ));
+            }
+        }
+    }
+    eprintln!(
+        "Data-flow graphs: {compared} compared, {} mismatches",
+        mismatches.len()
+    );
+    assert!(mismatches.is_empty(), "{}", mismatches.join("\n"));
 }

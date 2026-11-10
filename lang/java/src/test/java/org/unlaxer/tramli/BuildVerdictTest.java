@@ -2,6 +2,7 @@ package org.unlaxer.tramli;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.TestFactory;
 import org.junit.jupiter.api.parallel.Execution;
@@ -109,6 +110,71 @@ class BuildVerdictTest {
             result.errors().forEach(e -> { var pair = normalize(e); pairs.put(String.join("|", pair), pair); });
             return JSON.valueToTree(Map.of("ok", ok, "errors", pairs.values()));
         } finally { CONFIG.remove(); }
+    }
+    /**
+     * Requires and the two check-skipping flags cannot change a guaranteed set, so the
+     * probe builds more often and exposes its graph (see shared-tests/data-flow-graph).
+     */
+    private static JsonNode probe(JsonNode c) {
+        var p = (ObjectNode) c.deepCopy();
+        p.put("allowPerpetual", true);
+        p.put("allowUnreachable", true);
+        for (var t : p.get("transitions")) {
+            for (String role : List.of("guard", "branch", "processor")) {
+                if (t.has(role)) ((ObjectNode) t.get(role)).putArray("requires");
+            }
+            for (var target : t.path("targets")) {
+                if (target.has("processor")) ((ObjectNode) target.get("processor")).putArray("requires");
+            }
+        }
+        return p;
+    }
+    /** Every state the graph tracks, with availableAt() for it; null without a definition. */
+    private static JsonNode graphResult(JsonNode c) {
+        try {
+            var result = build(probe(c)).buildAndValidate();
+            var out = JSON.createObjectNode();
+            out.put("builds", result.errors().isEmpty());
+            if (result.definition() == null) return out.putNull("available");
+            var graph = result.definition().dataFlowGraph();
+            var states = new TreeSet<String>();
+            var tracked = Pattern.compile("^At state (\\S+):");
+            for (String assertion : graph.generateInvariantAssertions()) {
+                var m = tracked.matcher(assertion);
+                assertTrue(m.find(), assertion);
+                states.add(m.group(1));
+            }
+            var available = out.putObject("available");
+            for (String s : states) {
+                var types = available.putArray(s);
+                graph.availableAt(State.valueOf(s)).stream().map(Class::getSimpleName).sorted().forEach(types::add);
+            }
+            return out;
+        } finally { CONFIG.remove(); }
+    }
+    @TestFactory
+    Stream<DynamicTest> sharedDataFlowGraphs() throws Exception {
+        Path dir = Path.of("../../shared-tests");
+        String input = System.getenv("DATA_FLOW_GRAPH_CORPUS"), output = System.getenv("DATA_FLOW_GRAPH_OUTPUT");
+        var cases = JSON.readTree((input == null ? dir.resolve("build-verdicts/corpus.json") : Path.of(input)).toFile());
+        if (output != null) return Stream.of(DynamicTest.dynamicTest("export every graph without skips", () -> {
+            var results = JSON.createObjectNode();
+            for (var c : cases) results.set(c.get("id").asText(), graphResult(c));
+            JSON.writeValue(Path.of(output).toFile(), results);
+        }));
+        var expected = JSON.readTree(dir.resolve("data-flow-graph/expected.json").toFile());
+        var tests = new ArrayList<DynamicTest>();
+        for (var c : cases) {
+            String id = c.get("id").asText();
+            tests.add(DynamicTest.dynamicTest(id, () -> {
+                var actual = graphResult(c);
+                var wanted = expected.get(id);
+                assertEquals(wanted.get("builds"), actual.get("builds"), id + ": probe build verdict");
+                // Java exposes the graph only for a successful build.
+                if (actual.get("builds").asBoolean()) assertEquals(wanted.get("available"), actual.get("available"), id);
+            }));
+        }
+        return tests.stream();
     }
     @TestFactory
     Stream<DynamicTest> sharedBuildVerdicts() throws Exception {

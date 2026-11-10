@@ -10,7 +10,9 @@ parity, and normalize the latter API's complete diagnostic set.
 ## Files and commands
 
 - `generate.mjs`: deterministic Mulberry32 generator, no npm dependencies.
-- `oracle.mjs`: independent finite-set specification evaluator.
+- `oracle.mjs`: independent finite-set specification evaluator. Its `guaranteed`
+  dataflow fixpoint is also the `DataFlowGraph` specification in
+  [`../data-flow-graph`](../data-flow-graph/README.md).
 - `corpus.json`: 500 cases, seed 153, in declaration order.
 - `expected.json`: specification verdicts and issue-keyed known mismatches.
 - `fuzz.mjs`: generate and run arbitrary cases through all three test loaders.
